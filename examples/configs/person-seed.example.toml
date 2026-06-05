@@ -11,7 +11,7 @@
 person_id = "kouta"
 canonical_name = "Kouta"
 role = "primary companion / developer"
-aliases = ["コウタ", "こうちゃん"]
+aliases = ["まー", "まーちゃん"]
 
 [[preferences]]
 text = "prefers context-rich technical framing over beginner explanations"

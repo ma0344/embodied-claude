@@ -10,7 +10,7 @@ The TOML shape is:
     person_id = "kouta"
     canonical_name = "Kouta"
     role = "primary companion / developer"
-    aliases = ["コウタ", "こうちゃん"]
+    aliases = ["まー", "まーちゃん"]
 
     [[preferences]]
     text = "..."

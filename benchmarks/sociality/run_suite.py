@@ -77,7 +77,7 @@ def main(fixtures_dir: str) -> None:
                     }
                 )
             elif scenario == "commitment_persistence":
-                relationship.upsert_person(person_id="kouta", canonical_name="水島宏太", aliases=["こうちゃん"], role="companion")
+                relationship.upsert_person(person_id="kouta", canonical_name="山口政佳", aliases=["まーちゃん","まー","まーさん"], role="companion")
                 relationship.create_commitment(
                     person_id="kouta",
                     text="remind about dentist tomorrow morning",
@@ -91,7 +91,7 @@ def main(fixtures_dir: str) -> None:
                     }
                 )
             elif scenario == "relationship_continuity":
-                relationship.upsert_person(person_id="kouta", canonical_name="水島宏太", aliases=["こうちゃん"], role="companion")
+                relationship.upsert_person(person_id="kouta", canonical_name="山口政佳", aliases=["まーちゃん","まー","まーさん"], role="companion")
                 relationship.ingest_interaction(
                     person_id="kouta",
                     channel="voice",

@@ -32,13 +32,14 @@ if (-not (Test-Path $desiresJson)) {
 }
 
 # settings.local.json from example (merge hooks manually if you already have one)
-$settingsExample = Join-Path $Repo ".claude\settings.local.json.example"
+$settingsWindows = Join-Path $Repo ".claude\settings.windows.json.example"
 $settingsLocal = Join-Path $Repo ".claude\settings.local.json"
-if (-not (Test-Path $settingsLocal) -and (Test-Path $settingsExample)) {
-    Copy-Item $settingsExample $settingsLocal
-    Write-Host "Created .claude\settings.local.json from example"
+if (-not (Test-Path $settingsLocal) -and (Test-Path $settingsWindows)) {
+    Copy-Item $settingsWindows $settingsLocal
+    Write-Host "Created .claude\settings.local.json from settings.windows.json.example"
 } elseif (Test-Path $settingsLocal) {
-    Write-Host "Keep existing .claude\settings.local.json (check hooks + permissions)"
+    Write-Host "Keep existing .claude\settings.local.json"
+    Write-Host "  If UserPromptSubmit hook errors: use run_auto_context.cmd in the hook command"
 }
 
 Write-Host ""

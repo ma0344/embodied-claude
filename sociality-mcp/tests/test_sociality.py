@@ -6,8 +6,8 @@ from sociality_mcp import server
 def test_sociality_facade_handles_social_state_and_relationship_flow():
     server.upsert_person(
         person_id="kouta",
-        canonical_name="水島宏太",
-        aliases=["こうちゃん"],
+        canonical_name="山口政佳",
+        aliases=["まーちゃん","まー","まーさん"],
         role="companion",
     )
     server.ingest_social_event(
@@ -65,7 +65,7 @@ def test_sociality_facade_handles_social_state_and_relationship_flow():
 def test_sociality_facade_handles_joint_attention_and_boundary_gating():
     server.upsert_person(
         person_id="kouta",
-        canonical_name="水島宏太",
+        canonical_name="山口政佳",
         aliases=[],
         role="companion",
     )

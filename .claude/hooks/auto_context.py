@@ -14,7 +14,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from hashlib import sha1
 from pathlib import Path
 
@@ -71,7 +71,7 @@ def _social_ingest(text: str) -> None:
     if not db_path.is_file():
         return
     person_id = os.environ.get("SOCIAL_PRIMARY_PERSON_ID", "kouta")
-    ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
     event_id = f"evt_{sha1(f'{ts}{text}'.encode()).hexdigest()[:16]}"
     payload = json.dumps({"text": text}, ensure_ascii=False)
     try:
@@ -107,25 +107,37 @@ def _desire_hint() -> list[str]:
     parts = []
     if dominant:
         parts.append(f"dominant={dominant}")
-    hot = sorted(discomforts.items(), key=lambda kv: kv[1], reverse=True)[:2]
+    def _as_float(value: object) -> float:
+        try:
+            return float(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return 0.0
+
+    hot = sorted(discomforts.items(), key=lambda kv: _as_float(kv[1]), reverse=True)[:2]
     if hot:
-        parts.append("discomfort=" + ", ".join(f"{k}:{v:.2f}" for k, v in hot))
+        parts.append(
+            "discomfort=" + ", ".join(f"{k}:{_as_float(v):.2f}" for k, v in hot)
+        )
     return [f"[desire_hint] {'; '.join(parts)}"]
 
 
 def main() -> int:
-    text = _read_user_prompt()
-    if not text or _should_skip(text):
+    try:
+        text = _read_user_prompt()
+        if not text or _should_skip(text):
+            return 0
+
+        lines: list[str] = []
+        lines.extend(_recall_lines(text))
+        lines.extend(_desire_hint())
+        _social_ingest(text)
+
+        if lines:
+            sys.stdout.write("\n".join(lines) + "\n")
         return 0
-
-    lines: list[str] = []
-    lines.extend(_recall_lines(text))
-    lines.extend(_desire_hint())
-    _social_ingest(text)
-
-    if lines:
-        sys.stdout.write("\n".join(lines) + "\n")
-    return 0
+    except Exception as exc:  # noqa: BLE001 — hook must never block the prompt
+        print(f"auto_context hook skipped: {exc}", file=sys.stderr)
+        return 0
 
 
 if __name__ == "__main__":

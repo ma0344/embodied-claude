@@ -299,7 +299,7 @@ X（x-mcp）は使わない。USB ウェブカメラは任意（`usb-webcam-mcp`
 `.claude/hooks/auto_context.py`（Python・Windows/Linux 共通）が UserPromptSubmit で:
 
 1. **memory** — `MEMORY_HTTP_PORT`（既定 18900）へ HTTP recall → `[associative_recall]` 注入
-2. **sociality** — 宏太の発話を `~/.claude/sociality/social.db` に `human_utterance` 保存
+2. **sociality** — まーの発話を `~/.claude/sociality/social.db` に `human_utterance` 保存
 3. **desire** — `~/.claude/desires.json` があれば `[desire_hint]` 注入
 
 有効化: `.claude/settings.local.json` を example からコピー（hooks + permissions）。

@@ -50,7 +50,7 @@ Drop a new JSON file into `fixtures/`. Shape:
     "interpretation_shifts": [ ... ],
     "desires": { ... }
   },
-  "input": { "person_id": "kouta", "channel": "chat", "user_text": "..." },
+  "input": { "person_id": "ma", "channel": "chat", "user_text": "..." },
   "expected": [
     { "dimension": "bounded_initiative", "op": "equals", "path": "plan.primary_move", "expected": "answer_directly" }
   ]

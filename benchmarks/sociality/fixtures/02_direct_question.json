@@ -5,7 +5,7 @@
       "ts": "2026-04-15T19:12:00+09:00",
       "source": "human_mcp",
       "kind": "human_utterance",
-      "person_id": "kouta",
+      "person_id": "ma",
       "confidence": 0.99,
       "payload": {
         "text": "その PR どう見る？"

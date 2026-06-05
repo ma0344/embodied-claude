@@ -9,7 +9,7 @@ def test_append_daybook_and_active_arcs(store):
             ts="2026-04-15T08:00:00+00:00",
             source="camera",
             kind="scene_parse",
-            person_id="kouta",
+            person_id="ma",
             confidence=0.9,
             payload={"scene_summary": "Desk scene"},
         )
@@ -19,7 +19,7 @@ def test_append_daybook_and_active_arcs(store):
             ts="2026-04-15T09:00:00+00:00",
             source="voice",
             kind="human_utterance",
-            person_id="kouta",
+            person_id="ma",
             confidence=0.95,
             payload={"text": "今日は会議多い"},
         )
@@ -52,7 +52,7 @@ def test_daybook_surfaces_agent_experiences_and_shifts(store):
             (
                 f"exp_{uuid.uuid4().hex[:10]}",
                 "2026-04-19T11:30:00+00:00",
-                "kouta",
+                "ma",
                 "agent_response",
                 "replied with v0.3 spec",
                 "{}",
@@ -78,11 +78,11 @@ def test_daybook_surfaces_agent_experiences_and_shifts(store):
             (
                 f"shft_{uuid.uuid4().hex[:10]}",
                 "2026-04-19T11:40:00+00:00",
-                "kouta",
+                "ma",
                 "late-night behavior",
                 "sample wording is a hard rule",
                 "policy purpose is the rule",
-                "Kouta clarified",
+                "ma clarified",
                 0.92,
                 json.dumps(["Honor the purpose, not the wording"]),
                 "2026-04-19T11:40:05+00:00",
@@ -94,7 +94,7 @@ def test_daybook_surfaces_agent_experiences_and_shifts(store):
             ts="2026-04-19T11:00:00+00:00",
             source="voice",
             kind="human_utterance",
-            person_id="kouta",
+            person_id="ma",
             confidence=0.99,
             payload={"text": "OK"},
         )
@@ -103,7 +103,7 @@ def test_daybook_surfaces_agent_experiences_and_shifts(store):
     daybook = store.append_daybook(day="2026-04-19")
     assert any("replied with v0.3 spec" in item for item in daybook.concrete_events)
     assert any("late-night behavior" in item for item in daybook.noticed_changes)
-    assert any("kouta" in moment for moment in daybook.relationship_moments)
+    assert any("ma" in moment for moment in daybook.relationship_moments)
 
     summary = store.get_self_summary()
     assert summary.recent_concrete_events
@@ -121,7 +121,7 @@ def test_self_summary_and_reflect_on_change(store):
                 ts=f"{day}T08:00:00+00:00",
                 source="camera",
                 kind="scene_parse",
-                person_id="kouta",
+                person_id="ma",
                 confidence=0.9,
                 payload={"scene_summary": text},
             )

@@ -14,7 +14,7 @@ from interaction_orchestrator_mcp.schemas import (
 )
 
 
-def _compose(stores, *, user_text=None, channel="chat", person_id="kouta", memory_adapter=None):
+def _compose(stores, *, user_text=None, channel="chat", person_id="ma", memory_adapter=None):
     return compose_interaction_context(
         ComposeInteractionContextInput(
             person_id=person_id, channel=channel, user_text=user_text
@@ -59,7 +59,7 @@ class TestRecord:
     def test_record_agent_experience_is_visible_next_compose(self, stores):
         stores["orchestrator"].record_agent_experience(
             RecordAgentExperienceInput(
-                person_id="kouta",
+                person_id="ma",
                 kind="agent_response",
                 summary="Wrote v0.3 spec baseline",
                 importance=4,
@@ -73,11 +73,11 @@ class TestRecord:
     def test_record_interpretation_shift_counts_up(self, stores):
         stores["orchestrator"].record_interpretation_shift(
             RecordInterpretationShiftInput(
-                person_id="kouta",
+                person_id="ma",
                 topic="late-night behavior",
                 old_interpretation="sample wording is a hard rule",
                 new_interpretation="policy purpose (protect sleep) is the rule",
-                trigger="Kouta pointed out the confusion",
+                trigger="ma pointed out the confusion",
                 confidence=0.92,
                 implications=["Check policy purpose before suppressing action."],
             )
@@ -88,7 +88,7 @@ class TestRecord:
     def test_append_private_reflection_counts_up(self, stores):
         stores["orchestrator"].append_private_reflection(
             AppendPrivateReflectionInput(
-                person_id="kouta",
+                person_id="ma",
                 title="morning notes",
                 body="Quiet rebuild of morning routine.",
                 importance=3,
@@ -100,7 +100,7 @@ class TestRecord:
     def test_compose_private_letter_persists(self, stores):
         stored = stores["orchestrator"].compose_private_letter(
             ComposePrivateLetterInput(
-                person_id="kouta",
+                person_id="ma",
                 title="朝のお手紙",
                 body="深夜のループを振り返って...",
                 visibility="private",
@@ -125,7 +125,7 @@ class TestPlan:
                 "ts": "2026-04-18T16:30:00Z",  # 01:30 JST
                 "source": "camera",
                 "kind": "scene_parse",
-                "person_id": "kouta",
+                "person_id": "ma",
                 "confidence": 0.8,
                 "payload": {"scene_summary": "Dim room, no speech."},
             }

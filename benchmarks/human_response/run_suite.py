@@ -56,7 +56,7 @@ quiet_hours = ["00:00-07:00"]
 max_nudges_per_hour = 2
 
 [[person_rules]]
-person_id = "kouta"
+person_id = "ma"
 avoid_actions = ["camera_speaker_after_midnight"]
 preferred_nudge_style = "brief_gentle"
 """.strip(),

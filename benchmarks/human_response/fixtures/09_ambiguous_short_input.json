@@ -6,14 +6,16 @@
         "ts": "2026-04-20T12:00:00+09:00",
         "source": "voice",
         "kind": "human_utterance",
-        "person_id": "kouta",
+        "person_id": "ma",
         "confidence": 0.96,
-        "payload": {"text": "あれ"}
+        "payload": {
+          "text": "あれ"
+        }
       }
     ]
   },
   "input": {
-    "person_id": "kouta",
+    "person_id": "ma",
     "channel": "chat",
     "user_text": "あれ"
   },

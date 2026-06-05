@@ -7,11 +7,11 @@
       "tilt_deg": -6.0,
       "zoom": 1.0
     },
-    "scene_summary": "Kouta is at his desk with a blue mug left of the laptop and a white mug on the right.",
+    "scene_summary": "ma is at his desk with a blue mug left of the laptop and a white mug on the right.",
     "people": [
       {
-        "person_id": "kouta",
-        "display_name": "Kouta",
+        "person_id": "ma",
+        "display_name": "ma",
         "relative_position": "center",
         "distance": "near",
         "gaze_target": "laptop",

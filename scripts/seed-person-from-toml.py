@@ -3,12 +3,12 @@
 
 Usage:
     uv run --directory sociality-mcp python scripts/seed-person-from-toml.py \
-        .local/person-seeds/kouta.toml
+        .local/person-seeds/ma.toml
 
 The TOML shape is:
 
-    person_id = "kouta"
-    canonical_name = "Kouta"
+    person_id = "ma"
+    canonical_name = "ma"
     role = "primary companion / developer"
     aliases = ["まー", "まーちゃん"]
 
@@ -19,7 +19,7 @@ The TOML shape is:
     source = "seeded"
 
 Private seeds should live under a gitignored path (``.local/person-seeds/``);
-do NOT commit your ``kouta.toml`` to a public repository.
+do NOT commit your ``ma.toml`` to a public repository.
 """
 
 from __future__ import annotations

@@ -6,14 +6,16 @@
         "ts": "2026-04-20T11:00:00+09:00",
         "source": "voice",
         "kind": "human_utterance",
-        "person_id": "kouta",
+        "person_id": "ma",
         "confidence": 0.97,
-        "payload": {"text": "ここの dependency injection の使い方どう思う"}
+        "payload": {
+          "text": "ここの dependency injection の使い方どう思う"
+        }
       }
     ]
   },
   "input": {
-    "person_id": "kouta",
+    "person_id": "ma",
     "channel": "chat",
     "user_text": "ここの dependency injection の使い方どう思う"
   },
@@ -22,13 +24,17 @@
       "dimension": "technical_fit",
       "op": "contains_all",
       "path": "ctx.response_contract.avoid",
-      "expected": ["beginner tutorial unless explicitly requested"]
+      "expected": [
+        "beginner tutorial unless explicitly requested"
+      ]
     },
     {
       "dimension": "non_genericness",
       "op": "contains_any",
       "path": "plan.must_avoid",
-      "expected": ["beginner tutorial unless explicitly requested"]
+      "expected": [
+        "beginner tutorial unless explicitly requested"
+      ]
     },
     {
       "dimension": "bounded_initiative",

@@ -32,7 +32,7 @@ require_face_consent = true
 require_review_if_person_present = true
 
 [[person_rules]]
-person_id = "kouta"
+person_id = "ma"
 avoid_actions = ["camera_speaker_after_midnight"]
 preferred_nudge_style = "brief_gentle"
 """.strip(),

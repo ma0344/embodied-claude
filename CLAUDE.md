@@ -309,7 +309,7 @@ X（x-mcp）は使わない。USB ウェブカメラは任意（`usb-webcam-mcp`
 
 ローカル LLM は自動で compose しない。**`/talk`** スキル、または Heartbeat v0.3 を明示実行:
 
-`compose_interaction_context_tool(person_id=kouta)` → `plan_response_tool` → 返答 →
+`compose_interaction_context_tool(person_id=ma)` → `plan_response_tool` → 返答 →
 `record_agent_experience` / `remember`
 
 ### desire-system

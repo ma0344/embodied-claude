@@ -5,7 +5,7 @@ from sociality_mcp import server
 
 def test_sociality_facade_handles_social_state_and_relationship_flow():
     server.upsert_person(
-        person_id="kouta",
+        person_id="ma",
         canonical_name="山口政佳",
         aliases=["まーちゃん","まー","まーさん"],
         role="companion",
@@ -15,7 +15,7 @@ def test_sociality_facade_handles_social_state_and_relationship_flow():
             "ts": "2026-04-15T08:21:00+09:00",
             "source": "human_mcp",
             "kind": "human_utterance",
-            "person_id": "kouta",
+            "person_id": "ma",
             "confidence": 0.98,
             "payload": {"text": "ちょっと集中したいから静かめで頼む"},
         }
@@ -25,34 +25,34 @@ def test_sociality_facade_handles_social_state_and_relationship_flow():
             "ts": "2026-04-15T08:22:00+09:00",
             "source": "garmin",
             "kind": "health_summary",
-            "person_id": "kouta",
+            "person_id": "ma",
             "confidence": 0.87,
             "payload": {"body_battery": 23, "energy": "low"},
         }
     )
     server.ingest_interaction(
-        person_id="kouta",
+        person_id="ma",
         channel="voice",
         direction="human_to_ai",
         text="今日は会議多くて疲れた",
         ts="2026-04-15T19:12:00+09:00",
     )
     commitment = server.create_commitment(
-        person_id="kouta",
+        person_id="ma",
         text="remind about dentist tomorrow morning",
         due_at="2026-04-16T08:00:00+09:00",
         source="conversation",
     )
 
-    state = server.get_social_state(window_seconds=900, person_id="kouta", include_evidence=True)
+    state = server.get_social_state(window_seconds=900, person_id="ma", include_evidence=True)
     decision = server.should_interrupt(
         candidate_action="say",
         urgency="low",
-        person_id="kouta",
+        person_id="ma",
         message_preview="お茶でも飲む？",
     )
-    model = server.get_person_model(person_id="kouta")
-    suggestions = server.suggest_followup(person_id="kouta", context="evening_checkin")
+    model = server.get_person_model(person_id="ma")
+    suggestions = server.suggest_followup(person_id="ma", context="evening_checkin")
 
     assert state["availability"] in {"maybe_interruptible", "do_not_interrupt"}
     assert state["interrupt_cost"] >= 0.65
@@ -64,7 +64,7 @@ def test_sociality_facade_handles_social_state_and_relationship_flow():
 
 def test_sociality_facade_handles_joint_attention_and_boundary_gating():
     server.upsert_person(
-        person_id="kouta",
+        person_id="ma",
         canonical_name="山口政佳",
         aliases=[],
         role="companion",
@@ -74,13 +74,13 @@ def test_sociality_facade_handles_joint_attention_and_boundary_gating():
             "ts": "2026-04-15T20:00:00+09:00",
             "camera_pose": {"pan_deg": 12.0, "tilt_deg": -6.0, "zoom": 1.0},
             "scene_summary": (
-                "Kouta is at his desk with a blue mug left of the laptop and a notebook on the"
+                "ma is at his desk with a blue mug left of the laptop and a notebook on the"
                 " right."
             ),
             "people": [
                 {
-                    "person_id": "kouta",
-                    "display_name": "Kouta",
+                    "person_id": "ma",
+                    "display_name": "ma",
                     "relative_position": "center",
                     "distance": "near",
                     "gaze_target": "laptop",
@@ -108,20 +108,20 @@ def test_sociality_facade_handles_joint_attention_and_boundary_gating():
 
     resolution = server.resolve_reference(
         expression="その青いマグ",
-        person_id="kouta",
+        person_id="ma",
         lookback_frames=5,
     )
-    focus = server.get_current_joint_focus(person_id="kouta")
+    focus = server.get_current_joint_focus(person_id="ma")
     review = server.review_social_post(
         channel="x",
         text="今日の会議しんどそうやったな",
         scene_contains_face=False,
-        person_mentions=["kouta"],
+        person_mentions=["ma"],
     )
     evaluation = server.evaluate_action(
         action_type="post_tweet",
         channel="x",
-        person_id="kouta",
+        person_id="ma",
         context={
             "scene_contains_face": True,
             "time_local": "2026-04-15T23:40:00+09:00",
@@ -141,7 +141,7 @@ def test_sociality_facade_handles_self_narrative_tools():
             "ts": "2026-04-15T07:30:00+00:00",
             "source": "manual",
             "kind": "scene_parse",
-            "person_id": "kouta",
+            "person_id": "ma",
             "confidence": 0.91,
             "payload": {"scene_summary": "morning desk check"},
         }

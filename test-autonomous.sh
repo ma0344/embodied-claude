@@ -72,7 +72,7 @@ allowedTools の動作チェック。以下のツールを順番に1つずつ試
 
 ### MCP: sociality
 14. mcp__sociality__get_social_state — 現在の social state を取得
-15. mcp__sociality__get_person_model — kouta の person model を取得
+15. mcp__sociality__get_person_model — ma の person model を取得
 16. mcp__sociality__get_current_joint_focus — joint focus を取得
 17. mcp__sociality__get_quiet_mode_state — quiet mode 状態を取得
 18. mcp__sociality__get_self_summary — 自己要約を取得

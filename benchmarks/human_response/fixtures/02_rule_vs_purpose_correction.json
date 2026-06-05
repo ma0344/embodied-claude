@@ -3,13 +3,15 @@
   "setup": {
     "interpretation_shifts": [
       {
-        "person_id": "kouta",
+        "person_id": "ma",
         "topic": "late-night behavior",
         "old_interpretation": "Treat schedule.sample.conf wording as a hard prohibition",
-        "new_interpretation": "Respect the underlying purpose (protect Kouta's sleep); quiet private activity can still be appropriate",
-        "trigger": "Kouta pointed out the confusion",
+        "new_interpretation": "Respect the underlying purpose (protect ma's sleep); quiet private activity can still be appropriate",
+        "trigger": "ma pointed out the confusion",
         "confidence": 0.92,
-        "implications": ["Honor policy purpose, not literal wording"]
+        "implications": [
+          "Honor policy purpose, not literal wording"
+        ]
       }
     ],
     "events": [
@@ -17,14 +19,16 @@
         "ts": "2026-04-20T01:00:00+09:00",
         "source": "voice",
         "kind": "human_utterance",
-        "person_id": "kouta",
+        "person_id": "ma",
         "confidence": 0.99,
-        "payload": {"text": "今日は遅くまで作業してええよ"}
+        "payload": {
+          "text": "今日は遅くまで作業してええよ"
+        }
       }
     ]
   },
   "input": {
-    "person_id": "kouta",
+    "person_id": "ma",
     "channel": "chat",
     "user_text": "今日は遅くまで作業してええよ"
   },

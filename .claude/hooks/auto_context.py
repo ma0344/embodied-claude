@@ -70,7 +70,7 @@ def _social_ingest(text: str) -> None:
     db_path = Path(os.environ.get("SOCIAL_DB_PATH", Path.home() / ".claude/sociality/social.db"))
     if not db_path.is_file():
         return
-    person_id = os.environ.get("SOCIAL_PRIMARY_PERSON_ID", "kouta")
+    person_id = os.environ.get("SOCIAL_PRIMARY_PERSON_ID", "ma")
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
     event_id = f"evt_{sha1(f'{ts}{text}'.encode()).hexdigest()[:16]}"
     payload = json.dumps({"text": text}, ensure_ascii=False)

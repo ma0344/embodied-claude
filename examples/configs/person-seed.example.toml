@@ -6,10 +6,10 @@
 #
 # Run the seed script:
 #   uv run --directory sociality-mcp/packages/relationship-mcp python \
-#       scripts/seed-person-from-toml.py .local/person-seeds/kouta.toml
+#       scripts/seed-person-from-toml.py .local/person-seeds/ma.toml
 
-person_id = "kouta"
-canonical_name = "Kouta"
+person_id = "ma"
+canonical_name = "ma"
 role = "primary companion / developer"
 aliases = ["まー", "まーちゃん"]
 

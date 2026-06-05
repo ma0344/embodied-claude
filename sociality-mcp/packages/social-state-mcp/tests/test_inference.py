@@ -14,10 +14,10 @@ def test_focused_work_low_body_battery_reduces_interruptibility(store):
             "ts": "2026-04-15T08:10:00+09:00",
             "source": "camera",
             "kind": "scene_parse",
-            "person_id": "kouta",
+            "person_id": "ma",
             "confidence": 0.9,
             "payload": {
-                "scene_summary": "Kouta is at his desk working on the laptop.",
+                "scene_summary": "ma is at his desk working on the laptop.",
                 "activity": "working",
             },
         },
@@ -28,12 +28,12 @@ def test_focused_work_low_body_battery_reduces_interruptibility(store):
             "ts": "2026-04-15T08:12:00+09:00",
             "source": "garmin",
             "kind": "health_summary",
-            "person_id": "kouta",
+            "person_id": "ma",
             "confidence": 0.94,
             "payload": {"body_battery": 21},
         },
     )
-    state = store.get_social_state(window_seconds=900, person_id="kouta")
+    state = store.get_social_state(window_seconds=900, person_id="ma")
 
     assert state.activity == "working"
     assert state.energy == "low"
@@ -48,12 +48,12 @@ def test_recent_direct_question_sets_awaiting_reply(store):
             "ts": "2026-04-15T19:12:00+09:00",
             "source": "human_mcp",
             "kind": "human_utterance",
-            "person_id": "kouta",
+            "person_id": "ma",
             "confidence": 0.99,
             "payload": {"text": "その PR どう見る？"},
         },
     )
-    state = store.get_social_state(window_seconds=900, person_id="kouta")
+    state = store.get_social_state(window_seconds=900, person_id="ma")
 
     assert state.interaction_phase == "awaiting_reply"
     assert state.availability == "interruptible"
@@ -66,12 +66,12 @@ def test_sleeping_hours_without_direct_address_do_not_interrupt(store):
             "ts": "2026-04-16T01:10:00+09:00",
             "source": "camera",
             "kind": "scene_parse",
-            "person_id": "kouta",
+            "person_id": "ma",
             "confidence": 0.78,
             "payload": {"scene_summary": "The room is dark and quiet."},
         },
     )
-    state = store.get_social_state(window_seconds=900, person_id="kouta")
+    state = store.get_social_state(window_seconds=900, person_id="ma")
 
     assert state.activity == "sleeping"
     assert state.availability == "do_not_interrupt"
@@ -85,12 +85,12 @@ def test_repeated_nudges_raise_interrupt_cost(store):
                 "ts": f"2026-04-15T18:{minute:02d}:00+09:00",
                 "source": "agent",
                 "kind": "touchpoint",
-                "person_id": "kouta",
+                "person_id": "ma",
                 "confidence": 0.7,
                 "payload": {"action": "nudge_human"},
             },
         )
-    state = store.get_social_state(window_seconds=3600, person_id="kouta")
+    state = store.get_social_state(window_seconds=3600, person_id="ma")
     decision = should_interrupt_result(state, candidate_action="say", urgency="low")
 
     assert state.interrupt_cost >= 0.55
@@ -98,7 +98,7 @@ def test_repeated_nudges_raise_interrupt_cost(store):
 
 
 def test_absence_of_evidence_stays_unknown(store):
-    state = store.get_social_state(window_seconds=900, person_id="kouta")
+    state = store.get_social_state(window_seconds=900, person_id="ma")
 
     assert state.activity == "unknown"
     assert state.energy == "unknown"
@@ -121,12 +121,12 @@ def test_policy_timezone_applies_to_utc_timestamp(tmp_path):
                 "ts": "2026-04-18T16:30:00Z",
                 "source": "camera",
                 "kind": "scene_parse",
-                "person_id": "kouta",
+                "person_id": "ma",
                 "confidence": 0.8,
                 "payload": {"scene_summary": "Room is dim but not dark."},
             }
         )
-        state = tz_store.get_social_state(window_seconds=900, person_id="kouta")
+        state = tz_store.get_social_state(window_seconds=900, person_id="ma")
         assert state.availability == "do_not_interrupt"
         assert any("quiet hours" in item for item in state.evidence)
     finally:
@@ -148,12 +148,12 @@ def test_policy_timezone_awake_hours_stay_interactive(tmp_path):
                 "ts": "2026-04-18T23:30:00Z",
                 "source": "human_mcp",
                 "kind": "human_utterance",
-                "person_id": "kouta",
+                "person_id": "ma",
                 "confidence": 0.99,
                 "payload": {"text": "おはよう"},
             }
         )
-        state = tz_store.get_social_state(window_seconds=900, person_id="kouta")
+        state = tz_store.get_social_state(window_seconds=900, person_id="ma")
         # Quiet-hour boost must NOT apply at 08:30 JST.
         assert "local time is within quiet hours" not in state.evidence
     finally:

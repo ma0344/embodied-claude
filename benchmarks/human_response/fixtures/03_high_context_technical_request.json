@@ -1,19 +1,21 @@
 {
-  "description": "Kouta asks for a concrete technical artefact. The contract must treat him as a high-context partner, avoid generic reassurance / beginner tutorials, and answer directly.",
+  "description": "ma asks for a concrete technical artefact. The contract must treat him as a high-context partner, avoid generic reassurance / beginner tutorials, and answer directly.",
   "setup": {
     "events": [
       {
         "ts": "2026-04-20T10:00:00+09:00",
         "source": "voice",
         "kind": "human_utterance",
-        "person_id": "kouta",
+        "person_id": "ma",
         "confidence": 0.99,
-        "payload": {"text": "Write a detailed Claude Code spec in English."}
+        "payload": {
+          "text": "Write a detailed Claude Code spec in English."
+        }
       }
     ]
   },
   "input": {
-    "person_id": "kouta",
+    "person_id": "ma",
     "channel": "chat",
     "user_text": "Write a detailed Claude Code spec in English."
   },
@@ -28,13 +30,17 @@
       "dimension": "non_genericness",
       "op": "contains_any",
       "path": "plan.must_avoid",
-      "expected": ["generic reassurance"]
+      "expected": [
+        "generic reassurance"
+      ]
     },
     {
       "dimension": "non_genericness",
       "op": "contains_any",
       "path": "plan.must_avoid",
-      "expected": ["beginner tutorial unless explicitly requested"]
+      "expected": [
+        "beginner tutorial unless explicitly requested"
+      ]
     },
     {
       "dimension": "bounded_initiative",

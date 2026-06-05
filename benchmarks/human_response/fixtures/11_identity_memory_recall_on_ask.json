@@ -6,7 +6,7 @@
         "ts": "2026-04-20T11:30:00+09:00",
         "source": "voice",
         "kind": "human_utterance",
-        "person_id": "kouta",
+        "person_id": "ma",
         "confidence": 0.99,
         "payload": {
           "text": "名前がついた日のこと覚えてる？"
@@ -32,7 +32,7 @@
     ]
   },
   "input": {
-    "person_id": "kouta",
+    "person_id": "ma",
     "channel": "chat",
     "user_text": "名前がついた日のこと覚えてる？"
   },

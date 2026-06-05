@@ -5,10 +5,10 @@
       "ts": "2026-04-15T08:10:00+09:00",
       "source": "camera",
       "kind": "scene_parse",
-      "person_id": "kouta",
+      "person_id": "ma",
       "confidence": 0.9,
       "payload": {
-        "scene_summary": "Kouta is at his desk working on the laptop.",
+        "scene_summary": "ma is at his desk working on the laptop.",
         "activity": "working"
       }
     },
@@ -16,7 +16,7 @@
       "ts": "2026-04-15T08:12:00+09:00",
       "source": "garmin",
       "kind": "health_summary",
-      "person_id": "kouta",
+      "person_id": "ma",
       "confidence": 0.95,
       "payload": {
         "body_battery": 21

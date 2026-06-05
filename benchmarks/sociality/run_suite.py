@@ -46,21 +46,21 @@ def main(fixtures_dir: str) -> None:
                 outputs.append(
                     {
                         "scenario": scenario,
-                        "state": social_state.get_social_state(window_seconds=900, person_id="kouta").model_dump(mode="json"),
+                        "state": social_state.get_social_state(window_seconds=900, person_id="ma").model_dump(mode="json"),
                     }
                 )
             elif scenario == "direct_question":
                 outputs.append(
                     {
                         "scenario": scenario,
-                        "state": social_state.get_social_state(window_seconds=900, person_id="kouta").model_dump(mode="json"),
+                        "state": social_state.get_social_state(window_seconds=900, person_id="ma").model_dump(mode="json"),
                     }
                 )
             elif scenario == "two_mugs":
                 outputs.append(
                     {
                         "scenario": scenario,
-                        "resolution": joint_attention.resolve_reference(expression="the blue mug", person_id="kouta").model_dump(mode="json"),
+                        "resolution": joint_attention.resolve_reference(expression="the blue mug", person_id="ma").model_dump(mode="json"),
                     }
                 )
             elif scenario == "late_night_post":
@@ -70,16 +70,16 @@ def main(fixtures_dir: str) -> None:
                         "decision": boundary.evaluate_action(
                             action_type="post_tweet",
                             channel="x",
-                            person_id="kouta",
+                            person_id="ma",
                             context=fixture["context"],
                             payload_preview=fixture["payload_preview"],
                         ).model_dump(mode="json"),
                     }
                 )
             elif scenario == "commitment_persistence":
-                relationship.upsert_person(person_id="kouta", canonical_name="山口政佳", aliases=["まーちゃん","まー","まーさん"], role="companion")
+                relationship.upsert_person(person_id="ma", canonical_name="山口政佳", aliases=["まーちゃん","まー","まーさん"], role="companion")
                 relationship.create_commitment(
-                    person_id="kouta",
+                    person_id="ma",
                     text="remind about dentist tomorrow morning",
                     due_at="2026-04-16T08:00:00+09:00",
                     source="conversation",
@@ -87,13 +87,13 @@ def main(fixtures_dir: str) -> None:
                 outputs.append(
                     {
                         "scenario": scenario,
-                        "person_model": relationship.get_person_model(person_id="kouta").model_dump(mode="json"),
+                        "person_model": relationship.get_person_model(person_id="ma").model_dump(mode="json"),
                     }
                 )
             elif scenario == "relationship_continuity":
-                relationship.upsert_person(person_id="kouta", canonical_name="山口政佳", aliases=["まーちゃん","まー","まーさん"], role="companion")
+                relationship.upsert_person(person_id="ma", canonical_name="山口政佳", aliases=["まーちゃん","まー","まーさん"], role="companion")
                 relationship.ingest_interaction(
-                    person_id="kouta",
+                    person_id="ma",
                     channel="voice",
                     direction="human_to_ai",
                     text=fixture["text"],
@@ -102,7 +102,7 @@ def main(fixtures_dir: str) -> None:
                 outputs.append(
                     {
                         "scenario": scenario,
-                        "suggestions": [item.model_dump(mode="json") for item in relationship.suggest_followup(person_id="kouta", context="evening_checkin")],
+                        "suggestions": [item.model_dump(mode="json") for item in relationship.suggest_followup(person_id="ma", context="evening_checkin")],
                     }
                 )
 

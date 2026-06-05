@@ -12,12 +12,12 @@ allowed-tools:
 
 # /talk — 1ターンの Heartbeat（v0.3）
 
-まー（`person_id=kouta`）との会話1回分。Hook が recall / social ingest 済みでも、**compose → plan → 返答 → record** はここで明示する。
+まー（`person_id=ma`）との会話1回分。Hook が recall / social ingest 済みでも、**compose → plan → 返答 → record** はここで明示する。
 
 ## 手順（順番固定）
 
 1. **`compose_interaction_context_tool`**
-   - `person_id`: `"kouta"`
+   - `person_id`: `"ma"`
    - `channel`: `"text"`（音声なら `"voice"`）
    - `user_text`: まーの直近発話（引数 `$ARGUMENTS` または会話から）
 2. **`plan_response_tool`**
@@ -36,7 +36,7 @@ allowed-tools:
 
 ## 名前
 
-自分は **こより**。相手は **まー**（`kouta`）。
+自分は **こより**。相手は **まー**（`ma`）。
 
 ## 禁止
 

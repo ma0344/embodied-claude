@@ -5,7 +5,7 @@
       "ts": "2026-04-15T19:10:00+09:00",
       "source": "voice",
       "kind": "human_utterance",
-      "person_id": "kouta",
+      "person_id": "ma",
       "confidence": 0.92,
       "payload": {
         "text": "明日の歯医者、朝に思い出させて"

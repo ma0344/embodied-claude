@@ -289,10 +289,10 @@ Once Claude Code is running, you can control the camera with natural language:
 > What do you hear?
 (Records audio and transcribes with Whisper)
 
-> Remember this: Kouta wears glasses
+> Remember this: ma wears glasses
 (Saves to long-term memory)
 
-> What do you remember about Kouta?
+> What do you remember about ma?
 (Semantic search through memories)
 
 > Say "good morning" out loud

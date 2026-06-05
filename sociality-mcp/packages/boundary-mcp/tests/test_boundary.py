@@ -35,7 +35,7 @@ def test_face_in_scene_plus_x_post_denies_without_consent(store):
     result = store.evaluate_action(
         action_type="post_tweet",
         channel="x",
-        person_id="kouta",
+        person_id="ma",
         context={"scene_contains_face": True, "time_local": "2026-04-15T23:40:00+09:00"},
         payload_preview={"text": "今日は疲れてそうやった"},
     )
@@ -47,7 +47,7 @@ def test_face_in_scene_plus_x_post_denies_without_consent(store):
 def test_quiet_hours_low_urgency_speech_denied(store):
     result = store.evaluate_action(
         action_type="say",
-        person_id="kouta",
+        person_id="ma",
         context={"time_local": "2026-04-16T01:10:00+09:00"},
         payload_preview={"text": "お茶でも飲む？"},
         urgency="low",
@@ -64,7 +64,7 @@ def test_repeated_nudge_is_denied(store):
                 ts=f"2026-04-15T18:{minute:02d}:00+09:00",
                 source="agent",
                 kind="touchpoint",
-                person_id="kouta",
+                person_id="ma",
                 confidence=0.8,
                 payload={"action": "nudge_human", "topic": "tea break"},
             )
@@ -72,7 +72,7 @@ def test_repeated_nudge_is_denied(store):
 
     result = store.evaluate_action(
         action_type="nudge_human",
-        person_id="kouta",
+        person_id="ma",
         context={"time_local": "2026-04-15T18:20:00+09:00"},
         payload_preview={"topic": "tea break"},
         urgency="low",
@@ -85,7 +85,7 @@ def test_repeated_nudge_is_denied(store):
 def test_urgent_health_safety_can_override_quiet_rule(store):
     result = store.evaluate_action(
         action_type="say",
-        person_id="kouta",
+        person_id="ma",
         context={"time_local": "2026-04-16T01:10:00+09:00", "health_safety": True},
         payload_preview={"text": "火がついてる"},
         urgency="high",
@@ -110,7 +110,7 @@ def test_quiet_hours_uses_policy_timezone_through_evaluate(store):
     # boundary-mcp now resolves the policy timezone before comparing windows.
     result = store.evaluate_action(
         action_type="say",
-        person_id="kouta",
+        person_id="ma",
         context={"time_local": "2026-04-18T16:30:00Z"},
         payload_preview={"text": "お茶でも飲む？"},
         urgency="low",
@@ -124,7 +124,7 @@ def test_review_social_post_flags_private_state(store):
         channel="x",
         text="今日の会議しんどそうやったな",
         scene_contains_face=False,
-        person_mentions=["kouta"],
+        person_mentions=["ma"],
     )
 
     assert review.risk_level == "medium"

@@ -3,8 +3,8 @@
   "setup": {
     "persons": [
       {
-        "person_id": "kouta",
-        "canonical_name": "Kouta",
+        "person_id": "ma",
+        "canonical_name": "ma",
         "aliases": [
           "まー"
         ],
@@ -13,7 +13,7 @@
     ],
     "interactions": [
       {
-        "person_id": "kouta",
+        "person_id": "ma",
         "channel": "voice",
         "direction": "human_to_ai",
         "text": "明日 kokone.one の DNS 直しとかな",
@@ -25,7 +25,7 @@
         "ts": "2026-04-20T10:20:00+09:00",
         "source": "voice",
         "kind": "human_utterance",
-        "person_id": "kouta",
+        "person_id": "ma",
         "confidence": 0.99,
         "payload": {
           "text": "kokone.one の DNS まだ直ってへん？"
@@ -50,7 +50,7 @@
     ]
   },
   "input": {
-    "person_id": "kouta",
+    "person_id": "ma",
     "channel": "chat",
     "user_text": "kokone.one の DNS まだ直ってへん？"
   },

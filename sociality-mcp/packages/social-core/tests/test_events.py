@@ -10,7 +10,7 @@ def test_ingest_deduplicates_by_source_and_correlation_id(social_db):
         ts="2026-04-15T08:21:00+09:00",
         source="human_mcp",
         kind="human_utterance",
-        person_id="kouta",
+        person_id="ma",
         correlation_id="abc123",
         confidence=0.98,
         payload={"text": "静かめで頼む"},

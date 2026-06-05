@@ -333,7 +333,7 @@ def _pick_contract(
     *, person_id: str | None, channel: str, quiet_active: bool
 ) -> ResponseContract:
     base = ResponseContract()
-    if person_id == "kouta":
+    if person_id == "ma":
         base = ResponseContract(
             treat_user_as="high-context technical partner",
             avoid=[

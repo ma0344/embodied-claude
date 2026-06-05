@@ -48,6 +48,6 @@ if [ -z "$PAYLOAD" ]; then
 fi
 
 # Direct INSERT into SQLite
-sqlite3 "$SOCIAL_DB" "INSERT OR IGNORE INTO events (event_id, ts, source, kind, person_id, confidence, payload_json, created_at) VALUES ('$EVENT_ID', '$TS', 'hook', 'human_utterance', 'kouta', 1.0, '$PAYLOAD', '$CREATED_AT');" 2>/dev/null
+sqlite3 "$SOCIAL_DB" "INSERT OR IGNORE INTO events (event_id, ts, source, kind, person_id, confidence, payload_json, created_at) VALUES ('$EVENT_ID', '$TS', 'hook', 'human_utterance', 'ma', 1.0, '$PAYLOAD', '$CREATED_AT');" 2>/dev/null
 
 exit 0

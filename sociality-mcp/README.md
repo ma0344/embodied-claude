@@ -1,6 +1,6 @@
 # sociality-mcp
 
-Unified MCP facade for Kokone's social middle layer.
+Unified MCP facade for こより's social middle layer.
 
 `sociality-mcp` is the preferred deployment target for sociality. It exposes the tool families from
 `social-state-mcp`, `relationship-mcp`, `joint-attention-mcp`, `boundary-mcp`, and

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "social-core"
 version = "0.1.0"
-description = "Shared models and SQLite store for Kokone sociality MCP servers"
+description = "Shared models and SQLite store for こより sociality MCP servers"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

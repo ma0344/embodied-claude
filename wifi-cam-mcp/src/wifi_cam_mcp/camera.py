@@ -6,6 +6,7 @@ import io
 import logging
 import tempfile
 from dataclasses import dataclass
+from urllib.parse import quote
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -405,10 +406,9 @@ class TapoCamera:
         if self._config.stream_url:
             return self._config.stream_url
         stream = "stream2" if sub_stream else "stream1"
-        return (
-            f"rtsp://{self._config.username}:{self._config.password}"
-            f"@{self._config.host}:554/{stream}"
-        )
+        user = quote(self._config.username, safe="")
+        password = quote(self._config.password, safe="")
+        return f"rtsp://{user}:{password}@{self._config.host}:554/{stream}"
 
     # ------------------------------------------------------------------
     # PTZ control

@@ -131,5 +131,5 @@ def test_self_summary_and_reflect_on_change(store):
     summary = store.get_self_summary()
     change = store.reflect_on_change(horizon_days=2)
 
-    assert "Kokone" in summary.summary
+    assert "こより" in summary.summary
     assert change.summary

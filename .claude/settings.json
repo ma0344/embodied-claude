@@ -26,17 +26,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/auto-recall.sh",
-            "timeout": 4
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/auto-social.sh",
-            "timeout": 3
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/auto_context.py\"",
+            "timeout": 5
           }
         ]
       }

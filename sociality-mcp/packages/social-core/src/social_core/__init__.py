@@ -1,4 +1,4 @@
-"""Shared storage and schema helpers for Kokone sociality MCPs."""
+"""Shared storage and schema helpers for こより sociality MCPs."""
 
 from .confidence import clamp01, confidence_from_evidence, weighted_average
 from .db import DEFAULT_SOCIAL_DB_PATH, SocialDB, get_social_db_path

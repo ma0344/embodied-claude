@@ -3,6 +3,8 @@
 
 [wifi-cam]
 mount_mode = "normal"         # "normal" (卓上) or "ceiling" (天井)
+# LM Studio 等: tool_result に画像ブロックを載せると 400 になるため true 推奨
+text_only_tool_result = false
 mic_source = "camera"          # "camera" (RTSP) or "local" (PC マイク)
 capture_max_width = 1920
 capture_max_height = 1080

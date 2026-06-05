@@ -1,4 +1,4 @@
-"""Unified facade for Kokone sociality MCP tools."""
+"""Unified facade for こより sociality MCP tools."""
 
 __all__ = ["main"]
 

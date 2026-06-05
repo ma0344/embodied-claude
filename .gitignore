@@ -70,10 +70,14 @@ autonomous-action.sh
 heartbeat-session-id
 last-session-date.txt
 
-# User-specific config (use *.sample.conf as template)
+# User-specific config (use *.sample.conf / *.example as template)
 schedule.conf
 desires.conf
 desires.json
+SOUL.md
+MEMORY.md
+TODO.md
+ROUTINES.md
 
 # Google API credentials (NEVER commit)
 scripts/credentials.json
@@ -91,3 +95,5 @@ references/
 # Per-person seeds for relationship-mcp (contain private facts)
 .local/
 
+.code-workspace
+SOUL.md

@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from collections import Counter
+
+
+def agent_name() -> str:
+    """Display name for the embodied agent (override with AGENT_NAME)."""
+    return (os.environ.get("AGENT_NAME") or "こより").strip() or "こより"
 
 
 def build_day_summary(day: str, event_kinds: list[str], person_ids: list[str]) -> str:
@@ -52,7 +58,7 @@ def build_self_summary(
     continuity trace rather than a generic posture statement.
     """
 
-    pieces = ["Kokone keeps a socially aware, continuity-seeking self-model."]
+    pieces = [f"{agent_name()}は、社会的な文脈と連続性を大切にする自己モデルを持つ。"]
     if facets:
         pieces.append(f"Current facets: {', '.join(facets[:2])}.")
     if arcs:

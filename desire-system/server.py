@@ -1,5 +1,5 @@
 """
-Desire System MCP Server - ここねの自発的な欲求レベルを提供する。
+Desire System MCP Server - こよりの自発的な欲求レベルを提供する。
 
 v2: ホメオスタシス/アロスタシス対応
 - 不快度（discomfort）表示
@@ -25,6 +25,10 @@ from desire_updater import DESIRE_CONFIGS, compute_desires, save_desires
 DESIRES_PATH = Path(os.getenv("DESIRES_PATH", str(Path.home() / ".claude" / "desires.json")))
 
 server = Server("desire-system")
+
+
+def _agent_name() -> str:
+    return (os.environ.get("AGENT_NAME") or "こより").strip() or "こより"
 
 
 def load_desires() -> dict[str, Any] | None:
@@ -83,7 +87,7 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="get_desires",
             description=(
-                "Get Kokone's current desire levels and discomfort (homeostasis). "
+                f"Get {_agent_name()}'s current desire levels and discomfort (homeostasis). "
                 "Discomfort = distance from set point. "
                 "When discomfort >= 0.5: pick ONE bounded action that fits the "
                 "current context (prefer private/non-interruptive during quiet "

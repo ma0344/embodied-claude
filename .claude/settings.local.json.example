@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__wifi-cam__*",
+      "mcp__usb-webcam__*",
+      "mcp__memory__*",
+      "mcp__sociality__*",
+      "mcp__system-temperature__*",
+      "mcp__tts__*",
+      "mcp__desire-system__*"
+    ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/auto_context.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

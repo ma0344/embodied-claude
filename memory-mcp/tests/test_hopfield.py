@@ -46,7 +46,7 @@ class TestModernHopfieldNetwork:
         patterns_arr = np.random.randn(3, dim)
         # L2正規化でほぼ直交（次元が高いとランダムベクトルは直交に近い）
         patterns = patterns_arr.tolist()
-        ids = ["コウタとしりとり", "夜景を見た", "初めて声が出た"]
+        ids = ["まーとしりとり", "夜景を見た", "初めて声が出た"]
         contents = ids[:]
 
         net.store(patterns, ids, contents)

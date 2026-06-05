@@ -34,7 +34,7 @@ def test_whitespace_only_returns_low():
 
 def test_clean_short_text_low_or_medium():
     """Neutral conversational Japanese should not flag as high."""
-    text = "今日は天気がええな。コウタおはよう。"
+    text = "今日は天気がええな。まーおはよう。"
     result = analyze(text)
     assert result.interpretation in {"low", "medium"}
     assert result.overall_anomaly_score < 0.6

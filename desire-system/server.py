@@ -95,7 +95,7 @@ async def list_tools() -> list[Tool]:
                 "per tick. Desires bias attention; they are not a command queue. "
                 "browse_curiosity -> WebSearch something interesting; "
                 "look_outside -> use camera to look outside; "
-                "miss_companion -> talk to コウタ proactively; "
+                "miss_companion -> talk to まー proactively; "
                 "observe_room -> use camera to observe room; "
                 "identity_coherence -> recall memories to reinforce self-model; "
                 "cognitive_load -> think about or discuss something interesting."
@@ -151,7 +151,7 @@ async def list_tools() -> list[Tool]:
             description=(
                 "Boost a desire level due to novelty/surprise (dopamine/prediction error). "
                 "Call when you feel surprised or encounter unexpected info. "
-                "e.g. コウタ says something unexpected -> boost browse_curiosity; "
+                "e.g. まー says something unexpected -> boost browse_curiosity; "
                 "camera shows something unusual -> boost observe_room; "
                 "identity feels unstable -> boost identity_coherence. "
                 "Simulates dopamine response to novelty."

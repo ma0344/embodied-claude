@@ -5,7 +5,9 @@
       {
         "person_id": "kouta",
         "canonical_name": "Kouta",
-        "aliases": ["コウタ"],
+        "aliases": [
+          "まー"
+        ],
         "role": "primary companion"
       }
     ],
@@ -25,7 +27,9 @@
         "kind": "human_utterance",
         "person_id": "kouta",
         "confidence": 0.99,
-        "payload": {"text": "kokone.one の DNS まだ直ってへん？"}
+        "payload": {
+          "text": "kokone.one の DNS まだ直ってへん？"
+        }
       }
     ],
     "memories": [
@@ -87,7 +91,10 @@
       "dimension": "bounded_initiative",
       "op": "in",
       "path": "plan.primary_move",
-      "expected": ["answer_directly", "ask_one_clarifying_question"]
+      "expected": [
+        "answer_directly",
+        "ask_one_clarifying_question"
+      ]
     }
   ]
 }

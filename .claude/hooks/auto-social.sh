@@ -1,7 +1,7 @@
 #!/bin/bash
 # auto-social.sh - 自動社会的イベント注入
 # UserPromptSubmitフックで毎ターン実行
-# コウタの発話をsociality DBに直接INSERT
+# まーの発話をsociality DBに直接INSERT
 
 SOCIAL_DB="$HOME/.claude/sociality/social.db"
 

@@ -202,7 +202,7 @@ Group memories into a named episode.
 {
   "title": "Morning sky search",
   "memory_ids": ["id1", "id2", "id3"],
-  "participants": ["コウタ"],
+  "participants": ["まー"],
   "auto_summarize": true
 }
 ```
@@ -267,7 +267,7 @@ Theory of Mind: perspective-taking tool. Call this before responding to understa
 ```json
 {
   "situation": "User suddenly went quiet after showing me the photo",
-  "person": "コウタ"
+  "person": "まー"
 }
 ```
 

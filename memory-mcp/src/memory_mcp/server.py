@@ -651,8 +651,8 @@ class MemoryMCPServer:
                             },
                             "person": {
                                 "type": "string",
-                                "description": "Who you are talking to (default: コウタ)",
-                                "default": "コウタ",
+                                "description": "Who you are talking to (default: まー)",
+                                "default": "まー",
                             },
                         },
                         "required": ["situation"],
@@ -681,8 +681,8 @@ class MemoryMCPServer:
                             },
                             "person": {
                                 "type": "string",
-                                "description": "Who you are sharing attention with (default: コウタ)",
-                                "default": "コウタ",
+                                "description": "Who you are sharing attention with (default: まー)",
+                                "default": "まー",
                             },
                         },
                         "required": ["target"],
@@ -1367,7 +1367,7 @@ Date Range:
                         if not situation:
                             return [TextContent(type="text", text="Error: situation is required")]
 
-                        person = arguments.get("person", "コウタ")
+                        person = arguments.get("person", "まー")
 
                         # Pull relevant memories: personality, communication patterns
                         tom_memories = await self._memory_store.recall(
@@ -1421,7 +1421,7 @@ Date Range:
 
                         direction = arguments.get("direction", "respond")
                         my_observation = arguments.get("my_observation", "")
-                        person = arguments.get("person", "コウタ")
+                        person = arguments.get("person", "まー")
 
                         # Pull memories related to the shared target
                         ja_memories = await self._memory_store.recall(

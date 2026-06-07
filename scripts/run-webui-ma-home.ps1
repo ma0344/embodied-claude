@@ -1,51 +1,39 @@
-# Start claude-code-webui on ma-home with LM Studio (local Gemma) instead of Anthropic cloud.
+# Start claude-code-webui on ma-home (koyori / Tailscale kiosk).
+#
+# LM Studio routing lives in .claude/settings.local.json (copy from settings.local.json.example).
+# This script only sets bind address + port for the web UI process.
 #
 # Prerequisites:
-#   - LM Studio: model loaded, server on port 1234 (Anthropic-compatible /v1/messages)
+#   - LM Studio: model loaded, server on port 1234
+#   - .claude/settings.local.json with env block (ANTHROPIC_*)
 #   - npm install -g claude-code-webui
-#   - claude CLI on PATH (same env that passed: claude -p "..." --model google/gemma-4-12b)
 #
 # Usage:
 #   cd C:\Users\ma\src\embodied-claude
 #   .\scripts\run-webui-ma-home.ps1
-#
-# Koyori kiosk (Tailscale):
-#   http://<ma-home-tailscale-ip>:8080/projects/C:/Users/ma/src/embodied-claude
 
 param(
     [string]$Port = $(if ($env:WEBUI_PORT) { $env:WEBUI_PORT } else { "8080" }),
-    [string]$HostBind = $(if ($env:WEBUI_HOST) { $env:WEBUI_HOST } else { "0.0.0.0" }),
-    [string]$Model = $(if ($env:LMSTUDIO_MODEL) { $env:LMSTUDIO_MODEL } else { "google/gemma-4-12b" }),
-    [string]$LmBaseUrl = $(if ($env:ANTHROPIC_BASE_URL) { $env:ANTHROPIC_BASE_URL } else { "http://127.0.0.1:1234" })
+    [string]$HostBind = $(if ($env:WEBUI_HOST) { $env:WEBUI_HOST } else { "0.0.0.0" })
 )
 
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path $PSScriptRoot -Parent
+$SettingsLocal = Join-Path $Repo ".claude\settings.local.json"
 
-Write-Host "==> claude-code-webui (LM Studio / local model)"
-Write-Host "    repo:  $Repo"
-Write-Host "    model: $Model"
-Write-Host "    LM:    $LmBaseUrl"
-Write-Host "    bind:  ${HostBind}:$Port"
+if (-not (Test-Path $SettingsLocal)) {
+    Write-Error @"
+Missing $SettingsLocal
 
-# LM Studio API token (when Require Authentication is ON)
-$TokenFile = Join-Path $env:USERPROFILE ".config\embodied-claude\lmstudio.token"
-if ($env:ANTHROPIC_AUTH_TOKEN) {
-    $AuthToken = $env:ANTHROPIC_AUTH_TOKEN.Trim()
-} elseif (Test-Path $TokenFile) {
-    $AuthToken = (Get-Content $TokenFile -Raw).Trim()
-    Write-Host "    auth:  lmstudio.token"
-} else {
-    $AuthToken = "lmstudio"
-    Write-Host "    auth:  placeholder 'lmstudio' (set lmstudio.token if LM Studio requires auth)"
+  Copy-Item .claude\settings.local.json.example .claude\settings.local.json
+  Edit ANTHROPIC_AUTH_TOKEN (or paste lmstudio.token contents).
+"@
 }
 
-$env:ANTHROPIC_BASE_URL = $LmBaseUrl
-$env:ANTHROPIC_AUTH_TOKEN = $AuthToken
-$env:CLAUDE_CODE_ATTRIBUTION_HEADER = "0"
-$env:ANTHROPIC_DEFAULT_SONNET_MODEL = $Model
-$env:ANTHROPIC_DEFAULT_OPUS_MODEL = $Model
-$env:ANTHROPIC_DEFAULT_HAIKU_MODEL = $Model
+Write-Host "==> claude-code-webui"
+Write-Host "    repo:     $Repo"
+Write-Host "    settings: $SettingsLocal"
+Write-Host "    bind:     ${HostBind}:$Port"
 
 $Claude = Get-Command claude -ErrorAction SilentlyContinue
 if (-not $Claude) {
@@ -61,7 +49,7 @@ Set-Location $Repo
 
 $ProjectUrl = "http://localhost:${Port}/projects/$($Repo -replace '\\','/')"
 Write-Host ""
-Write-Host "Open: $ProjectUrl"
+Write-Host "Open:   $ProjectUrl"
 Write-Host "Koyori: http://<tailscale-ip>:${Port}/projects/..."
 Write-Host ""
 

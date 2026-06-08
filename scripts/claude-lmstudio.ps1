@@ -14,5 +14,5 @@ $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
 $Node = Get-Command node -ErrorAction Stop
 Set-Location $Repo
 
-& $Node.Source (Join-Path $PSScriptRoot "claude-lmstudio.js") @args
+& $Node.Source (Join-Path $PSScriptRoot "claude-lmstudio.cjs") @args
 exit $LASTEXITCODE

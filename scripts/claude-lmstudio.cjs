@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Claude Code entry shim for ma-home (LM Studio + forced --model).
- * Used by claude-code-webui (--claude-path scripts/claude-lmstudio.cmd) and run-claude-local.ps1.
+ * .cjs because repo package.json has "type": "module".
  */
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -50,8 +50,7 @@ const model = loadModel();
 const claudeCli = findClaudeCli();
 const userArgs = process.argv.slice(2);
 
-// Avoid duplicate --model if caller already passed one.
-const hasModelFlag = userArgs.some((arg, i) => arg === "--model" || arg.startsWith("--model="));
+const hasModelFlag = userArgs.some((arg) => arg === "--model" || arg.startsWith("--model="));
 const args = hasModelFlag ? userArgs : ["--model", model, ...userArgs];
 
 const result = spawnSync(process.execPath, [claudeCli, ...args], {

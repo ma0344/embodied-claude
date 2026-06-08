@@ -18,6 +18,9 @@ $env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
 $env:ANTHROPIC_DEFAULT_SONNET_MODEL = $Model
 $env:ANTHROPIC_DEFAULT_OPUS_MODEL = $Model
 $env:ANTHROPIC_DEFAULT_HAIKU_MODEL = $Model
+$env:CLAUDE_CODE_SUBAGENT_MODEL = $Model
+$env:CLAUDE_MODEL = $Model
+$env:LMSTUDIO_MODEL = $Model
 
 $TokenFile = Join-Path $env:USERPROFILE ".config\embodied-claude\lmstudio.token"
 if ($env:ANTHROPIC_AUTH_TOKEN) {

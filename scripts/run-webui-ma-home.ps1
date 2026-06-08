@@ -1,7 +1,9 @@
 # Start claude-code-webui on ma-home (koyori / Tailscale kiosk).
 #
-# Pass claude-lmstudio.cmd to webui — it parses the shim and spawns node + .cjs.
-# Do NOT pass .cjs directly (Windows shows "choose app to open .cjs").
+# Model: load-lmstudio-env.ps1 + .claude/settings.local.json ("model" + env block).
+# Do NOT pass claude-lmstudio.* to --claude-path — Claude Code 2.x SDK spawns a native
+# binary and .cjs/.cmd wrappers cause spawn EFTYPE / "choose app" on Windows.
+# CLI with forced --model: .\scripts\run-claude-local.ps1
 #
 # Prerequisites:
 #   - LM Studio: google/gemma-4-12b-qat loaded, server on port 1234
@@ -20,11 +22,6 @@ param(
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path $PSScriptRoot -Parent
 $SettingsLocal = Join-Path $Repo ".claude\settings.local.json"
-$ClaudeWrapper = Join-Path $PSScriptRoot "claude-lmstudio.cmd"
-if (-not (Test-Path $ClaudeWrapper)) {
-    Write-Error "Missing $ClaudeWrapper (git pull embodied-claude?)"
-}
-$ClaudeWrapper = (Resolve-Path $ClaudeWrapper).Path
 
 if (-not (Test-Path $SettingsLocal)) {
     Write-Error @"
@@ -37,11 +34,16 @@ Missing $SettingsLocal
 
 . (Join-Path $PSScriptRoot "load-lmstudio-env.ps1")
 
+$ClaudeBin = (Get-Command claude -ErrorAction SilentlyContinue).Source
+if (-not $ClaudeBin) {
+    Write-Error "claude CLI not found on PATH"
+}
+
 Write-Host "==> claude-code-webui"
 Write-Host "    repo:     $Repo"
 Write-Host "    settings: $SettingsLocal"
 Write-Host "    model:    $Model"
-Write-Host "    claude:   $ClaudeWrapper"
+Write-Host "    claude:   $ClaudeBin (auto-detect; model from env/settings)"
 Write-Host "    bind:     ${HostBind}:$Port"
 
 $Webui = Get-Command claude-code-webui -ErrorAction SilentlyContinue
@@ -56,8 +58,8 @@ Write-Host ""
 Write-Host "Open:   $ProjectUrl"
 Write-Host "Koyori: http://<tailscale-ip>:${Port}/projects/..."
 Write-Host ""
-Write-Host "Tip: old webui chats may have been started on gemma-4-12b; wrapper forces QAT on each turn."
-Write-Host "      Run .\scripts\check-lmstudio-model.ps1 if LM Studio loads the wrong weights."
+Write-Host "Tip: start a NEW chat in webui for QAT (resumed sessions may keep google/gemma-4-12b)."
+Write-Host "      CLI with --model: .\scripts\run-claude-local.ps1"
 Write-Host ""
 
-& $Webui.Source --host $HostBind --port $Port --claude-path $ClaudeWrapper @args
+& $Webui.Source --host $HostBind --port $Port @args

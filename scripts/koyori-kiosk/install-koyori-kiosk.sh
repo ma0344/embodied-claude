@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 # Install lightdm autologin + Chromium kiosk session on koyori (Surface Go).
 #
-# Run on koyori after:
-#   sudo apt install -y xorg lightdm chromium-browser unclutter iptsd
+# Run on koyori after base packages:
+#   sudo apt install -y xorg x11-common lightdm lightdm-gtk-greeter \
+#     chromium-browser unclutter iptsd x11-xserver-utils dbus-x11
 #
 # Usage:
-#   cd /path/to/embodied-claude
-#   sudo KOYORI_WEBUI_URL='http://ma-home.local:8080/projects/C:/Users/ma/src/embodied-claude' \
-#     ./scripts/koyori-kiosk/install-koyori-kiosk.sh
+#   cd /path/to/koyori-kiosk   # or embodied-claude/scripts/koyori-kiosk
+#   sudo ./install-koyori-kiosk.sh
 #
-# Reboot, then expect fullscreen webui. Logs: journalctl -u lightdm -b
+# Logs after reboot:
+#   cat /tmp/koyori-kiosk.log
+#   journalctl -u lightdm -b --no-pager | tail -30
 
 set -euo pipefail
 
@@ -22,29 +24,64 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 WEBUI_URL="${KOYORI_WEBUI_URL:-http://ma-home.local:8080/projects/C:/Users/ma/src/embodied-claude}"
 KIOSK_ENV="/etc/default/koyori-kiosk"
 
+missing=()
+for pkg in x11-common lightdm; do
+  if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+    missing+=("$pkg")
+  fi
+done
+if ((${#missing[@]})); then
+  echo "Installing missing packages: ${missing[*]}" >&2
+  apt-get update
+  apt-get install -y "${missing[@]}"
+fi
+
+if [[ ! -x /etc/X11/Xsession ]]; then
+  echo "ERROR: /etc/X11/Xsession missing. Run: sudo apt install -y x11-common" >&2
+  exit 1
+fi
+
 install -m 755 "$SCRIPT_DIR/koyori-kiosk.sh" /usr/local/bin/koyori-kiosk
+
+install -d -m 755 /usr/share/xsessions
 install -m 644 "$SCRIPT_DIR/koyori-kiosk.desktop" /usr/share/xsessions/koyori-kiosk.desktop
+install -m 644 "$SCRIPT_DIR/lightdm-xsession.desktop" /usr/share/xsessions/lightdm-xsession.desktop
+
+MA_HOME="/home/ma"
+if id ma &>/dev/null && [[ -d "$MA_HOME" ]]; then
+  install -o ma -g ma -m 755 "$SCRIPT_DIR/xsession" "$MA_HOME/.xsession"
+  usermod -aG video,input ma 2>/dev/null || true
+else
+  echo "WARN: user ma or $MA_HOME not found; create ~/.xsession manually" >&2
+fi
 
 cat >"$KIOSK_ENV" <<EOF
 # Koyori Chromium kiosk target (ma-home claude-code-webui)
+#
+# Tip: if the kiosk shows "This site can't be reached", ma-home.local may resolve
+# to IPv6 while webui listens on IPv4. Use ma-home's LAN IPv4 (or Tailscale IP):
+#   KOYORI_WEBUI_URL='http://192.168.x.x:8080/projects/C:/Users/ma/src/embodied-claude'
 KOYORI_WEBUI_URL='$WEBUI_URL'
+KOYORI_CHROMIUM_NO_SANDBOX=1
 EOF
 chmod 644 "$KIOSK_ENV"
 
 install -d -m 755 /etc/lightdm/lightdm.conf.d
 install -m 644 "$SCRIPT_DIR/lightdm-autologin.conf" /etc/lightdm/lightdm.conf.d/koyori-kiosk.conf
 
-if id ma &>/dev/null; then
-  usermod -aG video,input ma 2>/dev/null || true
-fi
-
 systemctl enable --now iptsd 2>/dev/null || true
 systemctl enable lightdm
 systemctl set-default graphical.target
 
 echo "Installed koyori kiosk."
-echo "  webui: $WEBUI_URL"
-echo "  config: $KIOSK_ENV"
+echo "  sessions: /usr/share/xsessions/koyori-kiosk.desktop"
+echo "  webui:    $WEBUI_URL"
+echo "  config:   $KIOSK_ENV"
+echo "  log:      /tmp/koyori-kiosk.log"
 echo ""
-echo "Reboot to start kiosk:"
+echo "Verify:"
+echo "  ls /usr/share/xsessions/"
+echo "  cat /etc/lightdm/lightdm.conf.d/koyori-kiosk.conf"
+echo ""
+echo "Reboot:"
 echo "  sudo reboot"

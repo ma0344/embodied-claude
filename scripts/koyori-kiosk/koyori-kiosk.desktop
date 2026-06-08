@@ -2,4 +2,5 @@
 Name=Koyori Kiosk
 Comment=Chromium kiosk to ma-home claude-code-webui
 Exec=/usr/local/bin/koyori-kiosk
-Type=Application
+Type=XSession
+DesktopNames=KoyoriKiosk

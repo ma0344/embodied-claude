@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=LightDM Xsession
+Comment=Runs /etc/X11/Xsession (honors ~/.xsession)
+Exec=/etc/X11/Xsession
+Type=XSession
+DesktopNames=LightDM-Xsession

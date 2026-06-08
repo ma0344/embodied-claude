@@ -1,0 +1,8 @@
+#!/bin/bash
+# lightdm autologin → lightdm-xsession → /etc/X11/Xsession → ~/.xsession
+echo "$(date -Is) .xsession start uid=$(id -u)" >>/tmp/xsession.log
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+if [[ -S "${XDG_RUNTIME_DIR}/bus" ]]; then
+  export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+fi
+exec /usr/local/bin/koyori-kiosk

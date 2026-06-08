@@ -1,10 +1,9 @@
 # Start claude-code-webui on ma-home (koyori / Tailscale kiosk).
 #
-# LM Studio routing lives in .claude/settings.local.json (copy from settings.local.json.example).
-# This script only sets bind address + port for the web UI process.
+# Uses claude-lmstudio.cmd so resumed webui sessions still get --model google/gemma-4-12b-qat.
 #
 # Prerequisites:
-#   - LM Studio: model loaded, server on port 1234
+#   - LM Studio: google/gemma-4-12b-qat loaded, server on port 1234
 #   - .claude/settings.local.json with env block (ANTHROPIC_*)
 #   - npm install -g claude-code-webui
 #
@@ -20,6 +19,7 @@ param(
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path $PSScriptRoot -Parent
 $SettingsLocal = Join-Path $Repo ".claude\settings.local.json"
+$ClaudeWrapper = Join-Path $PSScriptRoot "claude-lmstudio.cmd"
 
 if (-not (Test-Path $SettingsLocal)) {
     Write-Error @"
@@ -30,15 +30,14 @@ Missing $SettingsLocal
 "@
 }
 
+. (Join-Path $PSScriptRoot "load-lmstudio-env.ps1")
+
 Write-Host "==> claude-code-webui"
 Write-Host "    repo:     $Repo"
 Write-Host "    settings: $SettingsLocal"
+Write-Host "    model:    $Model"
+Write-Host "    claude:   $ClaudeWrapper"
 Write-Host "    bind:     ${HostBind}:$Port"
-
-$Claude = Get-Command claude -ErrorAction SilentlyContinue
-if (-not $Claude) {
-    Write-Error "claude CLI not found on PATH"
-}
 
 $Webui = Get-Command claude-code-webui -ErrorAction SilentlyContinue
 if (-not $Webui) {
@@ -52,5 +51,8 @@ Write-Host ""
 Write-Host "Open:   $ProjectUrl"
 Write-Host "Koyori: http://<tailscale-ip>:${Port}/projects/..."
 Write-Host ""
+Write-Host "Tip: old webui chats may have been started on gemma-4-12b; wrapper forces QAT on each turn."
+Write-Host "      Run .\scripts\check-lmstudio-model.ps1 if LM Studio loads the wrong weights."
+Write-Host ""
 
-& $Webui.Source --host $HostBind --port $Port --claude-path $Claude.Source @args
+& $Webui.Source --host $HostBind --port $Port --claude-path $ClaudeWrapper @args

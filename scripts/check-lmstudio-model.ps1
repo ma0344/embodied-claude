@@ -47,4 +47,5 @@ if (Test-Path $SettingsLocal) {
 Write-Host ""
 Write-Host "Expected: google/gemma-4-12b-qat everywhere."
 Write-Host "If you see google/gemma-4-12b (no -qat), fix settings.local.json or User env vars."
-Write-Host "Resumed sessions may keep an old model — start fresh: claude --model google/gemma-4-12b-qat"
+Write-Host "WebUI: restart with .\scripts\run-webui-ma-home.ps1 (uses claude-lmstudio.cmd wrapper)."
+Write-Host "Resumed CLI sessions: .\scripts\run-claude-local.ps1 --continue  (wrapper adds --model)"

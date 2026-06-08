@@ -60,7 +60,7 @@ def _lm_studio_settings() -> tuple[str, str, str]:
     model = (
         os.environ.get("LM_STUDIO_VISION_MODEL")
         or os.environ.get("CLAUDE_MODEL")
-        or "google/gemma-4-12b"
+        or "google/gemma-4-12b-qat"
     )
     token = os.environ.get("ANTHROPIC_AUTH_TOKEN", "").strip()
     if not token:

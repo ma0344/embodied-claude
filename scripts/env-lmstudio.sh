@@ -37,7 +37,7 @@ export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="${CLAUDE_CODE_DISABLE_NONESSENT
 export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-${ANTHROPIC_AUTH_TOKEN}}"
 
 # ma-server から確認済みのモデル ID（LM Studio にロード済みのものと一致させる）
-export CLAUDE_MODEL="${CLAUDE_MODEL:-google/gemma-4-12b}"
+export CLAUDE_MODEL="${CLAUDE_MODEL:-google/gemma-4-12b-qat}"
 
 echo "ANTHROPIC_BASE_URL=$ANTHROPIC_BASE_URL"
 echo "ANTHROPIC_AUTH_TOKEN is set: $([ -n \"${ANTHROPIC_AUTH_TOKEN}\" ] && echo yes || echo no)"

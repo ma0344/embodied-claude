@@ -15,7 +15,7 @@ source "$REPO/scripts/env-lmstudio.sh"
 # LM Studio accepts Bearer token; Claude Code may read either variable.
 export ANTHROPIC_API_KEY="${ANTHROPIC_AUTH_TOKEN}"
 
-MODEL="${CLAUDE_MODEL:-google/gemma-4-12b}"
+MODEL="${CLAUDE_MODEL:-google/gemma-4-12b-qat}"
 
 echo "Starting Claude Code in $REPO"
 echo "  model: $MODEL"

@@ -76,5 +76,5 @@ if (-not (Test-Path $mcp)) {
 
 Write-Host ""
 Write-Host "Done. Next:"
-Write-Host "  1. LM Studio: load google/gemma-4-12b, start Local Server"
+Write-Host "  1. LM Studio: load google/gemma-4-12b-qat, start Local Server"
 Write-Host "  2. .\scripts\run-claude-local.ps1"

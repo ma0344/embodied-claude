@@ -1,6 +1,7 @@
 # Start claude-code-webui on ma-home (koyori / Tailscale kiosk).
 #
-# Uses claude-lmstudio.cmd so resumed webui sessions still get --model google/gemma-4-12b-qat.
+# Uses claude-lmstudio.cmd (npm-shim shape → claude-lmstudio.js) so webui can spawn node
+# and every turn gets --model google/gemma-4-12b-qat.
 #
 # Prerequisites:
 #   - LM Studio: google/gemma-4-12b-qat loaded, server on port 1234

@@ -1,4 +1,5 @@
-@echo off
-REM Wrapper for claude-code-webui --claude-path (forces LM Studio QAT model).
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0claude-lmstudio.ps1" %*
-exit /b %ERRORLEVEL%
+@ECHO off
+SETLOCAL
+SET "NODE_EXE=node"
+SET "_prog=%NODE_EXE%"
+"%_prog%" "%dp0%\claude-lmstudio.js" %*

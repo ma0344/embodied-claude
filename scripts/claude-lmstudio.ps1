@@ -1,5 +1,5 @@
 # Claude CLI wrapper: always pass --model (fixes webui resume using old gemma-4-12b).
-# Used as: claude-code-webui --claude-path .../claude-lmstudio.cmd
+# Prefer claude-lmstudio.js (webui-compatible); this script loads LM Studio env first.
 #
 # Usage:
 #   .\scripts\claude-lmstudio.ps1
@@ -11,8 +11,8 @@ $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
 
 . (Join-Path $PSScriptRoot "load-lmstudio-env.ps1")
 
-$Claude = Get-Command claude -ErrorAction Stop
+$Node = Get-Command node -ErrorAction Stop
 Set-Location $Repo
 
-& $Claude.Source --model $Model @args
+& $Node.Source (Join-Path $PSScriptRoot "claude-lmstudio.js") @args
 exit $LASTEXITCODE

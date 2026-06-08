@@ -1,0 +1,36 @@
+{
+  "mcpServers": {
+    "memory": {
+      "command": "/home/ma/.local/bin/uv",
+      "args": [
+        "run",
+        "--directory",
+        "/home/ma/src/embodied-claude/memory-mcp",
+        "memory-mcp"
+      ],
+      "env": { "UV_PYTHON": "3.12" }
+    },
+    "system-temperature": {
+      "command": "/home/ma/.local/bin/uv",
+      "args": [
+        "run",
+        "--directory",
+        "/home/ma/src/embodied-claude/system-temperature-mcp",
+        "system-temperature-mcp"
+      ]
+    },
+    "sociality": {
+      "command": "/home/ma/.local/bin/uv",
+      "args": [
+        "run",
+        "--directory",
+        "/home/ma/src/embodied-claude/sociality-mcp",
+        "sociality-mcp"
+      ],
+      "env": {
+        "UV_PYTHON": "3.12",
+        "SOCIAL_POLICY_PATH": "/home/ma/src/embodied-claude/socialPolicy.toml"
+      }
+    }
+  }
+}

@@ -1,12 +1,4 @@
 {
-  "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:1234",
-    "ANTHROPIC_AUTH_TOKEN": "PASTE_LMSTUDIO_TOKEN_HERE",
-    "CLAUDE_CODE_ATTRIBUTION_HEADER": "0",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "google/gemma-4-12b-qat",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "google/gemma-4-12b-qat",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "google/gemma-4-12b-qat"
-  },
   "permissions": {
     "allow": [
       "mcp__wifi-cam__*",

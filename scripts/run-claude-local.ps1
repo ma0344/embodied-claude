@@ -5,7 +5,6 @@
 #   .\scripts\run-claude-local.ps1
 #
 # LM Studio env can also live in .claude/settings.local.json ("env" block).
-# This script sets the same vars for shells that do not load project settings.
 
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path $PSScriptRoot -Parent

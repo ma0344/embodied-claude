@@ -1,0 +1,12 @@
+[Unit]
+Description=Koyori USB power (disable autosuspend for dongles)
+After=sysinit.target local-fs.target
+Before=lightdm.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/koyori-usb-power-on.sh
+
+[Install]
+WantedBy=multi-user.target

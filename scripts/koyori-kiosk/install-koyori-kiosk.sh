@@ -69,6 +69,23 @@ chmod 644 "$KIOSK_ENV"
 install -d -m 755 /etc/lightdm/lightdm.conf.d
 install -m 644 "$SCRIPT_DIR/lightdm-autologin.conf" /etc/lightdm/lightdm.conf.d/koyori-kiosk.conf
 
+# Optional USB dongle tweaks (off by default; set KOYORI_USB_POWER=1 to enable).
+if [[ "${KOYORI_USB_POWER:-0}" == "1" ]] && [[ -f "$SCRIPT_DIR/koyori-usb-power-on.sh" ]]; then
+  install -m 755 "$SCRIPT_DIR/koyori-usb-power-on.sh" /usr/local/sbin/koyori-usb-power-on.sh
+  install -m 644 "$SCRIPT_DIR/99-koyori-usb-power.rules" /etc/udev/rules.d/99-koyori-usb-power.rules
+  install -m 644 "$SCRIPT_DIR/koyori-usb-power.service" /etc/systemd/system/koyori-usb-power.service
+  systemctl daemon-reload
+  systemctl enable koyori-usb-power.service
+  /usr/local/sbin/koyori-usb-power-on.sh || true
+  udevadm control --reload-rules 2>/dev/null || true
+  if ! grep -q 'usbcore.autosuspend=-1' /etc/default/grub 2>/dev/null; then
+    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="usbcore.autosuspend=-1 /' /etc/default/grub
+    update-grub 2>/dev/null || true
+  fi
+fi
+install -m 755 "$SCRIPT_DIR/diagnose-usb-c.sh" /usr/local/bin/koyori-diagnose-usb-c
+install -m 755 "$SCRIPT_DIR/fix-usb-c.sh" /usr/local/bin/koyori-fix-usb-c
+
 systemctl enable --now iptsd 2>/dev/null || true
 systemctl enable lightdm
 systemctl set-default graphical.target
@@ -82,6 +99,10 @@ echo ""
 echo "Verify:"
 echo "  ls /usr/share/xsessions/"
 echo "  cat /etc/lightdm/lightdm.conf.d/koyori-kiosk.conf"
+echo ""
+echo "USB-C / Travel Hub dead after boot:"
+echo "  sudo koyori-fix-usb-c"
+echo "  docs/koyori-usb-c-recovery.md"
 echo ""
 echo "Reboot:"
 echo "  sudo reboot"

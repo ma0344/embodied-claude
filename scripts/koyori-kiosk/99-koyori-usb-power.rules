@@ -1,0 +1,3 @@
+# Keep USB devices (e.g. Logitech receiver) from autosuspending after graphical boot.
+ACTION=="add", SUBSYSTEM=="usb", ATTR{power/control}="on"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{power/autosuspend}="-1"

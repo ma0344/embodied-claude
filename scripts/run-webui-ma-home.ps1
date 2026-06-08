@@ -1,7 +1,7 @@
 # Start claude-code-webui on ma-home (koyori / Tailscale kiosk).
 #
-# Pass claude-lmstudio.cjs to webui (SDK spawns: node <path> …). Use .cjs not .js —
-# repo package.json has "type":"module". Do not use .cmd (PowerShell breaks %dp0%).
+# Pass claude-lmstudio.cmd to webui — it parses the shim and spawns node + .cjs.
+# Do NOT pass .cjs directly (Windows shows "choose app to open .cjs").
 #
 # Prerequisites:
 #   - LM Studio: google/gemma-4-12b-qat loaded, server on port 1234
@@ -20,7 +20,7 @@ param(
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path $PSScriptRoot -Parent
 $SettingsLocal = Join-Path $Repo ".claude\settings.local.json"
-$ClaudeWrapper = Join-Path $PSScriptRoot "claude-lmstudio.cjs"
+$ClaudeWrapper = Join-Path $PSScriptRoot "claude-lmstudio.cmd"
 if (-not (Test-Path $ClaudeWrapper)) {
     Write-Error "Missing $ClaudeWrapper (git pull embodied-claude?)"
 }

@@ -42,6 +42,12 @@ ENV/
 # MCP config (may contain API keys)
 .mcp.json
 
+# Claude Code local settings (tokens, permissions)
+.claude/settings.local.json
+
+# LM Studio / local secrets
+**/lmstudio.token
+
 # Captured images
 /captures/
 *.jpg

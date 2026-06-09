@@ -85,6 +85,16 @@ if [[ -x /usr/local/bin/koyori-ime-start ]]; then
   source /usr/local/bin/koyori-ime-start
 fi
 
+if [[ -x /usr/local/bin/koyori-input-leap-start ]]; then
+  # shellcheck disable=SC1091
+  source /usr/local/bin/koyori-input-leap-start
+fi
+
+if [[ -x /usr/local/bin/koyori-onboard-start ]]; then
+  # shellcheck disable=SC1091
+  source /usr/local/bin/koyori-onboard-start
+fi
+
 BROWSER_ARGS=(
   --kiosk
   --noerrdialogs

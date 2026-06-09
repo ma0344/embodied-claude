@@ -45,9 +45,11 @@ fi
 install -m 755 "$SCRIPT_DIR/koyori-kiosk.sh" /usr/local/bin/koyori-kiosk
 install -m 755 "$SCRIPT_DIR/koyori-ime-start.sh" /usr/local/bin/koyori-ime-start
 install -m 755 "$SCRIPT_DIR/koyori-display-setup.sh" /usr/local/bin/koyori-display-setup
+install -m 755 "$SCRIPT_DIR/koyori-input-leap-start.sh" /usr/local/bin/koyori-input-leap-start
+install -m 755 "$SCRIPT_DIR/koyori-onboard-start.sh" /usr/local/bin/koyori-onboard-start
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-ime.sh" /usr/local/bin/koyori-diagnose-ime
 
-KIOSK_PKGS=(openbox xdotool x11-xserver-utils)
+KIOSK_PKGS=(openbox xdotool x11-xserver-utils onboard)
 missing_kiosk=()
 for pkg in "${KIOSK_PKGS[@]}"; do
   if ! dpkg -s "$pkg" >/dev/null 2>&1; then
@@ -113,6 +115,11 @@ KOYORI_BROWSER=firefox
 # Surface Go native mode (optional; xrandr --auto usually enough):
 # KOYORI_DISPLAY_MODE=1800x1200
 # KOYORI_USE_WM=1
+# On-screen keyboard (Surface touch). docs/koyori-input-sharing.md
+KOYORI_ONBOARD=1
+# Input Leap client — ma-home Windows Server IP (LAN or Tailscale):
+# KOYORI_INPUT_LEAP_SERVER='100.64.x.x'
+# KOYORI_INPUT_LEAP_NAME='koyori'
 EOF
 chmod 644 "$KIOSK_ENV"
 
@@ -160,3 +167,7 @@ echo ""
 echo "Japanese IME in kiosk:"
 echo "  Toggle: 半/全 key (JIS) in text fields"
 echo "  diagnose: koyori-diagnose-ime"
+echo ""
+echo "Input sharing:"
+echo "  touch keyboard: onboard (KOYORI_ONBOARD=1)"
+echo "  Windows KB share: docs/koyori-input-sharing.md (Input Leap)"

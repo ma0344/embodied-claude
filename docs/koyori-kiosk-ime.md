@@ -83,7 +83,16 @@ grep display /tmp/koyori-kiosk.log
 KOYORI_DISPLAY_MODE=1800x1200
 ```
 
+## 入力共有・タッチキーボード
+
+- **Input Leap** — ma-home (Windows Server) のキーボード/マウスを koyori で使う
+- **onboard** — タップでソフトキーボード（入力欄フォーカスで自動表示）
+- **Keychron K2** — Bluetooth 1/2/3 で接続先切替（Input Leap なしでも可）
+
+→ `docs/koyori-input-sharing.md`
+
 ## 関連
 
+- `docs/koyori-input-sharing.md`
 - `docs/backlog-ma-home.md` — webui 常時起動（後で）
 - `scripts/koyori-kiosk/koyori-kiosk.sh`

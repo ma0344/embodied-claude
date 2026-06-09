@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Start IBus + Mozc for koyori kiosk. Source from koyori-kiosk.sh (do not exec).
 # Requires: ibus-mozc ibus-gtk3
+#
+# Toggle in Firefox: JIS 半/全 key (Hankaku/Zenkaku). Ctrl+Space is often unbound
+# in minimal X sessions.
 
 koyori_ime_log() {
   echo "$(date -Is) ime: $*"
@@ -26,10 +29,6 @@ if ! command -v ibus-daemon >/dev/null 2>&1; then
   return 0
 fi
 
-if [[ -z "${DISPLAY:-}" ]]; then
-  koyori_ime_log "WARN DISPLAY unset — IME may not attach to the browser"
-fi
-
 koyori_ime_list_engines() {
   ibus list-engine 2>&1
 }
@@ -39,7 +38,7 @@ koyori_ime_has_mozc() {
 }
 
 koyori_ime_wait_mozc() {
-  local seconds="${1:-45}"
+  local seconds="${1:-60}"
   local i=0
   local max=$((seconds * 10))
   while (( i < max )); do
@@ -52,47 +51,18 @@ koyori_ime_wait_mozc() {
   return 1
 }
 
-koyori_ime_activate() {
-  local engine current
-  for engine in mozc-jp mozc-jp-ro mozc-jp-typing mozc-jp-dv mozc-on mozc; do
-    if ibus engine "$engine" 2>/dev/null; then
+koyori_ime_try_activate() {
+  local engine err current
+  for engine in mozc-jp mozc-jp-ro mozc-on mozc; do
+    if err=$(ibus engine "$engine" 2>&1); then
       current=$(ibus engine 2>/dev/null || echo "$engine")
       koyori_ime_log "engine=$current"
       return 0
+    fi
+    if [[ -n "$err" ]]; then
+      koyori_ime_log "engine $engine failed: $err"
     fi
   done
-  if koyori_ime_has_mozc; then
-    engine=$(koyori_ime_list_engines | awk '/mozc/ {print $1; exit}')
-    if [[ -n "$engine" ]] && ibus engine "$engine" 2>/dev/null; then
-      current=$(ibus engine 2>/dev/null || echo "$engine")
-      koyori_ime_log "engine=$current"
-      return 0
-    fi
-  fi
-  return 1
-}
-
-koyori_ime_bootstrap() {
-  if ! pgrep -u "$(id -u)" -x ibus-daemon >/dev/null 2>&1; then
-    koyori_ime_log "starting ibus-daemon"
-    ibus-daemon -drx --xim &
-  fi
-
-  if koyori_ime_wait_mozc 20 && koyori_ime_activate; then
-    return 0
-  fi
-
-  koyori_ime_log "mozc not ready — restarting ibus-daemon once"
-  ibus exit 2>/dev/null || true
-  sleep 1
-  ibus-daemon -drx --xim &
-
-  if koyori_ime_wait_mozc 45 && koyori_ime_activate; then
-    return 0
-  fi
-
-  koyori_ime_log "WARN mozc still unavailable after ibus restart"
-  koyori_ime_log "engines: $(koyori_ime_list_engines | tr '\n' ' ')"
   return 1
 }
 
@@ -102,18 +72,19 @@ if command -v gsettings >/dev/null 2>&1; then
   gsettings set org.freedesktop.ibus.general use-global-engine true 2>/dev/null || true
 fi
 
-if koyori_ime_bootstrap; then
+if ! pgrep -u "$(id -u)" -x ibus-daemon >/dev/null 2>&1; then
+  koyori_ime_log "starting ibus-daemon"
+  ibus-daemon -drx --xim &
+fi
+
+if koyori_ime_wait_mozc 60; then
+  if koyori_ime_try_activate; then
+    koyori_ime_log "toggle: 半/全 key (JIS) in text fields"
+    return 0
+  fi
+  koyori_ime_log "mozc registered; ibus engine CLI skipped — use 半/全 to toggle"
   return 0
 fi
 
-koyori_ime_log "background wait for mozc-jp (up to 60s)"
-(
-  for _ in $(seq 1 120); do
-    sleep 0.5
-    if koyori_ime_activate; then
-      koyori_ime_log "background engine ok"
-      exit 0
-    fi
-  done
-  koyori_ime_log "background timeout — try Ctrl+Space in the input field"
-) &
+koyori_ime_log "WARN mozc not in ibus list-engine after 60s"
+koyori_ime_log "engines: $(koyori_ime_list_engines | tr '\n' ' ')"

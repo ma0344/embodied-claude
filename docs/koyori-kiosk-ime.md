@@ -1,36 +1,35 @@
 # koyori キオスク: 日本語入力 (IME)
 
-Surface Go（koyori）の Chromium キオスクは `~/.xsession` から直接起動するため、
-通常デスクトップの im-config / IBus 自動起動が走らない。**英字は打てるが日本語に切り替えられない**
-状態になる。
+Surface Go（koyori）のキオスクは `~/.xsession` から直接起動するため、
+通常デスクトップの im-config / IBus 自動起動が走らない。
 
-加えて Ubuntu 24.04 の **snap 版 Chromium はホスト IBus を使えない**ことが多い。
-キオスクは **Firefox + IBus/Mozc** を既定にしている。
+キオスクは **Firefox + IBus/Mozc** を既定にしている（snap Chromium は IME 非推奨）。
 
-## 症状から読み取る
+## 使い方（これが本番）
 
-| 確認結果 | 意味 |
-|----------|------|
-| `grep ime /tmp/koyori-kiosk.log` が空 | IME スクリプト未導入、または古い `koyori-kiosk` |
-| `ibus list-engine` に mozc が無い | `ibus-mozc` 未インストール、または SSH から DISPLAY 未指定 |
-| `pgrep ibus-daemon` だけ動く | デーモンはいるが Mozc エンジン未登録 |
+1. webui の入力欄をクリック
+2. **半/全キー**（JIS キーボードの Hankaku/Zenkaku）で日本語 ON/OFF
+3. 日本語モードで入力
 
-SSH から IBus を見るときは **必ず DISPLAY を付ける**:
+**Ctrl+Space / Super+Space は効かないことが多い**（最小 X セッションでは IBus の
+ショートカットが未設定のため）。半/全が効けば正常。
+
+## ログの読み方
+
+| ログ | 意味 |
+|------|------|
+| `ime: mozc registered; ... use 半/全` | **OK** — Mozc 登録済み。半/全で切替 |
+| `ime: engine=mozc-jp` | **OK** — CLI でもエンジン選択できた |
+| `ime: background timeout` | 旧スクリプト。半/全が効いていれば無視してよい |
+| `ibus engine (current): xkb:us:eng` | 半/全を押すまで英字レイアウト表示のことがある |
 
 ```bash
+grep ime /tmp/koyori-kiosk.log
 DISPLAY=:0 koyori-diagnose-ime
-# または
-DISPLAY=:0 XDG_RUNTIME_DIR=/run/user/$(id -u) ibus list-engine | grep -i mozc
+DISPLAY=:0 ibus list-engine | grep -i mozc   # mozc-jp があれば OK
 ```
 
-## 対策（リポジトリ側）
-
-- `koyori-ime-start.sh` — IBus 再起動 + Mozc 選択（ログは `/tmp/koyori-kiosk.log` に `ime:`）
-- `koyori-kiosk.sh` — Chromium 前に IME 起動。**既定ブラウザ Firefox**
-- `install-koyori-kiosk.sh` — `ibus-mozc` / `ibus-gtk3` / `firefox` 等を導入
-- `koyori-diagnose-ime` — 一括診断
-
-## koyori で適用
+## セットアップ
 
 ```bash
 cd ~/src/embodied-claude/scripts/koyori-kiosk
@@ -39,41 +38,21 @@ sudo ./install-koyori-kiosk.sh
 sudo reboot
 ```
 
-再起動後:
-
-```bash
-grep ime /tmp/koyori-kiosk.log
-# 成功: ime: engine=mozc-jp
-# 遅延: ime: background engine ok
-
-DISPLAY=:0 koyori-diagnose-ime
-# ibus engine (current): mozc-jp  ← xkb:us:eng 等なら未選択
-```
-
-webui の入力欄をクリック → **Ctrl+Space**（または **Super+Space**）で Mozc ON/OFF。  
-起動直後は mozc 登録が遅れることがある（`background engine ok` を待つ）。
-
-## ブラウザを変えたい
+## ブラウザ
 
 `/etc/default/koyori-kiosk`:
 
 ```bash
-KOYORI_BROWSER=firefox    # 推奨（日本語入力）
-# KOYORI_BROWSER=chromium   # snap だと IME が効かないことが多い
-# KOYORI_BROWSER=auto       # firefox があれば firefox 優先
+KOYORI_BROWSER=firefox    # 推奨
 ```
 
-変更後: `sudo reboot`
-
-## うまくいかないとき
+## まだ日本語にならないとき
 
 | 症状 | 対処 |
 |------|------|
-| `grep ime` が空 | `sudo ./install-koyori-kiosk.sh` を再実行して reboot |
-| `ERROR ibus-mozc not installed` | `sudo apt install -y ibus-mozc ibus-gtk3 firefox` |
-| `no mozc engine` | `koyori-diagnose-ime` の engines 行を確認 |
-| Ctrl+Space が効かない | 入力欄フォーカス確認。Fn キーで Ctrl が効いているか |
-| Firefox でもダメ | `journalctl -u lightdm -b` と `/tmp/koyori-kiosk.log` を共有 |
+| 半/全でもダメ | `DISPLAY=:0 ibus list-engine \| grep mozc` が空 → `sudo apt install -y ibus-mozc` |
+| `grep ime` が空 | `sudo ./install-koyori-kiosk.sh` して reboot |
+| 英字キーボードのみ | JIS キーボード or 半/全相当キーがない |
 
 ## 関連
 

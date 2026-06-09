@@ -67,8 +67,8 @@ if [[ -n "$CH" ]]; then
 fi
 
 echo ""
-echo "If mozc-jp appears above but engine is xkb:*, reboot after install or wait for"
-echo "background ime activation (grep ime /tmp/koyori-kiosk.log)."
+echo "Toggle in Firefox: 半/全 (JIS Hankaku/Zenkaku). Ctrl+Space often does nothing here."
+echo "If mozc-jp is listed above, IME is ready even when ibus engine shows xkb:*."
 echo ""
 echo "Fix:"
 echo "  cd .../scripts/koyori-kiosk && sudo ./install-koyori-kiosk.sh && sudo reboot"

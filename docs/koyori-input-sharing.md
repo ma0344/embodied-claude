@@ -69,12 +69,28 @@ New-NetFirewallRule -DisplayName "Input Leap" `
 
 ### 2. koyori (Ubuntu) — Client
 
+v3.0.3 は **.deb ではなく tar.gz** のみ（中にさらに tar が入っている）。
+
 ```bash
-# Releases から Ubuntu 24.04 用 .deb を取得してインストール
-cd ~/Downloads
-sudo apt install -y ./input-leap_*_ubuntu_noble_amd64.deb
-input-leapc --help   # 入ったか確認
+# 例: /tmp/input-leap-ubuntu-24-04-v3.0.3.tar.gz を置いた状態で
+cd ~/src/embodied-claude/scripts/koyori-kiosk
+sudo ./install-input-leap-tarball.sh /tmp/input-leap-ubuntu-24-04-v3.0.3.tar.gz
+input-leapc --help
 ```
+
+手動でやる場合:
+
+```bash
+cd /tmp
+tar xzf input-leap-ubuntu-24-04-v3.0.3.tar.gz
+cd input-leap-ubuntu-24-04
+tar xf input-leap-ubuntu-24-04.tar.gz    # 内側は gzip ではない plain tar
+sudo cp -a input-leap-ubuntu-24-04/bin/* /usr/local/bin/
+sudo cp -a input-leap-ubuntu-24-04/share/. /usr/local/share/
+sudo apt install -y libqt6core6t64 libqt6gui6t64 libqt6widgets6t64 libssl3
+```
+
+別案: [Flathub Input Leap](https://flathub.org/apps/io.github.input_leap.input-leap)（GUI 用。キオスクの CLI client とは別）。
 
 `/etc/default/koyori-kiosk` を編集（**install で上書きされるので、その後に設定**）:
 
@@ -120,7 +136,7 @@ ma-home でマウスを右端へ → koyori の Surface でカーソルが動け
 | スクリーン名不一致 | Server 配置の名前と `KOYORI_INPUT_LEAP_NAME` を一致（既定 `koyori`） |
 | crypto エラー | 両方 `--enable-crypto`（既定）。ダメなら `KOYORI_INPUT_LEAP_CRYPTO=0` を両側で |
 | 日本語がおかしい | **半/全** は Server 側キーボードから送られる。おかしければ K2 を koyori BT に直接切替 |
-| `input-leapc not installed` | `.deb` を手動インストール（apt に無いことが多い） |
+| `input-leapc not installed` | `install-input-leap-tarball.sh` で tar.gz から `/usr/local/bin` へ |
 
 ---
 

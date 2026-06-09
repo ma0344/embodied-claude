@@ -5,6 +5,8 @@
 $Repo = Split-Path $PSScriptRoot -Parent
 $SettingsLocal = Join-Path $Repo ".claude\settings.local.json"
 
+. (Join-Path $PSScriptRoot "lmstudio-env.ps1")
+
 Write-Host "==> LM Studio model check (ma-home)"
 Write-Host ""
 
@@ -44,9 +46,20 @@ if (Test-Path $SettingsLocal) {
     Write-Host "  WARN: missing $SettingsLocal"
 }
 
+$Mismatches = Test-LmStudioSettingsMismatch -SettingsLocal $SettingsLocal
+if ($Mismatches.Count -gt 0) {
+    Write-Host ""
+    Write-Host "  MISMATCH (env block vs settings.model):"
+    foreach ($Row in $Mismatches) {
+        Write-Host "    env.$($Row.Name) = $($Row.Value)  (expected $($Row.Expected))"
+    }
+    Write-Host ""
+    Write-Host "  Fix: .\scripts\sync-lmstudio-settings.ps1"
+}
+
 Write-Host ""
 Write-Host "Expected: google/gemma-4-12b-qat everywhere."
-Write-Host "If you see google/gemma-4-12b (no -qat), fix settings.local.json or User env vars."
-Write-Host "WebUI: .\scripts\run-webui-ma-home.ps1  (new chat for QAT)"
-Write-Host "CLI:   .\scripts\run-claude-local.ps1  (always --model google/gemma-4-12b-qat)"
-Write-Host "Resumed sessions may keep an old model — start a new chat or use run-claude-local.ps1"
+Write-Host "If LM Studio still loads google/gemma-4-12b:"
+Write-Host "  1) sync-lmstudio-settings.ps1  2) restart webui  3) NEW chat (not resumed history)"
+Write-Host "WebUI: .\scripts\run-webui-ma-home.ps1"
+Write-Host "CLI:   .\scripts\run-claude-local.ps1  (always passes --model)"

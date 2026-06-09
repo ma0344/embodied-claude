@@ -65,37 +65,29 @@ claude.exe not found.
 "@
 }
 
+. (Join-Path $PSScriptRoot "lmstudio-env.ps1")
+
 $Settings = Get-Content $SettingsLocal -Raw | ConvertFrom-Json
-$Model = if ($Settings.model) { $Settings.model } else { "google/gemma-4-12b-qat" }
+$Model = Get-LmStudioModelFromSettings -SettingsLocal $SettingsLocal
 
-if ($Settings.env) {
-    foreach ($Prop in $Settings.env.PSObject.Properties) {
-        if ($Prop.Value) {
-            Set-Item -Path "env:$($Prop.Name)" -Value $Prop.Value
+# Top-level "model" must win over stale env.*MODEL keys (CLAUDE_MODEL overrides "model").
+Set-LmStudioProcessEnv -Model $Model -SettingsEnv $Settings.env -ForceModel
+
+$Mismatches = Test-LmStudioSettingsMismatch -SettingsLocal $SettingsLocal
+if ($Mismatches.Count -gt 0) {
+    Write-Warning "settings.local.json env MODEL keys differ from `"model`": run .\scripts\sync-lmstudio-settings.ps1"
+}
+
+$UserSettings = Join-Path $env:USERPROFILE ".claude\settings.json"
+if (Test-Path $UserSettings) {
+    try {
+        $UserJson = Get-Content $UserSettings -Raw | ConvertFrom-Json
+        if ($UserJson.model -and $UserJson.model -ne $Model) {
+            Write-Warning "~/.claude/settings.json model=$($UserJson.model) — project local uses $Model for new sessions."
         }
+    } catch {
+        # ignore parse errors
     }
-}
-
-if (-not $env:CLAUDE_MODEL) { $env:CLAUDE_MODEL = $Model }
-if (-not $env:LMSTUDIO_MODEL) { $env:LMSTUDIO_MODEL = $Model }
-if (-not $env:ANTHROPIC_BASE_URL) { $env:ANTHROPIC_BASE_URL = "http://127.0.0.1:1234" }
-if (-not $env:CLAUDE_CODE_ATTRIBUTION_HEADER) { $env:CLAUDE_CODE_ATTRIBUTION_HEADER = "0" }
-if (-not $env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC) { $env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1" }
-if (-not $env:ANTHROPIC_DEFAULT_SONNET_MODEL) { $env:ANTHROPIC_DEFAULT_SONNET_MODEL = $Model }
-if (-not $env:ANTHROPIC_DEFAULT_OPUS_MODEL) { $env:ANTHROPIC_DEFAULT_OPUS_MODEL = $Model }
-if (-not $env:ANTHROPIC_DEFAULT_HAIKU_MODEL) { $env:ANTHROPIC_DEFAULT_HAIKU_MODEL = $Model }
-if (-not $env:CLAUDE_CODE_SUBAGENT_MODEL) { $env:CLAUDE_CODE_SUBAGENT_MODEL = $Model }
-
-if (-not $env:ANTHROPIC_AUTH_TOKEN) {
-    $TokenFile = Join-Path $env:USERPROFILE ".config\embodied-claude\lmstudio.token"
-    if (Test-Path $TokenFile) {
-        $env:ANTHROPIC_AUTH_TOKEN = (Get-Content $TokenFile -Raw).Trim()
-    } elseif ($env:LM_STUDIO_TOKEN) {
-        $env:ANTHROPIC_AUTH_TOKEN = $env:LM_STUDIO_TOKEN.Trim()
-    }
-}
-if ($env:ANTHROPIC_AUTH_TOKEN -and -not $env:ANTHROPIC_API_KEY) {
-    $env:ANTHROPIC_API_KEY = $env:ANTHROPIC_AUTH_TOKEN
 }
 
 $ClaudeExe = Resolve-ClaudeExe -Override $ClaudePath
@@ -119,7 +111,7 @@ Write-Host ""
 Write-Host "Open:   $ProjectUrl"
 Write-Host "Koyori: http://<tailscale-ip>:${Port}/projects/..."
 Write-Host ""
-Write-Host "Tip: start a NEW chat for QAT (resumed sessions may keep google/gemma-4-12b)."
+Write-Host "Tip: NEW chat only (History resumes google/gemma-4-12b). If mismatch warning above: .\scripts\sync-lmstudio-settings.ps1"
 Write-Host ""
 
 & $Webui.Source --host $HostBind --port $Port --claude-path $ClaudeExe @args

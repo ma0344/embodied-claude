@@ -15,6 +15,31 @@ if [[ -f /etc/default/koyori-kiosk ]]; then
   source /etc/default/koyori-kiosk
 fi
 
+# firefox: reliable IBus on minimal X. chromium snap often ignores host IME.
+KOYORI_BROWSER="${KOYORI_BROWSER:-auto}"
+
+pick_browser() {
+  local want="$1"
+  local c
+
+  if [[ "$want" == "firefox" ]]; then
+    for c in firefox firefox-esr; do command -v "$c" >/dev/null 2>&1 && { echo "$c"; return 0; }; done
+    return 1
+  fi
+  if [[ "$want" == "chromium" ]]; then
+    for c in chromium-browser chromium google-chrome; do
+      command -v "$c" >/dev/null 2>&1 && { echo "$c"; return 0; }
+    done
+    return 1
+  fi
+  # auto: prefer firefox for Japanese IME
+  for c in firefox firefox-esr; do command -v "$c" >/dev/null 2>&1 && { echo "$c"; return 0; }; done
+  for c in chromium-browser chromium google-chrome; do
+    command -v "$c" >/dev/null 2>&1 && { echo "$c"; return 0; }
+  done
+  return 1
+}
+
 : "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
 export XDG_RUNTIME_DIR
 if [[ -S "${XDG_RUNTIME_DIR}/bus" ]]; then
@@ -38,19 +63,16 @@ if command -v unclutter >/dev/null 2>&1 && [[ -n "${DISPLAY:-}" ]]; then
 fi
 
 CHROMIUM=""
-for candidate in chromium-browser chromium google-chrome firefox; do
-  if command -v "$candidate" >/dev/null 2>&1; then
-    CHROMIUM="$candidate"
-    break
-  fi
-done
+if picked=$(pick_browser "$KOYORI_BROWSER"); then
+  CHROMIUM="$picked"
+fi
 
 if [[ -z "$CHROMIUM" ]]; then
-  log "ERROR: no browser binary found (chromium/firefox)"
+  log "ERROR: no browser found (KOYORI_BROWSER=$KOYORI_BROWSER)"
   exit 1
 fi
 
-log "browser=$CHROMIUM url=$WEBUI_URL"
+log "browser=$CHROMIUM (KOYORI_BROWSER=$KOYORI_BROWSER) url=$WEBUI_URL"
 
 if [[ -x /usr/local/bin/koyori-ime-start ]]; then
   # shellcheck disable=SC1091
@@ -68,13 +90,14 @@ BROWSER_ARGS=(
 )
 
 if [[ "$CHROMIUM" == *firefox* ]]; then
-  BROWSER_ARGS=(--kiosk "$WEBUI_URL")
-  exec "$CHROMIUM" "${BROWSER_ARGS[@]}"
+  exec "$CHROMIUM" --kiosk "$WEBUI_URL"
 fi
 
 # Ubuntu 24.04 chromium-browser is usually snap; needs this on minimal X sessions.
 if [[ "${KOYORI_CHROMIUM_NO_SANDBOX:-1}" == "1" ]]; then
   BROWSER_ARGS+=(--no-sandbox)
 fi
+# Snap chromium + IBus: X11 ozone sometimes helps; firefox is still preferred.
+BROWSER_ARGS+=(--ozone-platform=x11)
 
 exec "$CHROMIUM" "${BROWSER_ARGS[@]}" "$WEBUI_URL"

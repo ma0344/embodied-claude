@@ -44,10 +44,18 @@ fi
 
 install -m 755 "$SCRIPT_DIR/koyori-kiosk.sh" /usr/local/bin/koyori-kiosk
 install -m 755 "$SCRIPT_DIR/koyori-ime-start.sh" /usr/local/bin/koyori-ime-start
+install -m 755 "$SCRIPT_DIR/koyori-diagnose-ime.sh" /usr/local/bin/koyori-diagnose-ime
 
-if ! dpkg -s ibus-mozc >/dev/null 2>&1; then
-  echo "Installing ibus-mozc for Japanese IME..."
-  apt-get install -y ibus-mozc fonts-noto-cjk
+IME_PKGS=(ibus-mozc ibus-gtk3 ibus-gtk mozc-server fonts-noto-cjk firefox)
+missing_ime=()
+for pkg in "${IME_PKGS[@]}"; do
+  if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+    missing_ime+=("$pkg")
+  fi
+done
+if ((${#missing_ime[@]})); then
+  echo "Installing IME + kiosk browser: ${missing_ime[*]}"
+  apt-get install -y "${missing_ime[@]}"
 fi
 
 install -d -m 755 /usr/share/xsessions
@@ -73,6 +81,8 @@ cat >"$KIOSK_ENV" <<EOF
 #   KOYORI_WEBUI_URL='http://192.168.x.x:8080/projects/C:/Users/ma/src/embodied-claude'
 KOYORI_WEBUI_URL='$WEBUI_URL'
 KOYORI_CHROMIUM_NO_SANDBOX=1
+# firefox: IBus/Mozc works on minimal X. snap chromium often cannot use host IME.
+KOYORI_BROWSER=firefox
 EOF
 chmod 644 "$KIOSK_ENV"
 
@@ -118,5 +128,6 @@ echo "Reboot:"
 echo "  sudo reboot"
 echo ""
 echo "Japanese IME in kiosk:"
-echo "  Ctrl+Space toggles Mozc (after ibus-mozc installed)"
-echo "  Log: grep ime /tmp/koyori-kiosk.log"
+echo "  Ctrl+Space toggles Mozc"
+echo "  diagnose: koyori-diagnose-ime"
+echo "  log: grep ime /tmp/koyori-kiosk.log"

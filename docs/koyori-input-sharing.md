@@ -46,7 +46,10 @@ cd ~/src/embodied-claude && git pull
 koyori-pair-keychron.sh 2
 ```
 
-スキャンで `Keychron K4 MAX` 等を自動検出してペアする。
+スキャンで **`Keychron K4 Max`** を自動検出（既定パターン `K4 Max`）。
+名前が違うとき: `KOYORI_KEYCHRON_NAME='Keychron' koyori-pair-keychron.sh 2`
+
+`bluetoothctl devices` が空でも、スキャン中の `[NEW] Device ... Keychron K4 Max` 行から MAC を拾う。
 
 手動:
 

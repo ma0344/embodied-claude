@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
-# Reconnect Keychron without relying on a fixed MAC (K4 MAX random address).
-#
-# Usage: koyori-connect-keychron.sh
-# On keyboard: Fn+<slot> for koyori (default slot 2).
+# Reconnect Keychron (K4 MAX random MAC) by scanning for name.
 
 set -euo pipefail
 
 SLOT=2
-NAME_PATTERN="${KOYORI_KEYCHRON_NAME:-Keychron}"
+NAME_PATTERN="${KOYORI_KEYCHRON_NAME:-K4 Max}"
 if [[ -f ~/.config/koyori-keychron ]]; then
   # shellcheck disable=SC1090
   source ~/.config/koyori-keychron
@@ -18,37 +15,51 @@ if ! command -v bluetoothctl >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Turn on keyboard slot $SLOT (Fn+$SLOT), then waiting ..."
+koyori_bt_find_mac() {
+  local pattern="$1"
+  local log="$2"
+  local mac=""
+  mac=$(grep -iE '^\[(NEW|CHG)\] Device [0-9A-F:]{17}' "$log" | grep -i "$pattern" | tail -1 \
+    | grep -oE '([0-9A-F]{2}:){5}[0-9A-F]{2}' | tail -1 || true)
+  [[ -n "$mac" ]] && { echo "$mac"; return 0; }
+  mac=$(grep -iE '^Device [0-9A-F:]{17}' "$log" | grep -i "$pattern" | tail -1 | awk '{print $2}' || true)
+  [[ -n "$mac" ]] && { echo "$mac"; return 0; }
+  return 1
+}
+
+echo "Fn+$SLOT on keyboard, then scanning for *${NAME_PATTERN}* ..."
 bluetoothctl power on >/dev/null 2>&1 || true
 
-# Try last bonded device first
 if [[ -n "${LAST_MAC:-}" ]]; then
-  if bluetoothctl connect "$LAST_MAC" 2>/dev/null; then
-    sleep 1
-    if bluetoothctl info "$LAST_MAC" 2>/dev/null | grep -q "Connected: yes"; then
-      echo "Connected via last MAC $LAST_MAC"
-      exit 0
-    fi
+  if bluetoothctl connect "$LAST_MAC" 2>/dev/null && \
+     bluetoothctl info "$LAST_MAC" 2>/dev/null | grep -q 'Connected: yes'; then
+    echo "Connected via last MAC $LAST_MAC"
+    exit 0
   fi
 fi
 
-# Scan and connect by name
-bluetoothctl scan on >/dev/null 2>&1 || true
-sleep 12
-bluetoothctl scan off >/dev/null 2>&1 || true
+SCAN_LOG=$(mktemp)
+trap 'rm -f "$SCAN_LOG"' EXIT
 
-MAC=$(bluetoothctl devices 2>/dev/null | grep -i "$NAME_PATTERN" | awk '{print $2}' | tail -1)
+if bluetoothctl --help 2>&1 | grep -q -- '--timeout'; then
+  bluetoothctl --timeout 20 scan on 2>&1 | tee -a "$SCAN_LOG" || true
+else
+  timeout 20 bluetoothctl scan on 2>&1 | tee -a "$SCAN_LOG" || true
+  bluetoothctl scan off 2>&1 | tee -a "$SCAN_LOG" || true
+fi
+bluetoothctl devices 2>&1 | tee -a "$SCAN_LOG" || true
+
+MAC=$(koyori_bt_find_mac "$NAME_PATTERN" "$SCAN_LOG" || true)
 if [[ -z "$MAC" ]]; then
-  echo "No '$NAME_PATTERN' found. Is Fn+$SLOT on and keyboard awake?" >&2
-  bluetoothctl devices
+  echo "Not found. Is Fn+$SLOT on?" >&2
+  grep -iE '^\[(NEW|CHG)\] Device|^Device ' "$SCAN_LOG" | tail -15
   exit 1
 fi
 
 bluetoothctl trust "$MAC" 2>/dev/null || true
 bluetoothctl connect "$MAC"
-echo "Connected $MAC ($(bluetoothctl devices | grep "$MAC" || true))"
+echo "Connected $MAC"
 
-mkdir -p ~/.config
 if [[ -f ~/.config/koyori-keychron ]]; then
   sed -i "s/^LAST_MAC=.*/LAST_MAC=$MAC/" ~/.config/koyori-keychron 2>/dev/null || true
 fi

@@ -74,10 +74,21 @@ webui 入力欄 → 英字 → **半/全** で日本語。
 
 ## 日常
 
-1. **`Fn+2`** で koyori に接続
-2. つながらない: `koyori-connect-keychron.sh`（SSH からでも可）
+1. **`Fn+2`** で koyori スロットへ（接続まで数秒かかることあり）
+2. つながらない: `koyori-connect-keychron.sh`（**Fn+2 を押してから**実行）
+3. キオスクは 30 秒ごとに自動再接続（`KOYORI_BT_AUTOCONNECT=1`）
 
-ma-home は **`Fn+1`**。
+ma-home は **`Fn+1`**。スロット 2 は koyori 専用に。
+
+### Fn+2 だけでは繋がらない
+
+```bash
+cd ~/src/embodied-claude/scripts/koyori-kiosk
+sudo ./install-koyori-kiosk.sh    # BlueZ ReconnectUUIDs
+sudo systemctl restart bluetooth
+koyori-connect-keychron.sh        # Fn+2 押しながら/直後に
+grep bt-watch /tmp/koyori-kiosk.log
+```
 
 ---
 

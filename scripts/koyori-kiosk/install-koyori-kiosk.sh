@@ -53,6 +53,10 @@ install -m 755 "$SCRIPT_DIR/koyori-diagnose-input-leap.sh" /usr/local/bin/koyori
 install -m 755 "$SCRIPT_DIR/koyori-pair-keychron.sh" /usr/local/bin/koyori-pair-keychron
 install -m 755 "$SCRIPT_DIR/koyori-connect-keychron.sh" /usr/local/bin/koyori-connect-keychron
 install -m 755 "$SCRIPT_DIR/koyori-bluetooth-cleanup-keychron.sh" /usr/local/bin/koyori-bluetooth-cleanup-keychron
+install -m 644 "$SCRIPT_DIR/koyori-bluetooth-keychron-lib.sh" /usr/local/bin/koyori-bluetooth-keychron-lib.sh
+install -m 755 "$SCRIPT_DIR/koyori-bluetooth-keychron-watch.sh" /usr/local/bin/koyori-bluetooth-keychron-watch
+install -d -m 755 /etc/bluetooth/main.conf.d
+install -m 644 "$SCRIPT_DIR/99-koyori-bluetooth-keychron.conf" /etc/bluetooth/main.conf.d/99-koyori-keychron.conf
 
 KIOSK_PKGS=(openbox xdotool x11-xserver-utils bluez)
 missing_kiosk=()
@@ -129,6 +133,9 @@ KOYORI_ONBOARD=0
 # Input Leap client — ma-home Windows Server (Tailscale IP recommended):
 # KOYORI_INPUT_LEAP_SERVER='100.64.x.x'
 # KOYORI_INPUT_LEAP_NAME='koyori'
+# Keychron BT auto-reconnect in kiosk (background watch)
+KOYORI_BT_AUTOCONNECT=1
+KOYORI_BT_RECONNECT_INTERVAL=30
 EOF
 chmod 644 "$KIOSK_ENV"
 

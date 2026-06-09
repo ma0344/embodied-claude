@@ -95,6 +95,11 @@ if [[ -x /usr/local/bin/koyori-onboard-start ]]; then
   source /usr/local/bin/koyori-onboard-start
 fi
 
+if [[ -x /usr/local/bin/koyori-bluetooth-keychron-watch ]]; then
+  # shellcheck disable=SC1091
+  source /usr/local/bin/koyori-bluetooth-keychron-watch
+fi
+
 BROWSER_ARGS=(
   --kiosk
   --noerrdialogs

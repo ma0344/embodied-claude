@@ -3,7 +3,8 @@
 #
 # Run on koyori after base packages:
 #   sudo apt install -y xorg x11-common lightdm lightdm-gtk-greeter \
-#     chromium-browser unclutter iptsd x11-xserver-utils dbus-x11
+#     chromium-browser unclutter iptsd x11-xserver-utils dbus-x11 \
+#     ibus-mozc fonts-noto-cjk
 #
 # Usage:
 #   cd /path/to/koyori-kiosk   # or embodied-claude/scripts/koyori-kiosk
@@ -42,6 +43,12 @@ if [[ ! -x /etc/X11/Xsession ]]; then
 fi
 
 install -m 755 "$SCRIPT_DIR/koyori-kiosk.sh" /usr/local/bin/koyori-kiosk
+install -m 755 "$SCRIPT_DIR/koyori-ime-start.sh" /usr/local/bin/koyori-ime-start
+
+if ! dpkg -s ibus-mozc >/dev/null 2>&1; then
+  echo "Installing ibus-mozc for Japanese IME..."
+  apt-get install -y ibus-mozc fonts-noto-cjk
+fi
 
 install -d -m 755 /usr/share/xsessions
 install -m 644 "$SCRIPT_DIR/koyori-kiosk.desktop" /usr/share/xsessions/koyori-kiosk.desktop
@@ -51,6 +58,9 @@ MA_HOME="/home/ma"
 if id ma &>/dev/null && [[ -d "$MA_HOME" ]]; then
   install -o ma -g ma -m 755 "$SCRIPT_DIR/xsession" "$MA_HOME/.xsession"
   usermod -aG video,input ma 2>/dev/null || true
+  if command -v im-config >/dev/null 2>&1; then
+    runuser -u ma -- im-config -n ibus 2>/dev/null || true
+  fi
 else
   echo "WARN: user ma or $MA_HOME not found; create ~/.xsession manually" >&2
 fi
@@ -106,3 +116,7 @@ echo "  docs/koyori-usb-c-recovery.md"
 echo ""
 echo "Reboot:"
 echo "  sudo reboot"
+echo ""
+echo "Japanese IME in kiosk:"
+echo "  Ctrl+Space toggles Mozc (after ibus-mozc installed)"
+echo "  Log: grep ime /tmp/koyori-kiosk.log"

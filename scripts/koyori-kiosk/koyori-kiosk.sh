@@ -52,6 +52,11 @@ fi
 
 log "browser=$CHROMIUM url=$WEBUI_URL"
 
+if [[ -x /usr/local/bin/koyori-ime-start ]]; then
+  # shellcheck disable=SC1091
+  source /usr/local/bin/koyori-ime-start
+fi
+
 BROWSER_ARGS=(
   --kiosk
   --noerrdialogs

@@ -62,6 +62,9 @@ function Set-LmStudioProcessEnv {
     if (-not $env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC) {
         $env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
     }
+    if (-not $env:CLAUDE_CODE_DISABLE_THINKING) {
+        $env:CLAUDE_CODE_DISABLE_THINKING = "1"
+    }
 
     if (-not $env:ANTHROPIC_AUTH_TOKEN) {
         $TokenFile = Join-Path $env:USERPROFILE ".config\embodied-claude\lmstudio.token"

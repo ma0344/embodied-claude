@@ -109,6 +109,7 @@ koyori_run_browser() {
   local browser_pid
 
   if [[ "$CHROMIUM" == *firefox* ]]; then
+    export MOZ_ENABLE_A11Y=1
     local ff_args=(--kiosk)
     local ff_profile="${KOYORI_FIREFOX_PROFILE:-}"
     if [[ -z "$ff_profile" ]]; then

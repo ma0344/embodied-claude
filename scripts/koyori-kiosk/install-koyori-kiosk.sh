@@ -47,9 +47,10 @@ install -m 755 "$SCRIPT_DIR/koyori-ime-start.sh" /usr/local/bin/koyori-ime-start
 install -m 755 "$SCRIPT_DIR/koyori-display-setup.sh" /usr/local/bin/koyori-display-setup
 install -m 755 "$SCRIPT_DIR/koyori-input-leap-start.sh" /usr/local/bin/koyori-input-leap-start
 install -m 755 "$SCRIPT_DIR/koyori-onboard-start.sh" /usr/local/bin/koyori-onboard-start
+install -m 755 "$SCRIPT_DIR/koyori-onboard-preseed.sh" /usr/local/bin/koyori-onboard-preseed
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-ime.sh" /usr/local/bin/koyori-diagnose-ime
 
-KIOSK_PKGS=(openbox xdotool x11-xserver-utils onboard)
+KIOSK_PKGS=(openbox xdotool x11-xserver-utils onboard at-spi2-core)
 missing_kiosk=()
 for pkg in "${KIOSK_PKGS[@]}"; do
   if ! dpkg -s "$pkg" >/dev/null 2>&1; then
@@ -62,6 +63,7 @@ if ((${#missing_kiosk[@]})); then
 fi
 
 MA_HOME="/home/ma"
+/usr/local/bin/koyori-onboard-preseed "$MA_HOME"
 
 IME_PKGS=(ibus-mozc ibus-gtk3 ibus-gtk mozc-server fonts-noto-cjk firefox)
 missing_ime=()

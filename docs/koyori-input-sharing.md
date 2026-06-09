@@ -64,32 +64,33 @@ Input Leap なしでも、K2 の **1/2/3 チャンネル**で ma-home ↔ koyori
 
 ---
 
-## 2. タッチキーボード（onboard）
+## 2. タッチキーボード（florence / onboard）
 
-キオスク既定で **onboard** を起動する（`KOYORI_ONBOARD=1`）。
-
-起動直後の「Enable accessibility?」ダイアログは **auto-show を使わない** 設定で回避する。
-代わりに **画面下にキーボードを常時表示**（`force-to-top` で Firefox の上に載る）。
+既定は **florence**（`KOYORI_OSK_BACKEND=florence`）。Firefox 全画面の上に
+`--keep-above` で載せる。onboard は dock モードだと全画面の下に隠れるため補助扱い。
 
 | 操作 | 説明 |
 |------|------|
-| 画面下のキーボード | 常時表示（隠したら端のパレットアイコンで再表示） |
-| 入力欄タップ → キーボードで入力 | webui のテキスト欄をタップしてからキー入力 |
-| 日本語 | **半/全**（Input Leap / Bluetooth KB）または Mozc |
+| 画面下のキーボード | 常時表示（Firefox 起動後も xdotool で再配置） |
+| 入力欄タップ → キー入力 | webui のテキスト欄をタップしてから入力 |
+| 日本語 | 物理 KB の **半/全** / Mozc。ソフト KB は主に英数字向け |
 
-無効化:
+`/etc/default/koyori-kiosk`:
 
 ```bash
-# /etc/default/koyori-kiosk
-KOYORI_ONBOARD=0
+KOYORI_ONBOARD=1
+KOYORI_OSK_BACKEND=florence   # または onboard
+KOYORI_ONBOARD_HEIGHT=220
 ```
 
-高さ変更: `KOYORI_ONBOARD_HEIGHT=260`
+無効化: `KOYORI_ONBOARD=0`
 
 ログ:
 
 ```bash
-grep onboard /tmp/koyori-kiosk.log
+grep 'osk:' /tmp/koyori-kiosk.log
+# osk: florence started 1800x220+0+980
+# osk: placed window=...
 ```
 
 ---

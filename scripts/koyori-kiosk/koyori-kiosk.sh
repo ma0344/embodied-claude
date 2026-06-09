@@ -130,6 +130,9 @@ koyori_run_browser() {
     if declare -F koyori_resize_browser_window >/dev/null 2>&1; then
       (sleep 2; koyori_resize_browser_window "$browser_pid") &
     fi
+    if declare -F koyori_osk_ensure_visible >/dev/null 2>&1; then
+      (sleep 3; koyori_osk_ensure_visible) &
+    fi
     wait "$browser_pid"
     return $?
   fi
@@ -147,6 +150,9 @@ koyori_run_browser() {
   browser_pid=$!
   if declare -F koyori_resize_browser_window >/dev/null 2>&1; then
     (sleep 2; koyori_resize_browser_window "$browser_pid") &
+  fi
+  if declare -F koyori_osk_ensure_visible >/dev/null 2>&1; then
+    (sleep 3; koyori_osk_ensure_visible) &
   fi
   wait "$browser_pid"
 }

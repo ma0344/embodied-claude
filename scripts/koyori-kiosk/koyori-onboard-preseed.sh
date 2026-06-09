@@ -34,8 +34,8 @@ preseed() {
   gsettings set org.onboard.window.force-to-top true 2>/dev/null || true
   gsettings set org.onboard.icon-palette in-use true 2>/dev/null || true
   gsettings set org.onboard.icon-palette hide-on-touch false 2>/dev/null || true
-  gsettings set org.onboard.window.landscape dock-expand true 2>/dev/null || true
-  gsettings set org.onboard.window.landscape dock-height 220 2>/dev/null || true
+  gsettings set org.onboard.window.landscape dock-expand false 2>/dev/null || true
+  gsettings set org.onboard.window.landscape height 220 2>/dev/null || true
   gsettings set org.onboard.keyboard key-synth 'XTest' 2>/dev/null || true
   gsettings set org.onboard layout 'Compact' 2>/dev/null || true
 }

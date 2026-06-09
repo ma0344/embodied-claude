@@ -50,7 +50,7 @@ install -m 755 "$SCRIPT_DIR/koyori-onboard-start.sh" /usr/local/bin/koyori-onboa
 install -m 755 "$SCRIPT_DIR/koyori-onboard-preseed.sh" /usr/local/bin/koyori-onboard-preseed
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-ime.sh" /usr/local/bin/koyori-diagnose-ime
 
-KIOSK_PKGS=(openbox xdotool x11-xserver-utils onboard at-spi2-core)
+KIOSK_PKGS=(openbox xdotool x11-xserver-utils florence onboard at-spi2-core)
 missing_kiosk=()
 for pkg in "${KIOSK_PKGS[@]}"; do
   if ! dpkg -s "$pkg" >/dev/null 2>&1; then
@@ -119,6 +119,7 @@ KOYORI_BROWSER=firefox
 # KOYORI_USE_WM=1
 # On-screen keyboard (Surface touch). docs/koyori-input-sharing.md
 KOYORI_ONBOARD=1
+KOYORI_OSK_BACKEND=florence
 # Input Leap client — ma-home Windows Server IP (LAN or Tailscale):
 # KOYORI_INPUT_LEAP_SERVER='100.64.x.x'
 # KOYORI_INPUT_LEAP_NAME='koyori'

@@ -54,6 +54,23 @@ KOYORI_BROWSER=firefox    # 推奨
 | `grep ime` が空 | `sudo ./install-koyori-kiosk.sh` して reboot |
 | 英字キーボードのみ | JIS キーボード or 半/全相当キーがない |
 
+## 全画面（UI が左上の一部だけ）
+
+Firefox `--kiosk` が物理画面いっぱいに伸びないことがある（右・下に黒帯）。
+`install-koyori-kiosk.sh` は `xrandr` + `openbox` + `xdotool` でウィンドウを
+ルート画面サイズに合わせる。
+
+```bash
+grep display /tmp/koyori-kiosk.log
+# dimensions=1800x1200 resized window=... が出れば OK
+```
+
+まだ小さいときは `/etc/default/koyori-kiosk` に追加:
+
+```bash
+KOYORI_DISPLAY_MODE=1800x1200
+```
+
 ## 関連
 
 - `docs/backlog-ma-home.md` — webui 常時起動（後で）

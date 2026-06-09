@@ -44,7 +44,24 @@ fi
 
 install -m 755 "$SCRIPT_DIR/koyori-kiosk.sh" /usr/local/bin/koyori-kiosk
 install -m 755 "$SCRIPT_DIR/koyori-ime-start.sh" /usr/local/bin/koyori-ime-start
+install -m 755 "$SCRIPT_DIR/koyori-display-setup.sh" /usr/local/bin/koyori-display-setup
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-ime.sh" /usr/local/bin/koyori-diagnose-ime
+
+KIOSK_PKGS=(openbox xdotool x11-xserver-utils)
+missing_kiosk=()
+for pkg in "${KIOSK_PKGS[@]}"; do
+  if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+    missing_kiosk+=("$pkg")
+  fi
+done
+if ((${#missing_kiosk[@]})); then
+  echo "Installing kiosk display packages: ${missing_kiosk[*]}"
+  apt-get install -y "${missing_kiosk[@]}"
+fi
+
+FF_PROFILE="/var/lib/koyori/firefox-kiosk"
+install -d -o ma -g ma -m 700 "$FF_PROFILE"
+install -o ma -g ma -m 644 "$SCRIPT_DIR/firefox-kiosk-user.js" "$FF_PROFILE/user.js"
 
 IME_PKGS=(ibus-mozc ibus-gtk3 ibus-gtk mozc-server fonts-noto-cjk firefox)
 missing_ime=()
@@ -83,6 +100,9 @@ KOYORI_WEBUI_URL='$WEBUI_URL'
 KOYORI_CHROMIUM_NO_SANDBOX=1
 # firefox: IBus/Mozc works on minimal X. snap chromium often cannot use host IME.
 KOYORI_BROWSER=firefox
+# Surface Go native mode (optional; xrandr --auto usually enough):
+# KOYORI_DISPLAY_MODE=1800x1200
+# KOYORI_USE_WM=1
 EOF
 chmod 644 "$KIOSK_ENV"
 

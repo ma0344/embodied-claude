@@ -62,6 +62,12 @@ if command -v unclutter >/dev/null 2>&1 && [[ -n "${DISPLAY:-}" ]]; then
   unclutter -idle 0 -root &
 fi
 
+if [[ -x /usr/local/bin/koyori-display-setup ]]; then
+  # shellcheck disable=SC1091
+  source /usr/local/bin/koyori-display-setup
+  koyori_start_window_manager
+fi
+
 CHROMIUM=""
 if picked=$(pick_browser "$KOYORI_BROWSER"); then
   CHROMIUM="$picked"
@@ -89,15 +95,39 @@ BROWSER_ARGS=(
   --autoplay-policy=no-user-gesture-required
 )
 
-if [[ "$CHROMIUM" == *firefox* ]]; then
-  exec "$CHROMIUM" --kiosk "$WEBUI_URL"
-fi
+koyori_run_browser() {
+  local browser_pid
 
-# Ubuntu 24.04 chromium-browser is usually snap; needs this on minimal X sessions.
-if [[ "${KOYORI_CHROMIUM_NO_SANDBOX:-1}" == "1" ]]; then
-  BROWSER_ARGS+=(--no-sandbox)
-fi
-# Snap chromium + IBus: X11 ozone sometimes helps; firefox is still preferred.
-BROWSER_ARGS+=(--ozone-platform=x11)
+  if [[ "$CHROMIUM" == *firefox* ]]; then
+    local ff_args=(--kiosk)
+    local ff_profile="${KOYORI_FIREFOX_PROFILE:-/var/lib/koyori/firefox-kiosk}"
+    if [[ -d "$ff_profile" ]]; then
+      ff_args=(--profile "$ff_profile" --kiosk)
+    fi
+    "$CHROMIUM" "${ff_args[@]}" "$WEBUI_URL" &
+    browser_pid=$!
+    if declare -F koyori_resize_browser_window >/dev/null 2>&1; then
+      (sleep 2; koyori_resize_browser_window "$browser_pid") &
+    fi
+    wait "$browser_pid"
+    return $?
+  fi
 
-exec "$CHROMIUM" "${BROWSER_ARGS[@]}" "$WEBUI_URL"
+  # Ubuntu 24.04 chromium-browser is usually snap; needs this on minimal X sessions.
+  if [[ "${KOYORI_CHROMIUM_NO_SANDBOX:-1}" == "1" ]]; then
+    BROWSER_ARGS+=(--no-sandbox)
+  fi
+  BROWSER_ARGS+=(--ozone-platform=x11 --start-fullscreen --window-position=0,0)
+  if [[ -n "${KOYORI_SCREEN_W:-}" && -n "${KOYORI_SCREEN_H:-}" ]]; then
+    BROWSER_ARGS+=(--window-size="${KOYORI_SCREEN_W},${KOYORI_SCREEN_H}")
+  fi
+
+  "$CHROMIUM" "${BROWSER_ARGS[@]}" "$WEBUI_URL" &
+  browser_pid=$!
+  if declare -F koyori_resize_browser_window >/dev/null 2>&1; then
+    (sleep 2; koyori_resize_browser_window "$browser_pid") &
+  fi
+  wait "$browser_pid"
+}
+
+koyori_run_browser

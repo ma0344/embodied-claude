@@ -54,12 +54,15 @@ if ($Mismatches.Count -gt 0) {
         Write-Host "    env.$($Row.Name) = $($Row.Value)  (expected $($Row.Expected))"
     }
     Write-Host ""
-    Write-Host "  Fix: .\scripts\sync-lmstudio-settings.ps1"
+    Write-Host "  Fix: .\scripts\sync-lmstudio-settings.ps1  or  .\scripts\set-lmstudio-model.ps1 -Model <id>"
 }
 
+$ExpectedModel = Get-LmStudioModelFromSettings -SettingsLocal $SettingsLocal
+
 Write-Host ""
-Write-Host "Expected: google/gemma-4-12b-qat everywhere."
-Write-Host "If LM Studio still loads google/gemma-4-12b:"
-Write-Host "  1) sync-lmstudio-settings.ps1  2) restart webui  3) NEW chat (not resumed history)"
+Write-Host "Expected model (from settings.local.json): $ExpectedModel"
+Write-Host "Change model: .\scripts\set-lmstudio-model.ps1 -Model <lm-studio-model-id>"
+Write-Host "Fix env drift: .\scripts\sync-lmstudio-settings.ps1"
+Write-Host "Docs: docs/lmstudio-model-change.md"
 Write-Host "WebUI: .\scripts\run-webui-ma-home.ps1"
 Write-Host "CLI:   .\scripts\run-claude-local.ps1  (always passes --model)"

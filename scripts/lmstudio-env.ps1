@@ -76,9 +76,25 @@ function Set-LmStudioProcessEnv {
     }
 }
 
-function Sync-LmStudioSettingsFile {
+function Write-LmStudioJsonFile {
+    param(
+        [string]$Path,
+        [object]$Data
+    )
+
+    $Json = ($Data | ConvertTo-Json -Depth 20) + "`n"
+    if ($PSVersionTable.PSVersion.Major -ge 6) {
+        Set-Content -Path $Path -Value $Json -Encoding utf8NoBOM
+    } else {
+        $Utf8 = New-Object System.Text.UTF8Encoding $false
+        [System.IO.File]::WriteAllText($Path, $Json, $Utf8)
+    }
+}
+
+function Set-LmStudioModelInSettingsFile {
     param(
         [string]$SettingsLocal,
+        [string]$Model,
         [switch]$WhatIf
     )
 
@@ -86,21 +102,22 @@ function Sync-LmStudioSettingsFile {
         throw "Missing $SettingsLocal"
     }
 
-    $Raw = Get-Content $SettingsLocal -Raw
-    $Settings = $Raw | ConvertFrom-Json
-    $Model = if ($Settings.model) { [string]$Settings.model } else { "google/gemma-4-12b-qat" }
-
-    if (-not $Settings.PSObject.Properties["model"]) {
-        $Settings | Add-Member -NotePropertyName "model" -NotePropertyValue $Model
-    } else {
-        $Settings.model = $Model
-    }
+    $Settings = Get-Content $SettingsLocal -Raw | ConvertFrom-Json
+    $Previous = if ($Settings.model) { [string]$Settings.model } else { "(unset)" }
 
     if (-not $Settings.env) {
         $Settings | Add-Member -NotePropertyName "env" -NotePropertyValue ([pscustomobject]@{})
     }
 
     $Changed = @()
+    if ($Previous -ne $Model) {
+        $Changed += "model: $Previous -> $Model"
+    }
+
+    if (-not $WhatIf) {
+        $Settings.model = $Model
+    }
+
     foreach ($Name in $script:LmStudioModelEnvVars) {
         $Current = $Settings.env.$Name
         if ($Current -ne $Model) {
@@ -112,13 +129,73 @@ function Sync-LmStudioSettingsFile {
     }
 
     if (-not $WhatIf -and $Changed.Count -gt 0) {
-        ($Settings | ConvertTo-Json -Depth 10) + "`n" | Set-Content -Path $SettingsLocal -Encoding utf8NoBOM
+        Write-LmStudioJsonFile -Path $SettingsLocal -Data $Settings
     }
 
     return [pscustomobject]@{
         Model = $Model
+        PreviousModel = $Previous
         Changed = $Changed
     }
+}
+
+function Sync-LmStudioSettingsFile {
+    param(
+        [string]$SettingsLocal,
+        [switch]$WhatIf
+    )
+
+    if (-not (Test-Path $SettingsLocal)) {
+        throw "Missing $SettingsLocal"
+    }
+
+    $Settings = Get-Content $SettingsLocal -Raw | ConvertFrom-Json
+    $Model = if ($Settings.model) { [string]$Settings.model } else { "google/gemma-4-12b-qat" }
+
+    return Set-LmStudioModelInSettingsFile -SettingsLocal $SettingsLocal -Model $Model -WhatIf:$WhatIf
+}
+
+function Update-LmStudioMcpJson {
+    param(
+        [string]$McpJson,
+        [string]$Model,
+        [switch]$WhatIf
+    )
+
+    if (-not (Test-Path $McpJson)) {
+        return [pscustomobject]@{ Changed = @(); Skipped = "file missing" }
+    }
+
+    $Config = Get-Content $McpJson -Raw | ConvertFrom-Json
+    $Changed = @()
+    $Targets = @(
+        @{ Server = "wifi-cam"; Keys = @("CLAUDE_MODEL", "LM_STUDIO_VISION_MODEL") }
+    )
+
+    foreach ($Target in $Targets) {
+        $Server = $Target.Server
+        if (-not $Config.mcpServers.$Server) { continue }
+        if (-not $Config.mcpServers.$Server.env) {
+            if (-not $WhatIf) {
+                $Config.mcpServers.$Server | Add-Member -NotePropertyName "env" -NotePropertyValue ([pscustomobject]@{})
+            }
+        }
+        foreach ($Key in $Target.Keys) {
+            $Current = $Config.mcpServers.$Server.env.$Key
+            if ($Current -ne $Model) {
+                $Changed += "mcpServers.$Server.env.$Key`: $Current -> $Model"
+                if (-not $WhatIf) {
+                    $Config.mcpServers.$Server.env | Add-Member -NotePropertyName $Key -NotePropertyValue $Model -Force
+                }
+            }
+        }
+    }
+
+    if (-not $WhatIf -and $Changed.Count -gt 0) {
+        Write-LmStudioJsonFile -Path $McpJson -Data $Config
+    }
+
+    return [pscustomobject]@{ Changed = $Changed }
 }
 
 function Test-LmStudioSettingsMismatch {

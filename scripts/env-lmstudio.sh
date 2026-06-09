@@ -10,6 +10,9 @@
 #   export ANTHROPIC_BASE_URL=http://127.0.0.1:1234
 #   claude --model "<model-id-from-lm-studio>"
 #
+# モデル ID の変更手順: docs/lmstudio-model-change.md
+#   ma-home: .\scripts\set-lmstudio-model.ps1 -Model <id>
+#
 # ma-server では Cursor + .mcp.json の MCP を使う構成が現実的です。
 #
 # Set LM_STUDIO_TOKEN in ~/.config/embodied-claude/lmstudio.token (chmod 600)

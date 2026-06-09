@@ -46,5 +46,7 @@ if ($WhatIf) {
     Write-Host "Re-run without -WhatIf to apply."
 } else {
     Write-Host ""
-    Write-Host "Restart claude-code-webui, then start a NEW chat (resumed sessions keep the old model)."
+    Write-Host "Restart claude-code-webui if it is running."
+    Write-Host "To change the model ID: .\scripts\set-lmstudio-model.ps1 -Model <id>"
+    Write-Host "Docs: docs/lmstudio-model-change.md"
 }

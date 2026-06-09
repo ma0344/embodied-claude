@@ -85,9 +85,10 @@ ma-home は **`Fn+1`**。
 
 | 症状 | 対処 |
 |------|------|
+| `Paired: no` / agent エラー | 最新 `koyori-pair-keychron.sh`（pair 後 20s 待機）。**Fn+2 点滅を pair 完了まで維持** |
 | scan に出ない | ペアリングモード（Fn+2 長押し）、USB 抜く、Fn+J+Z |
 | 何個も Keychron が `devices` に溜まる | `sudo koyori-bluetooth-cleanup-keychron.sh` → 再ペア |
-| ペア直後に切れる | `trust` 済みか。`sudo koyori-bluetooth-cleanup-keychron.sh` 後に再ペア |
+| ペア直後に切れる | `koyori-connect-keychron.sh` |
 | 再起動後に切れる | `koyori-connect-keychron.sh`。まだダメなら下記 IRK 回避 |
 | スリープ後に切れる | GRUB: `btusb.enable_autosuspend=n`（install-koyori-kiosk の USB オプションと同様） |
 | Windows と BT 併用 | **スロットを分ける**（Win=1, koyori=2）。同じスロットで両 OS ペアしない |

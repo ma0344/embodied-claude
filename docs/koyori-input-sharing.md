@@ -1,39 +1,54 @@
-# koyori 入力 — Keychron K2（Bluetooth）
+# koyori 入力 — Keychron K4 MAX（Bluetooth）
 
-Surface Go キオスクの入力は **Keychron K2 の Bluetooth 切替** が本番。
+Surface Go キオスクの入力は **Keychron K4 MAX の Bluetooth 切替** が本番。
 
-| チャンネル | 接続先 | 切替 |
-|-----------|--------|------|
+| スロット | 接続先 | 切替 |
+|---------|--------|------|
 | **1** | ma-home (Windows) | `Fn+1` |
 | **2** | koyori (Ubuntu) | `Fn+2` |
-| **3** | （予備） | `Fn+3` |
+| **3** | 予備 | `Fn+3` |
 
-Input Leap / タッチキーボードは見送り → `docs/backlog-koyori.md`
+**スロット 2 だけ koyori 専用**にする（他 PC と混ぜない）。
+
+Input Leap / タッチ KB は見送り → `docs/backlog-koyori.md`
 
 ---
 
-## 初回ペアリング（koyori）
+## MAC アドレスが毎回変わる
 
-### 1. キーボード側
+K4 MAX は **Bluetooth のランダムアドレス**（プライバシー）を使うことがある。
+`bluetoothctl` で `Device XX:XX:... (random)` と出るのは正常。
 
-1. **有線 USB を抜く**（BT ペアリング中はケーブル外す）
-2. **`Fn+2`** でスロット 2 を選ぶ
-3. **`Fn+2` を約 3 秒長押し** → LED が速く点滅（ペアリングモード）
-4. 見つからないとき: **`Fn+J+Z`**（Windows/Android モード）を押してから 2〜3 をやり直す
+- **ペアリング時**: そのとき見えている MAC で `pair` → `trust`（スクリプトは **名前で自動検出**）
+- **再接続**: 固定 MAC を覚えなくてよい → `koyori-connect-keychron.sh`
+- **何度も別 MAC で増殖**したら: `sudo koyori-bluetooth-cleanup-keychron.sh` してから再ペア
 
-### 2. koyori 側
+毎回 MAC を手入力する必要はない。
+
+---
+
+## 初回ペアリング
+
+### キーボード
+
+1. **USB を抜く**
+2. **`Fn+2`**（koyori 専用スロット）
+3. **`Fn+2` を約 3 秒長押し** → LED 速点滅
+4. 見つからない: **`Fn+J+Z`**（Windows/Android）→ やり直し
+
+### koyori
 
 ```bash
 sudo apt install -y bluez
 sudo systemctl enable --now bluetooth
 
-cd ~/src/embodied-claude/scripts/koyori-kiosk
-./koyori-pair-keychron.sh 2
+cd ~/src/embodied-claude && git pull
+koyori-pair-keychron.sh 2
 ```
 
-対話式。15 秒スキャン後、表示された Keychron の **MAC アドレス** を貼る。
+スキャンで `Keychron K4 MAX` 等を自動検出してペアする。
 
-手動でやる場合:
+手動:
 
 ```bash
 bluetoothctl
@@ -41,33 +56,25 @@ power on
 agent on
 default-agent
 scan on
-# "Keychron K2" が出たら:
+# 名前で探す（MAC はそのときのものを使う）
 pair AA:BB:CC:DD:EE:FF
 trust AA:BB:CC:DD:EE:FF
 connect AA:BB:CC:DD:EE:FF
-scan off
 quit
 ```
 
-### 3. 動作確認
+### 確認
 
-- キオスクの webui で入力欄をクリック
-- 英字が打てるか
-- **半/全** で日本語（Mozc）に切替
-
-```bash
-DISPLAY=:0 koyori-diagnose-ime
-```
+webui 入力欄 → 英字 → **半/全** で日本語。
 
 ---
 
-## 日常の使い方
+## 日常
 
-1. Surface の前に立つ
-2. K2 で **`Fn+2`**（koyori に接続。LED が青などで点灯）
-3. 打てないとき: もう一度 `Fn+2`、または SSH から `bluetoothctl connect <MAC>`
+1. **`Fn+2`** で koyori に接続
+2. つながらない: `koyori-connect-keychron.sh`（SSH からでも可）
 
-ma-home に戻るときは **`Fn+1`**。
+ma-home は **`Fn+1`**。
 
 ---
 
@@ -75,23 +82,31 @@ ma-home に戻るときは **`Fn+1`**。
 
 | 症状 | 対処 |
 |------|------|
-| scan に出ない | キーボードのペアリングモード（Fn+2 長押し）をやり直す。USB 抜く |
-| pair 失敗 | 他デバイスのペアリングを解除。K2 を工場リセット（マニュアル参照）して再ペア |
-| 再起動後に切れる | `trust` 済みか確認。`bluetoothctl connect <MAC>` |
-| 英字だけ / 日本語不可 | webui 入力欄フォーカス → **半/全** |
-| `bluetooth` が無い | `sudo apt install bluez && sudo systemctl start bluetooth` |
+| scan に出ない | ペアリングモード（Fn+2 長押し）、USB 抜く、Fn+J+Z |
+| 何個も Keychron が `devices` に溜まる | `sudo koyori-bluetooth-cleanup-keychron.sh` → 再ペア |
+| ペア直後に切れる | `trust` 済みか。`sudo koyori-bluetooth-cleanup-keychron.sh` 後に再ペア |
+| 再起動後に切れる | `koyori-connect-keychron.sh`。まだダメなら下記 IRK 回避 |
+| スリープ後に切れる | GRUB: `btusb.enable_autosuspend=n`（install-koyori-kiosk の USB オプションと同様） |
+| Windows と BT 併用 | **スロットを分ける**（Win=1, koyori=2）。同じスロットで両 OS ペアしない |
 
-保存した MAC の確認:
+### ランダム MAC で再接続が壊れる場合（上級）
+
+ペア後、まだ毎回ペアし直しなら（Ubuntu 24.04 で報告あり）:
 
 ```bash
-cat ~/.config/koyori-keychron-mac 2>/dev/null
-bluetoothctl devices
+# アダプタ MAC とキーボード MAC は環境依存
+sudo systemctl stop bluetooth
+sudo nano /var/lib/bluetooth/<adapter-mac>/<keyboard-mac>/info
+# [IdentityResolvingKey] セクションを削除
+sudo systemctl start bluetooth
 ```
+
+詳細: [Arch Wiki Bluetooth](https://wiki.archlinux.org/title/Bluetooth)、Keychron Linux [gist](https://gist.github.com/andrebrait/961cefe730f4a2c41f57911e6195e444)
 
 ---
 
 ## 関連
 
-- `docs/koyori-kiosk-ime.md` — Mozc / 半/全
-- `docs/backlog-koyori.md` — Input Leap / タッチ KB（見送り）
 - `scripts/koyori-kiosk/koyori-pair-keychron.sh`
+- `scripts/koyori-kiosk/koyori-connect-keychron.sh`
+- `docs/koyori-kiosk-ime.md` — 半/全 / Mozc

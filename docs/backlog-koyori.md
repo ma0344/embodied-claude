@@ -1,9 +1,9 @@
 # koyori バックログ
 
-## 本番: Keychron K2 Bluetooth
+## 本番: Keychron K4 MAX Bluetooth
 
-手順: `docs/koyori-input-sharing.md`  
-スクリプト: `scripts/koyori-kiosk/koyori-pair-keychron.sh`
+手順: `docs/koyori-input-sharing.md`（MAC はランダムでも名前でペア）  
+`koyori-pair-keychron.sh` / `koyori-connect-keychron.sh`
 
 ## Input Leap — 見送り
 

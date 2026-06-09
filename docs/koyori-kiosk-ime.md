@@ -85,7 +85,7 @@ KOYORI_DISPLAY_MODE=1800x1200
 
 ## 入力
 
-**Keychron K2** — `Fn+1` ma-home / `Fn+2` koyori。初回ペアリング: `koyori-pair-keychron.sh`
+**Keychron K4 MAX** — `Fn+1` ma-home / `Fn+2` koyori。ペア: `koyori-pair-keychron.sh`（MAC は変わっても名前で検出）
 
 → `docs/koyori-input-sharing.md`
 

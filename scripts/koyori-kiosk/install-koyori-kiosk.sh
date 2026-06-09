@@ -51,6 +51,8 @@ install -m 755 "$SCRIPT_DIR/koyori-onboard-preseed.sh" /usr/local/bin/koyori-onb
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-ime.sh" /usr/local/bin/koyori-diagnose-ime
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-input-leap.sh" /usr/local/bin/koyori-diagnose-input-leap
 install -m 755 "$SCRIPT_DIR/koyori-pair-keychron.sh" /usr/local/bin/koyori-pair-keychron
+install -m 755 "$SCRIPT_DIR/koyori-connect-keychron.sh" /usr/local/bin/koyori-connect-keychron
+install -m 755 "$SCRIPT_DIR/koyori-bluetooth-cleanup-keychron.sh" /usr/local/bin/koyori-bluetooth-cleanup-keychron
 
 KIOSK_PKGS=(openbox xdotool x11-xserver-utils bluez)
 missing_kiosk=()
@@ -176,5 +178,5 @@ echo "  Toggle: 半/全 key (JIS) in text fields"
 echo "  diagnose: koyori-diagnose-ime"
 echo ""
 echo "Input:"
-echo "  Keychron K2 BT: koyori-pair-keychron.sh  (docs/koyori-input-sharing.md)"
+echo "  Keychron K4 MAX BT: koyori-pair-keychron.sh / koyori-connect-keychron.sh"
 echo "  IME: 半/全 in webui text fields"

@@ -42,6 +42,8 @@ echo ""
 echo "  ibus list-engine:"
 if command -v ibus >/dev/null 2>&1; then
   ibus list-engine 2>&1 | sed 's/^/    /' || true
+  echo ""
+  echo "  ibus engine (current): $(DISPLAY=$DISPLAY ibus engine 2>/dev/null || echo '?')"
 else
   echo "    (ibus CLI missing)"
 fi
@@ -64,6 +66,9 @@ if [[ -n "$CH" ]]; then
   fi
 fi
 
+echo ""
+echo "If mozc-jp appears above but engine is xkb:*, reboot after install or wait for"
+echo "background ime activation (grep ime /tmp/koyori-kiosk.log)."
 echo ""
 echo "Fix:"
 echo "  cd .../scripts/koyori-kiosk && sudo ./install-koyori-kiosk.sh && sudo reboot"

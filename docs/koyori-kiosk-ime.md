@@ -43,13 +43,15 @@ sudo reboot
 
 ```bash
 grep ime /tmp/koyori-kiosk.log
-# 例:
-# ime: start DISPLAY=:0 uid=1000
-# ime: engine=mozc-jp
-# browser=firefox (KOYORI_BROWSER=firefox)
+# 成功: ime: engine=mozc-jp
+# 遅延: ime: background engine ok
+
+DISPLAY=:0 koyori-diagnose-ime
+# ibus engine (current): mozc-jp  ← xkb:us:eng 等なら未選択
 ```
 
-webui の入力欄をクリック → **Ctrl+Space** で Mozc ON/OFF。
+webui の入力欄をクリック → **Ctrl+Space**（または **Super+Space**）で Mozc ON/OFF。  
+起動直後は mozc 登録が遅れることがある（`background engine ok` を待つ）。
 
 ## ブラウザを変えたい
 

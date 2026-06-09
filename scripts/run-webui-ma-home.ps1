@@ -1,8 +1,7 @@
 # Start claude-code-webui on ma-home (koyori / Tailscale kiosk).
 #
-# Model: load-lmstudio-env.ps1 + .claude/settings.local.json ("model" + env block).
-# Do NOT pass claude-lmstudio.* to --claude-path — Claude Code 2.x SDK spawns a native
-# binary and .cjs/.cmd wrappers cause spawn EFTYPE / "choose app" on Windows.
+# Uses WinGet claude.exe for --claude-path (Node 24+ spawn EINVAL on .cmd).
+# Model/env: this script sets process env; .claude/settings.local.json is read by Claude CLI too.
 # CLI with forced --model: .\scripts\run-claude-local.ps1
 #
 # Prerequisites:
@@ -16,7 +15,8 @@
 
 param(
     [string]$Port = $(if ($env:WEBUI_PORT) { $env:WEBUI_PORT } else { "8080" }),
-    [string]$HostBind = $(if ($env:WEBUI_HOST) { $env:WEBUI_HOST } else { "0.0.0.0" })
+    [string]$HostBind = $(if ($env:WEBUI_HOST) { $env:WEBUI_HOST } else { "0.0.0.0" }),
+    [string]$ClaudePath = $(if ($env:CLAUDE_EXE_PATH) { $env:CLAUDE_EXE_PATH } else { "" })
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,18 +32,79 @@ Missing $SettingsLocal
 "@
 }
 
-. (Join-Path $PSScriptRoot "load-lmstudio-env.ps1")
+function Resolve-ClaudeExe {
+    param([string]$Override)
 
-$ClaudeBin = (Get-Command claude -ErrorAction SilentlyContinue).Source
-if (-not $ClaudeBin) {
-    Write-Error "claude CLI not found on PATH"
+    if ($Override -and (Test-Path $Override)) {
+        return (Resolve-Path $Override).Path
+    }
+
+    $Candidates = @(
+        (Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Links\claude.exe"),
+        (Join-Path $env:USERPROFILE ".local\bin\claude.exe")
+    )
+    foreach ($Path in $Candidates) {
+        if (Test-Path $Path) {
+            return (Resolve-Path $Path).Path
+        }
+    }
+
+    $Where = & where.exe claude 2>$null
+    foreach ($Line in $Where) {
+        $Line = $Line.Trim()
+        if ($Line -match '\.exe$' -and (Test-Path $Line)) {
+            return (Resolve-Path $Line).Path
+        }
+    }
+
+    Write-Error @"
+claude.exe not found.
+
+  Install Claude Code (WinGet) or set CLAUDE_EXE_PATH to claude.exe.
+  Do not use claude.cmd — claude-code-webui spawn fails with EINVAL on Node 24+.
+"@
 }
+
+$Settings = Get-Content $SettingsLocal -Raw | ConvertFrom-Json
+$Model = if ($Settings.model) { $Settings.model } else { "google/gemma-4-12b-qat" }
+
+if ($Settings.env) {
+    foreach ($Prop in $Settings.env.PSObject.Properties) {
+        if ($Prop.Value) {
+            Set-Item -Path "env:$($Prop.Name)" -Value $Prop.Value
+        }
+    }
+}
+
+if (-not $env:CLAUDE_MODEL) { $env:CLAUDE_MODEL = $Model }
+if (-not $env:LMSTUDIO_MODEL) { $env:LMSTUDIO_MODEL = $Model }
+if (-not $env:ANTHROPIC_BASE_URL) { $env:ANTHROPIC_BASE_URL = "http://127.0.0.1:1234" }
+if (-not $env:CLAUDE_CODE_ATTRIBUTION_HEADER) { $env:CLAUDE_CODE_ATTRIBUTION_HEADER = "0" }
+if (-not $env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC) { $env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1" }
+if (-not $env:ANTHROPIC_DEFAULT_SONNET_MODEL) { $env:ANTHROPIC_DEFAULT_SONNET_MODEL = $Model }
+if (-not $env:ANTHROPIC_DEFAULT_OPUS_MODEL) { $env:ANTHROPIC_DEFAULT_OPUS_MODEL = $Model }
+if (-not $env:ANTHROPIC_DEFAULT_HAIKU_MODEL) { $env:ANTHROPIC_DEFAULT_HAIKU_MODEL = $Model }
+if (-not $env:CLAUDE_CODE_SUBAGENT_MODEL) { $env:CLAUDE_CODE_SUBAGENT_MODEL = $Model }
+
+if (-not $env:ANTHROPIC_AUTH_TOKEN) {
+    $TokenFile = Join-Path $env:USERPROFILE ".config\embodied-claude\lmstudio.token"
+    if (Test-Path $TokenFile) {
+        $env:ANTHROPIC_AUTH_TOKEN = (Get-Content $TokenFile -Raw).Trim()
+    } elseif ($env:LM_STUDIO_TOKEN) {
+        $env:ANTHROPIC_AUTH_TOKEN = $env:LM_STUDIO_TOKEN.Trim()
+    }
+}
+if ($env:ANTHROPIC_AUTH_TOKEN -and -not $env:ANTHROPIC_API_KEY) {
+    $env:ANTHROPIC_API_KEY = $env:ANTHROPIC_AUTH_TOKEN
+}
+
+$ClaudeExe = Resolve-ClaudeExe -Override $ClaudePath
 
 Write-Host "==> claude-code-webui"
 Write-Host "    repo:     $Repo"
 Write-Host "    settings: $SettingsLocal"
 Write-Host "    model:    $Model"
-Write-Host "    claude:   $ClaudeBin (auto-detect; model from env/settings)"
+Write-Host "    claude:   $ClaudeExe"
 Write-Host "    bind:     ${HostBind}:$Port"
 
 $Webui = Get-Command claude-code-webui -ErrorAction SilentlyContinue
@@ -58,8 +119,7 @@ Write-Host ""
 Write-Host "Open:   $ProjectUrl"
 Write-Host "Koyori: http://<tailscale-ip>:${Port}/projects/..."
 Write-Host ""
-Write-Host "Tip: start a NEW chat in webui for QAT (resumed sessions may keep google/gemma-4-12b)."
-Write-Host "      CLI with --model: .\scripts\run-claude-local.ps1"
+Write-Host "Tip: start a NEW chat for QAT (resumed sessions may keep google/gemma-4-12b)."
 Write-Host ""
 
-& $Webui.Source --host $HostBind --port $Port @args
+& $Webui.Source --host $HostBind --port $Port --claude-path $ClaudeExe @args

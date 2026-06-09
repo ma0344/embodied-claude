@@ -54,6 +54,18 @@ KOYORI_BROWSER=firefox    # 推奨
 | `grep ime` が空 | `sudo ./install-koyori-kiosk.sh` して reboot |
 | 英字キーボードのみ | JIS キーボード or 半/全相当キーがない |
 
+## Firefox「profile cannot be loaded」
+
+Ubuntu の Firefox（snap）は `/var/lib/...` のプロファイルを読めない。
+キオスク用プロファイルは **ma のホーム配下** に置く:
+
+- snap: `~/snap/firefox/common/.mozilla/koyori-kiosk`
+- 通常: `~/.mozilla/koyori-kiosk`
+
+`sudo ./install-koyori-kiosk.sh` で再インストール後 reboot。ログに
+`firefox profile=...` が出れば OK。出ない場合はデフォルトプロファイルで
+キオスク起動（全画面リサイズはそのまま効く）。
+
 ## 全画面（UI が左上の一部だけ）
 
 Firefox `--kiosk` が物理画面いっぱいに伸びないことがある（右・下に黒帯）。

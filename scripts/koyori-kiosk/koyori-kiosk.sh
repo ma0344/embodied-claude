@@ -100,9 +100,19 @@ koyori_run_browser() {
 
   if [[ "$CHROMIUM" == *firefox* ]]; then
     local ff_args=(--kiosk)
-    local ff_profile="${KOYORI_FIREFOX_PROFILE:-/var/lib/koyori/firefox-kiosk}"
-    if [[ -d "$ff_profile" ]]; then
+    local ff_profile="${KOYORI_FIREFOX_PROFILE:-}"
+    if [[ -z "$ff_profile" ]]; then
+      if [[ -d "${HOME}/snap/firefox/common" ]]; then
+        ff_profile="${HOME}/snap/firefox/common/.mozilla/koyori-kiosk"
+      else
+        ff_profile="${HOME}/.mozilla/koyori-kiosk"
+      fi
+    fi
+    if [[ -d "$ff_profile" && -r "$ff_profile" && -w "$ff_profile" ]]; then
       ff_args=(--profile "$ff_profile" --kiosk)
+      log "firefox profile=$ff_profile"
+    else
+      log "WARN firefox profile unavailable ($ff_profile) — default profile"
     fi
     "$CHROMIUM" "${ff_args[@]}" "$WEBUI_URL" &
     browser_pid=$!

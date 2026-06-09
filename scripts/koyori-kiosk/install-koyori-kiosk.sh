@@ -59,9 +59,7 @@ if ((${#missing_kiosk[@]})); then
   apt-get install -y "${missing_kiosk[@]}"
 fi
 
-FF_PROFILE="/var/lib/koyori/firefox-kiosk"
-install -d -o ma -g ma -m 700 "$FF_PROFILE"
-install -o ma -g ma -m 644 "$SCRIPT_DIR/firefox-kiosk-user.js" "$FF_PROFILE/user.js"
+MA_HOME="/home/ma"
 
 IME_PKGS=(ibus-mozc ibus-gtk3 ibus-gtk mozc-server fonts-noto-cjk firefox)
 missing_ime=()
@@ -75,11 +73,23 @@ if ((${#missing_ime[@]})); then
   apt-get install -y "${missing_ime[@]}"
 fi
 
+if id ma &>/dev/null && [[ -d "$MA_HOME" ]]; then
+  if [[ -d "$MA_HOME/snap/firefox/common" ]]; then
+    FF_PROFILE="$MA_HOME/snap/firefox/common/.mozilla/koyori-kiosk"
+  else
+    FF_PROFILE="$MA_HOME/.mozilla/koyori-kiosk"
+  fi
+  install -d -o ma -g ma -m 700 "$FF_PROFILE"
+  install -o ma -g ma -m 644 "$SCRIPT_DIR/firefox-kiosk-user.js" "$FF_PROFILE/user.js"
+  # Snap Firefox cannot read /var/lib; remove legacy path if present.
+  rm -rf /var/lib/koyori/firefox-kiosk 2>/dev/null || true
+  echo "  firefox profile: $FF_PROFILE"
+fi
+
 install -d -m 755 /usr/share/xsessions
 install -m 644 "$SCRIPT_DIR/koyori-kiosk.desktop" /usr/share/xsessions/koyori-kiosk.desktop
 install -m 644 "$SCRIPT_DIR/lightdm-xsession.desktop" /usr/share/xsessions/lightdm-xsession.desktop
 
-MA_HOME="/home/ma"
 if id ma &>/dev/null && [[ -d "$MA_HOME" ]]; then
   install -o ma -g ma -m 755 "$SCRIPT_DIR/xsession" "$MA_HOME/.xsession"
   usermod -aG video,input ma 2>/dev/null || true

@@ -83,12 +83,11 @@ grep display /tmp/koyori-kiosk.log
 KOYORI_DISPLAY_MODE=1800x1200
 ```
 
-## 入力共有
+## 入力
 
-- **Keychron K2** — Bluetooth 1/2/3 で ma-home ↔ koyori 切替
-- **Input Leap** — ma-home (Windows Server) の KB/マウスを画面端で koyori へ
+**Keychron K2** — `Fn+1` ma-home / `Fn+2` koyori。初回ペアリング: `koyori-pair-keychron.sh`
 
-→ `docs/koyori-input-sharing.md`（タッチ KB は `docs/backlog-koyori.md` で保留）
+→ `docs/koyori-input-sharing.md`
 
 ## 関連
 

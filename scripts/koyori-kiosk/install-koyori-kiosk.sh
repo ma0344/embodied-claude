@@ -50,8 +50,9 @@ install -m 755 "$SCRIPT_DIR/koyori-onboard-start.sh" /usr/local/bin/koyori-onboa
 install -m 755 "$SCRIPT_DIR/koyori-onboard-preseed.sh" /usr/local/bin/koyori-onboard-preseed
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-ime.sh" /usr/local/bin/koyori-diagnose-ime
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-input-leap.sh" /usr/local/bin/koyori-diagnose-input-leap
+install -m 755 "$SCRIPT_DIR/koyori-pair-keychron.sh" /usr/local/bin/koyori-pair-keychron
 
-KIOSK_PKGS=(openbox xdotool x11-xserver-utils)
+KIOSK_PKGS=(openbox xdotool x11-xserver-utils bluez)
 missing_kiosk=()
 for pkg in "${KIOSK_PKGS[@]}"; do
   if ! dpkg -s "$pkg" >/dev/null 2>&1; then
@@ -174,7 +175,6 @@ echo "Japanese IME in kiosk:"
 echo "  Toggle: 半/全 key (JIS) in text fields"
 echo "  diagnose: koyori-diagnose-ime"
 echo ""
-echo "Input sharing:"
-echo "  Keychron BT + Input Leap: docs/koyori-input-sharing.md"
-echo "  diagnose: koyori-diagnose-input-leap"
-echo "  touch keyboard: deferred (docs/backlog-koyori.md)"
+echo "Input:"
+echo "  Keychron K2 BT: koyori-pair-keychron.sh  (docs/koyori-input-sharing.md)"
+echo "  IME: 半/全 in webui text fields"

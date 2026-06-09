@@ -49,8 +49,9 @@ install -m 755 "$SCRIPT_DIR/koyori-input-leap-start.sh" /usr/local/bin/koyori-in
 install -m 755 "$SCRIPT_DIR/koyori-onboard-start.sh" /usr/local/bin/koyori-onboard-start
 install -m 755 "$SCRIPT_DIR/koyori-onboard-preseed.sh" /usr/local/bin/koyori-onboard-preseed
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-ime.sh" /usr/local/bin/koyori-diagnose-ime
+install -m 755 "$SCRIPT_DIR/koyori-diagnose-input-leap.sh" /usr/local/bin/koyori-diagnose-input-leap
 
-KIOSK_PKGS=(openbox xdotool x11-xserver-utils florence onboard at-spi2-core)
+KIOSK_PKGS=(openbox xdotool x11-xserver-utils)
 missing_kiosk=()
 for pkg in "${KIOSK_PKGS[@]}"; do
   if ! dpkg -s "$pkg" >/dev/null 2>&1; then
@@ -63,7 +64,10 @@ if ((${#missing_kiosk[@]})); then
 fi
 
 MA_HOME="/home/ma"
-/usr/local/bin/koyori-onboard-preseed "$MA_HOME"
+if [[ "${KOYORI_TOUCH_KB:-0}" == "1" ]]; then
+  apt-get install -y onboard at-spi2-core 2>/dev/null || true
+  /usr/local/bin/koyori-onboard-preseed "$MA_HOME"
+fi
 
 IME_PKGS=(ibus-mozc ibus-gtk3 ibus-gtk mozc-server fonts-noto-cjk firefox)
 missing_ime=()
@@ -117,10 +121,9 @@ KOYORI_BROWSER=firefox
 # Surface Go native mode (optional; xrandr --auto usually enough):
 # KOYORI_DISPLAY_MODE=1800x1200
 # KOYORI_USE_WM=1
-# On-screen keyboard (Surface touch). docs/koyori-input-sharing.md
-KOYORI_ONBOARD=1
-KOYORI_OSK_BACKEND=florence
-# Input Leap client — ma-home Windows Server IP (LAN or Tailscale):
+# Touch keyboard: deferred (docs/backlog-koyori.md). Enable: KOYORI_ONBOARD=1
+KOYORI_ONBOARD=0
+# Input Leap client — ma-home Windows Server (Tailscale IP recommended):
 # KOYORI_INPUT_LEAP_SERVER='100.64.x.x'
 # KOYORI_INPUT_LEAP_NAME='koyori'
 EOF
@@ -172,5 +175,6 @@ echo "  Toggle: 半/全 key (JIS) in text fields"
 echo "  diagnose: koyori-diagnose-ime"
 echo ""
 echo "Input sharing:"
-echo "  touch keyboard: onboard (KOYORI_ONBOARD=1)"
-echo "  Windows KB share: docs/koyori-input-sharing.md (Input Leap)"
+echo "  Keychron BT + Input Leap: docs/koyori-input-sharing.md"
+echo "  diagnose: koyori-diagnose-input-leap"
+echo "  touch keyboard: deferred (docs/backlog-koyori.md)"

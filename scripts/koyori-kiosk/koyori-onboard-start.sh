@@ -128,7 +128,7 @@ koyori_osk_ensure_visible() {
   koyori_osk_place_window || true
 }
 
-if [[ "${KOYORI_ONBOARD:-1}" != "1" ]]; then
+if [[ "${KOYORI_ONBOARD:-0}" != "1" ]]; then
   koyori_osk_log "disabled (KOYORI_ONBOARD=0)"
   return 0
 fi

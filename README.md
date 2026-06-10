@@ -18,6 +18,8 @@ A collection of MCP servers that give Claude "eyes", "neck", "ears", "voice", an
 
 Traditional LLMs were passive — they could only see what was shown to them. With a body, they become active — they can look for themselves. This shift in agency is profound.
 
+**Why this project exists, what it's built on, and what this fork aims for** → [docs/VISION.md](./docs/VISION.md) (Japanese)
+
 ## Body Parts
 
 | MCP Server | Body Part | Function | Hardware |

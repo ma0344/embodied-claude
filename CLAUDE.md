@@ -3,6 +3,8 @@
 このプロジェクトは、Claude に身体（目・首・耳・声・脳）を与え、その上に sociality
 （社会的中間層）を積む MCP サーバー群です。
 
+**きっかけ・目指すもの・この fork（こより / ma-home）の前提** → [docs/VISION.md](./docs/VISION.md)
+
 ## ディレクトリ構造
 
 ```

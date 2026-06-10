@@ -3,6 +3,8 @@
 ## Overview
 This repository contains multiple Python MCP servers that give Claude “senses” (eyes, neck, ears, memory, and voice). Each server is a standalone package with its own `pyproject.toml` and can be run independently.
 
+Project motivation and goals (Japanese): [docs/VISION.md](./docs/VISION.md).
+
 ## Project Structure & Module Organization
 - `usb-webcam-mcp/`: USB webcam capture (`src/usb_webcam_mcp/`).
 - `wifi-cam-mcp/`: Wi‑Fi PTZ camera control + audio capture (`src/wifi_cam_mcp/`).

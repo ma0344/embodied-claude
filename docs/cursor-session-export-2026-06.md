@@ -105,6 +105,7 @@ koyori ──webui──▶ ma-home ──LM Studio──▶ Gemma
 
 ## 関連ドキュメント
 
+- `docs/VISION.md` — プロジェクトの前提・目指すもの
 - `docs/lmstudio-model-change.md`
 - `docs/koyori-kiosk-ime.md`
 - `docs/koyori-input-sharing.md`（Keychron）

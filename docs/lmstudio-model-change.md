@@ -8,9 +8,9 @@ Claude Code・claude-code-webui・wifi-cam ビジョンが LM Studio に送る *
 
 | マシン | 役割 |
 |--------|------|
-| **ma-home** (Windows) | LM Studio 本体、Claude Code CLI、claude-code-webui、koyori キオスクの接続先 |
-| **ma-server** (Linux) | 開発・Cursor MCP。Claude Code CLI は動かない（CPU 制約） |
-| **koyori** | Chromium キオスク → ma-home の webui のみ |
+| **ma-home** (Windows) | LM Studio 本体、Claude Code CLI、claude-code-webui、全 MCP、開発（Cursor ローカル） |
+| **koyori** (Surface Go) | Firefox キオスク → ma-home の webui（表示・入力端末） |
+| **ma-server** (Linux) | 旧開発箱（任意）。本番経路・開発の主戦場ではない |
 
 ## クイック手順（ma-home・推奨）
 
@@ -68,7 +68,7 @@ API リクエストだけ非 QAT モデルになることがある。`set-lmstud
 | スクリプト | 用途 |
 |------------|------|
 | `set-lmstudio-model.ps1` | **モデル ID を変更**（settings + .mcp.json） |
-| `set-lmstudio-model.sh` | Linux / ma-server 側の同内容（settings + .mcp.json） |
+| `set-lmstudio-model.sh` | Linux 用（レガシー。ma-home では `set-lmstudio-model.ps1` を使う） |
 | `sync-lmstudio-settings.ps1` | `"model"` はそのまま、**env だけ** `"model"` に合わせる（ずれ修正） |
 | `check-lmstudio-model.ps1` | 現在の設定・User env・不一致の表示 |
 | `run-webui-ma-home.ps1` | webui 起動（WinGet `claude.exe` + MODEL env 強制） |
@@ -94,9 +94,9 @@ Copy-Item .claude\settings.local.json.example .claude\settings.local.json
 notepad .claude\settings.local.json   # ANTHROPIC_AUTH_TOKEN を LM Studio トークンに
 ```
 
-## ma-server（Linux）での作業
+## Linux / ma-server（レガシー・任意）
 
-リポジトリの設定だけ先に揃える場合:
+開発は ma-home に移行済み。Linux マシンで設定ファイルだけ揃える場合:
 
 ```bash
 cd ~/src/embodied-claude
@@ -140,5 +140,5 @@ LM Studio のチャットモデル変更とは別問題。embedding モデルを
 
 - `.claude/settings.local.json.example` — テンプレート
 - `.mcp.json.windows.example` — Windows 用 MCP テンプレート
-- `scripts/env-lmstudio.sh` — ma-server シェル用 LM Studio 向け env
+- `scripts/env-lmstudio.sh` — Linux シェル用 LM Studio 向け env（レガシー）
 - `scripts/setup-ma-home.ps1` — ma-home 初回セットアップ

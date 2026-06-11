@@ -12,7 +12,7 @@
 |--------|------|
 | **ma-home** (Win, RTX 3090) | LM Studio (`google/gemma-4-12b-qat`)、Claude Code CLI、claude-code-webui、**全 MCP**、長期記憶 |
 | **koyori** (Surface Go, Ubuntu) | Firefox キオスク → ma-home webui。BT キーボード（Keychron K4 MAX, Fn+2） |
-| **ma-server** (Core2 Linux) | **開発用のみ**（CLI は Illegal instruction）。本番経路には不要 |
+| **ma-server** (Core2 Linux) | 旧箱（任意）。開発・本番とも ma-home に移行済み |
 
 ```
 koyori ──webui──▶ ma-home ──LM Studio──▶ Gemma
@@ -75,11 +75,13 @@ koyori ──webui──▶ ma-home ──LM Studio──▶ Gemma
 - ma-home **webui 常時起動** → `scripts/install-webui-task.ps1`（`docs/backlog-ma-home.md`）
 - koyori **内蔵カメラ**（libcamera / video グループ / 場合により linux-surface）— 近目 PoC 用、本番目は Tapo
 - koyori タッチキーボード、Input Leap — 見送り
-- **開発ワークスペースを ma-home Cursor に移す**（Remote SSH やめる）
+- ~~開発ワークスペースを ma-home Cursor に移す~~ → **完了**（2026-06）
 
 ---
 
 ## ma-home Cursor 移行（最小手順）
+
+> **2026-06 完了済み。** 以下は移行当時の記録。新規作業は ma-home ローカルで `git pull` のみ。
 
 1. ma-server で **未 push が無い**ことを確認 → push
 2. ma-home: `git pull`（秘密ファイルは `sync-ma-home-git.ps1`）

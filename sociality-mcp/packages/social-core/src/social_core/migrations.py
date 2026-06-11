@@ -294,6 +294,34 @@ MIGRATIONS = [
         name="002_interaction_orchestrator",
         sql=_MIGRATION_002_SQL,
     ),
+    Migration(
+        name="003_room_sessions",
+        sql="""
+        CREATE TABLE IF NOT EXISTS room_sessions (
+            session_id TEXT PRIMARY KEY,
+            person_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            metadata_json TEXT NOT NULL DEFAULT '{}'
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_room_sessions_person_updated
+            ON room_sessions(person_id, updated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS session_pointers (
+            client_id TEXT NOT NULL,
+            person_id TEXT NOT NULL,
+            active_session_id TEXT NOT NULL,
+            activated_at TEXT NOT NULL,
+            PRIMARY KEY (client_id, person_id),
+            FOREIGN KEY (active_session_id) REFERENCES room_sessions(session_id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_session_pointers_active
+            ON session_pointers(active_session_id, activated_at DESC);
+        """,
+    ),
 ]
 
 

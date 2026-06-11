@@ -18,6 +18,12 @@ from datetime import datetime, timezone
 from hashlib import sha1
 from pathlib import Path
 
+_HOOKS_DIR = Path(__file__).resolve().parent
+if str(_HOOKS_DIR) not in sys.path:
+    sys.path.insert(0, str(_HOOKS_DIR))
+from hook_io import ensure_utf8_stdio  # noqa: E402
+from soul_pulse import identity_line  # noqa: E402
+
 SKIP_SUBSTRINGS = (
     "好きなことをいっぱいして",
     "深呼吸や瞑想",
@@ -122,12 +128,16 @@ def _desire_hint() -> list[str]:
 
 
 def main() -> int:
+    ensure_utf8_stdio()
     try:
         text = _read_user_prompt()
         if not text or _should_skip(text):
             return 0
 
         lines: list[str] = []
+        pulse = identity_line()
+        if pulse:
+            lines.append(pulse)
         lines.extend(_recall_lines(text))
         lines.extend(_desire_hint())
         _social_ingest(text)

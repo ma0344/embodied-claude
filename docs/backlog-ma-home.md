@@ -19,4 +19,15 @@ Start-ScheduledTask -TaskName EmbodiedClaude-WebUI
 
 外すとき: `.\scripts\install-webui-task.ps1 -Uninstall`
 
-関連: `scripts/run-webui-ma-home.ps1` / `.cmd`（手動起動）
+関連:
+
+| スクリプト | 用途 |
+|------------|------|
+| `scripts/run-webui-ma-home.ps1` / `.cmd` | 手動起動（前面・デバッグ） |
+| `scripts/restart-webui-ma-home.ps1` | 設定変更後の再起動（タスク経由） |
+| `scripts/stop-webui-ma-home.ps1` | 停止のみ |
+
+```powershell
+.\scripts\restart-webui-ma-home.ps1              # 通常
+.\scripts\restart-webui-ma-home.ps1 -Foreground  # このターミナルで起動
+```

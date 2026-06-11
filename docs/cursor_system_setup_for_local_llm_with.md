@@ -1,6 +1,12 @@
 # System setup for local LLM with SSH access
 _Exported on 2026/6/10 at 10:10:32 JST from Cursor (3.7.21)_
 
+> **アーカイブ（2026-06 時点の会話 Export）**  
+> 当時の正は ma-server / Chromium 前提の記述が多い。**いまの本番・開発の正**は
+> [VISION.md](./VISION.md)、[ma-home-cursor-handoff.md](./ma-home-cursor-handoff.md)、
+> [cursor-session-export-2026-06.md](./cursor-session-export-2026-06.md) を参照。
+> koyori キオスクは **Firefox**（[koyori-kiosk-ime.md](./koyori-kiosk-ime.md)）。
+
 ---
 
 **User**

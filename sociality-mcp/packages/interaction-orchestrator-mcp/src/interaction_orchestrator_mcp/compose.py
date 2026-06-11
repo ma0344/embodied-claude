@@ -18,6 +18,12 @@ from .memory_adapter import (
 from .memory_adapter import (
     make_default_adapter as make_default_memory_adapter,
 )
+from .session_adapter import (
+    OrchestratorSessionAdapter,
+)
+from .session_adapter import (
+    make_default_session_adapter,
+)
 from .schemas import (
     AgentStateSummary,
     CommitmentSummary,
@@ -27,6 +33,7 @@ from .schemas import (
     OpenLoopSummary,
     RelevantMemoryRef,
     ResponseContract,
+    SessionTurn,
 )
 from .store import InteractionOrchestratorStore
 
@@ -42,6 +49,7 @@ def compose_interaction_context(
     orchestrator_store: InteractionOrchestratorStore,
     policy_timezone: str = DEFAULT_POLICY_TIMEZONE,
     memory_adapter: OrchestratorMemoryAdapter | None = None,
+    session_adapter: OrchestratorSessionAdapter | None = None,
 ) -> InteractionContext:
     """Gather everything the next move needs into a single snapshot."""
 
@@ -165,10 +173,21 @@ def compose_interaction_context(
         relevant_memories=relevant_memories,
     )
 
+    session_history = _resolve_session_history(
+        payload=payload,
+        session_adapter=session_adapter or make_default_session_adapter(),
+    )
+
+    session_context_block = _format_session_context_block(
+        session_id=payload.session_id,
+        session_history=session_history,
+    )
+
     compact_prompt_block = _compact_block(
         prompt_summary=prompt_summary,
         response_contract=response_contract,
         relevant_memories=relevant_memories,
+        session_context_block=session_context_block,
         max_chars=payload.max_chars,
     )
 
@@ -178,6 +197,9 @@ def compose_interaction_context(
         timezone=policy_timezone,
         person_id=payload.person_id,
         person_name=person_name,
+        session_id=payload.session_id,
+        session_history=session_history,
+        session_context_block=session_context_block,
         social_state=_to_plain(social_state) or {},
         turn_taking=turn_taking_data,
         boundary_hints=boundary_hints,
@@ -205,6 +227,22 @@ def compose_interaction_context(
 # ---------------------------------------------------------------------------
 # internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _resolve_session_history(
+    *,
+    payload: ComposeInteractionContextInput,
+    session_adapter: OrchestratorSessionAdapter,
+) -> list[SessionTurn]:
+    """Load transcript by session_id from social.db (shared room pointer)."""
+    if payload.session_history:
+        return list(payload.session_history)
+    if not payload.session_id or not payload.person_id:
+        return []
+    return session_adapter.load_transcript(
+        person_id=payload.person_id,
+        session_id=payload.session_id,
+    )
 
 
 def _call(fn, **kwargs):
@@ -335,17 +373,17 @@ def _pick_contract(
     base = ResponseContract()
     if person_id == "ma":
         base = ResponseContract(
-            treat_user_as="high-context technical partner",
+            treat_user_as="childhood friend まー; agent is こより (SOUL.md voice)",
             avoid=[
-                "generic reassurance",
-                "beginner tutorial unless explicitly requested",
+                "generic assistant tone or keigo",
+                "breaking character into neutral chatbot",
                 "pretending to remember unsupported facts",
-                "over-explaining already-established premises",
+                "meta comments about TTS or using tools",
             ],
             prefer=[
-                "direct technical framing",
-                "relationship-aware specificity",
-                "one clear implementation path",
+                "soft Kansai casual (うち / タメ口) per SOUL.md",
+                "relationship-aware specificity with まー",
+                "direct answers without over-explaining",
                 "explicit uncertainty when memory or evidence is weak",
             ],
             initiative_policy="bounded",
@@ -422,11 +460,73 @@ def _build_prompt_summary(
     ).strip()
 
 
+def _format_session_context_block(
+    *,
+    session_id: str | None,
+    session_history: list[SessionTurn],
+) -> str:
+    if not session_id or not session_history:
+        return ""
+
+    arc = _session_arc_summary(session_history)
+    lines = [
+        f"[recent_room_context session_id={session_id}]",
+        arc,
+        "Conversation in THIS room only (chronological):",
+    ]
+    for turn in session_history:
+        who = "まー" if turn.sender == "ma" else "こより"
+        lines.append(f"{who}: {turn.text}")
+    return "\n".join(lines)
+
+
+def _session_arc_summary(session_history: list[SessionTurn]) -> str:
+    total = len(session_history)
+    human = sum(1 for turn in session_history if turn.sender == "ma")
+    koyori = total - human
+    last = session_history[-1]
+    last_who = "まー" if last.sender == "ma" else "こより"
+    return (
+        f"Room arc: {total} turns ({human} from まー, {koyori} from こより). "
+        f"Last speaker: {last_who}."
+    )
+
+
+def _trim_session_context_block(block: str, *, max_chars: int) -> str:
+    if len(block) <= max_chars:
+        return block
+    lines = block.splitlines()
+    if len(lines) <= 4:
+        return block[: max_chars - 1].rstrip() + "…"
+
+    header = lines[:3]
+    body = lines[3:]
+    budget = max_chars - sum(len(line) + 1 for line in header) - 40
+    if budget < 200:
+        return block[: max_chars - 1].rstrip() + "…"
+
+    head_turns = body[:2]
+    tail_budget = budget - sum(len(line) + 1 for line in head_turns)
+    tail_turns: list[str] = []
+    for line in reversed(body[2:]):
+        if sum(len(item) + 1 for item in tail_turns) + len(line) + 1 > tail_budget:
+            break
+        tail_turns.insert(0, line)
+
+    omitted = len(body) - len(head_turns) - len(tail_turns)
+    middle = [f"… ({omitted} earlier turns omitted) …"] if omitted > 0 else []
+    trimmed = "\n".join([*header, *head_turns, *middle, *tail_turns])
+    if len(trimmed) > max_chars:
+        return trimmed[: max_chars - 1].rstrip() + "…"
+    return trimmed
+
+
 def _compact_block(
     *,
     prompt_summary: str,
     response_contract: ResponseContract,
     relevant_memories: list[RelevantMemoryRef],
+    session_context_block: str = "",
     max_chars: int,
 ) -> str:
     contract_lines = [f"treat_user_as: {response_contract.treat_user_as}"]
@@ -448,12 +548,26 @@ def _compact_block(
         snippet = m.content[:80] + ("…" if len(m.content) > 80 else "")
         memory_lines.append(f"[background r={m.relevance:.2f}] {snippet}")
 
+    session_budget = min(7000, max(max_chars // 2, 1200))
+    trimmed_session = ""
+    if session_context_block:
+        trimmed_session = _trim_session_context_block(
+            session_context_block,
+            max_chars=session_budget,
+        )
+
     sections = [
         "[interaction_context]",
         prompt_summary,
-        "[response_contract]",
-        *contract_lines,
     ]
+    if trimmed_session:
+        sections.extend(["", trimmed_session])
+    sections.extend(
+        [
+            "[response_contract]",
+            *contract_lines,
+        ]
+    )
     if memory_lines:
         sections.append("[relevant_memories]")
         sections.extend(memory_lines)

@@ -135,6 +135,7 @@ koyori（Surface Go）          ma-home（Windows + RTX 3090）
 | LM Studio・モデル切替 | [lmstudio-model-change.md](./lmstudio-model-change.md) |
 | koyori キオスク・IME・BT キーボード | [koyori-kiosk-ime.md](./koyori-kiosk-ime.md)、[koyori-input-sharing.md](./koyori-input-sharing.md) |
 | ma-home 運用バックログ | [backlog-ma-home.md](./backlog-ma-home.md) |
+| セッション JSONL → MD export | [session-export-ma-home.md](./session-export-ma-home.md) |
 | セットアップ会話の全文アーカイブ | [cursor_system_setup_for_local_llm_with.md](./cursor_system_setup_for_local_llm_with.md) |
 | **ma-home で Cursor を開き直すときのプロンプト** | [ma-home-cursor-handoff.md](./ma-home-cursor-handoff.md) |
 

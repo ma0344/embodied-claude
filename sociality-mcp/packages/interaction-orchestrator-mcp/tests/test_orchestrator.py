@@ -11,6 +11,7 @@ from interaction_orchestrator_mcp.schemas import (
     PlanResponseInput,
     RecordAgentExperienceInput,
     RecordInterpretationShiftInput,
+    SessionTurn,
 )
 
 
@@ -33,7 +34,7 @@ def _compose(stores, *, user_text=None, channel="chat", person_id="ma", memory_a
 class TestCompose:
     def test_returns_context_with_contract_and_prompt_block(self, stores):
         ctx = _compose(stores, user_text="テスト")
-        assert ctx.response_contract.treat_user_as.startswith("high-context")
+        assert "こより" in ctx.response_contract.treat_user_as
         assert "[response_contract]" in ctx.compact_prompt_block
         assert ctx.compact_prompt_block.startswith("[interaction_context]")
         assert ctx.timezone == "Asia/Tokyo"
@@ -47,6 +48,54 @@ class TestCompose:
         ctx = _compose(stores, user_text="hello", person_id=None)
         assert ctx.person_id is None
         assert ctx.agent_state is not None
+
+    def test_session_history_appears_in_compact_block(self, stores, db):
+        from interaction_orchestrator_mcp.session_adapter import SqliteRoomSessionAdapter
+        from social_core.events import EventStore, SocialEventCreate
+
+        session_id = "room_alpha"
+        events = EventStore(db)
+        for kind, text in (
+            ("human_utterance", "部屋で最初の一言"),
+            ("agent_utterance", "うん、聞いてるで"),
+        ):
+            events.ingest(
+                SocialEventCreate(
+                    ts="2026-06-10T10:00:00+00:00",
+                    source="room",
+                    kind=kind,
+                    person_id="ma",
+                    session_id=session_id,
+                    confidence=1.0,
+                    payload={"text": text},
+                )
+            )
+
+        ctx = compose_interaction_context(
+            ComposeInteractionContextInput(
+                person_id="ma",
+                channel="chat",
+                user_text="続き",
+                session_id=session_id,
+                max_chars=8000,
+            ),
+            social_state_store=stores["social_state"],
+            relationship_store=stores["relationship"],
+            joint_attention_store=stores["joint_attention"],
+            boundary_store=stores["boundary"],
+            self_narrative_store=stores["self_narrative"],
+            orchestrator_store=stores["orchestrator"],
+            policy_timezone="Asia/Tokyo",
+            memory_adapter=stores.get("memory_adapter"),
+            session_adapter=SqliteRoomSessionAdapter(db=db),
+        )
+        assert ctx.session_id == session_id
+        assert f"[recent_room_context session_id={session_id}]" in ctx.compact_prompt_block
+        assert "部屋で最初の一言" in ctx.compact_prompt_block
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text="続き"),
+        )
+        assert any("THIS room's thread" in item for item in plan.must_include)
 
     def test_agent_state_includes_counts(self, stores):
         ctx = _compose(stores)

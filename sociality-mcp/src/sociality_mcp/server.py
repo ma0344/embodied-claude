@@ -457,6 +457,7 @@ def compose_interaction_context_tool(
     channel: str = "chat",
     user_text: str | None = None,
     autonomous_trigger: str | None = None,
+    session_id: str | None = None,
     include_private: bool = True,
     max_chars: int = 3000,
 ) -> dict[str, Any]:
@@ -477,6 +478,7 @@ def compose_interaction_context_tool(
             channel=channel,
             user_text=user_text,
             autonomous_trigger=autonomous_trigger,
+            session_id=session_id,
             include_private=include_private,
             max_chars=max_chars,
         ),
@@ -711,6 +713,7 @@ async def _handle_http(reader: __import__("asyncio").StreamReader, writer: __imp
                     channel=params.get("channel", ["chat"])[0],
                     user_text=params.get("text", [None])[0],
                     autonomous_trigger=params.get("trigger", [None])[0],
+                    session_id=params.get("session_id", [None])[0],
                     include_private=params.get("include_private", ["true"])[0] == "true",
                     max_chars=int(params.get("max_chars", ["3000"])[0]),
                 ),

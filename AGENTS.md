@@ -8,7 +8,7 @@ Project motivation and goals (Japanese): [docs/VISION.md](./docs/VISION.md).
 ## Project Structure & Module Organization
 - `usb-webcam-mcp/`: USB webcam capture (`src/usb_webcam_mcp/`).
 - `wifi-cam-mcp/`: Wi‑Fi PTZ camera control + audio capture (`src/wifi_cam_mcp/`).
-- `elevenlabs-t2s-mcp/`: ElevenLabs text-to-speech (`src/elevenlabs_t2s_mcp/`).
+- `tts-mcp/`: Text-to-speech (ElevenLabs + VOICEVOX, `src/tts_mcp/`).
 - `memory-mcp/`: Long‑term memory server (`src/memory_mcp/`) with tests in `memory-mcp/tests/`.
 - `system-temperature-mcp/`: System temperature sensor (`src/system_temperature_mcp/`).
 - `installer/`: PyInstaller-based GUI installer.
@@ -35,7 +35,8 @@ Run commands from the target subproject directory.
 
 ## Configuration, Hardware, and WSL2 Notes
 - `.env` is not committed; pass camera credentials via environment variables.
-- ElevenLabs requires `ELEVENLABS_API_KEY` in the environment (see `elevenlabs-t2s-mcp/.env.example`).
+- ElevenLabs requires `ELEVENLABS_API_KEY` in the environment (see `tts-mcp/.env.example`).
+- **Production runtime** is ma-home (Windows native + LM Studio), not WSL2-only.
 - Long‑term memory stores data under `~/.claude/memories/`.
 - WSL2: USB webcams need `usbipd` forwarding; system temperature does not work under WSL2.
 - Tapo cameras require a local camera account (not the TP‑Link cloud account) and a stable IP is recommended.

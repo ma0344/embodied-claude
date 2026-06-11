@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>こよりの部屋</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500&family=Cormorant+Garamond:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="room">
+    <header class="top-bar">
+      <div class="brand">
+        <h1>こよりの部屋</h1>
+        <p class="subtitle">Koyori's Room</p>
+      </div>
+      <div class="meta">
+        <div class="clock" id="clock">--:--</div>
+        <div class="temperature" id="temperature" aria-live="polite">—</div>
+      </div>
+    </header>
+
+    <section class="panel status-room" aria-label="こよりの状態">
+      <div id="status-content" class="status-grid">
+        <p class="placeholder">読み込み中…</p>
+      </div>
+    </section>
+
+    <section class="panel chat-room" aria-label="会話">
+      <div class="chat-header">
+        <div class="chat-header-main">
+          <h2>会話</h2>
+          <div class="session-bar">
+            <label class="session-label" for="project-select">プロジェクト</label>
+            <select id="project-select" class="session-select" aria-label="Claude Code プロジェクト"></select>
+            <label class="session-label" for="history-select">セッション</label>
+            <select id="history-select" class="session-select" aria-label="Claude Code セッション"></select>
+            <button type="button" id="session-reload" class="session-import" title="履歴を再読み込み">再読込</button>
+          </div>
+        </div>
+        <span class="chat-hint" id="chat-hint"></span>
+      </div>
+      <div class="chat-scroll" id="chat-log" tabindex="0">
+        <p class="placeholder">読み込み中…</p>
+      </div>
+      <form class="chat-compose" id="chat-form" autocomplete="off">
+        <label class="sr-only" for="chat-input">こよりに話しかける</label>
+        <textarea
+          id="chat-input"
+          class="chat-input"
+          rows="1"
+          maxlength="4000"
+          placeholder="こよりに話しかける..."
+          aria-label="こよりに話しかける"
+        ></textarea>
+        <button type="submit" class="chat-send" id="chat-send" aria-label="送信">
+          送る
+        </button>
+      </form>
+    </section>
+
+    <section class="panel visual-room" aria-label="視界">
+      <h2>視界</h2>
+      <div class="visual-feed" id="visual-feed">
+        <p class="placeholder">カメラを読み込み中…</p>
+      </div>
+    </section>
+  </div>
+
+  <script src="/static/cc-messages.js"></script>
+  <script src="/static/koyori-voice.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

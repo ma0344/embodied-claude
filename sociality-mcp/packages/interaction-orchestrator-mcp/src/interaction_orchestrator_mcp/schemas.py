@@ -41,6 +41,15 @@ PrivacyLevel = Literal["private", "relationship", "public"]
 LetterVisibility = Literal["private", "shareable", "sent"]
 
 
+class SessionTurn(BaseModel):
+    """One utterance in a room-scoped conversation thread."""
+
+    sender: Literal["ma", "koyori"]
+    text: str
+    timestamp: str
+    message_id: str | None = None
+
+
 class ComposeInteractionContextInput(BaseModel):
     """Request schema for :func:`compose_interaction_context`."""
 
@@ -50,6 +59,8 @@ class ComposeInteractionContextInput(BaseModel):
     channel: Channel = "chat"
     user_text: str | None = None
     autonomous_trigger: str | None = None
+    session_id: str | None = None
+    session_history: list[SessionTurn] = Field(default_factory=list)
     include_private: bool = True
     max_chars: int = Field(default=3000, ge=200, le=12000)
 
@@ -125,6 +136,9 @@ class InteractionContext(BaseModel):
 
     person_id: str | None = None
     person_name: str | None = None
+    session_id: str | None = None
+    session_history: list[SessionTurn] = Field(default_factory=list)
+    session_context_block: str = ""
 
     social_state: dict[str, Any] = Field(default_factory=dict)
     turn_taking: dict[str, Any] = Field(default_factory=dict)

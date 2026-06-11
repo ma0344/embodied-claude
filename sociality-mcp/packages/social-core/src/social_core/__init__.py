@@ -2,6 +2,14 @@
 
 from .confidence import clamp01, confidence_from_evidence, weighted_average
 from .db import DEFAULT_SOCIAL_DB_PATH, SocialDB, get_social_db_path
+from .room_sessions import (
+    DEFAULT_ROOM_CLIENT_ID,
+    LEGACY_ROOM_SESSION_ID,
+    ROOM_EVENT_SOURCES,
+    ActiveSessionPointer,
+    RoomSessionRecord,
+    RoomSessionRegistry,
+)
 from .events import EventStore, build_event_id
 from .models import EVENT_KINDS, SocialEvent, SocialEventCreate
 from .time import (
@@ -16,7 +24,13 @@ from .time import (
 
 __all__ = [
     "DEFAULT_POLICY_TIMEZONE",
+    "DEFAULT_ROOM_CLIENT_ID",
     "DEFAULT_SOCIAL_DB_PATH",
+    "LEGACY_ROOM_SESSION_ID",
+    "ROOM_EVENT_SOURCES",
+    "ActiveSessionPointer",
+    "RoomSessionRecord",
+    "RoomSessionRegistry",
     "EVENT_KINDS",
     "EventStore",
     "FixedClock",

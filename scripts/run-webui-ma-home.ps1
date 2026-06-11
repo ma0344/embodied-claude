@@ -92,6 +92,30 @@ if (Test-Path $UserSettings) {
 
 $ClaudeExe = Resolve-ClaudeExe -Override $ClaudePath
 
+$PortListeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
+if ($PortListeners.Count -gt 0) {
+    $OwnerPid = $PortListeners[0].OwningProcess
+    $Proc = Get-Process -Id $OwnerPid -ErrorAction SilentlyContinue
+    $ProcLabel = if ($Proc) { "$($Proc.ProcessName) (PID $OwnerPid)" } else { "PID $OwnerPid" }
+    $ProjectUrl = "http://localhost:${Port}/projects/$($Repo -replace '\\','/')"
+    $Task = Get-ScheduledTask -TaskName "EmbodiedClaude-WebUI" -ErrorAction SilentlyContinue
+
+    Write-Host "==> claude-code-webui"
+    Write-Host ""
+    Write-Host "Port $Port is already in use by $ProcLabel."
+    if ($Task -and $Task.State -eq "Running") {
+        Write-Host "Scheduled task EmbodiedClaude-WebUI is running — webui is already up."
+    } else {
+        Write-Host "Another webui (or process) is already listening."
+    }
+    Write-Host ""
+    Write-Host "Open:   $ProjectUrl"
+    Write-Host ""
+    Write-Host "To restart:"
+    Write-Host "  .\scripts\restart-webui-ma-home.ps1"
+    exit 0
+}
+
 Write-Host "==> claude-code-webui"
 Write-Host "    repo:     $Repo"
 Write-Host "    settings: $SettingsLocal"
@@ -99,9 +123,25 @@ Write-Host "    model:    $Model"
 Write-Host "    claude:   $ClaudeExe"
 Write-Host "    bind:     ${HostBind}:$Port"
 
-$Webui = Get-Command claude-code-webui -ErrorAction SilentlyContinue
+$Webui = Get-Command claude-code-webui-ma-home -ErrorAction SilentlyContinue
 if (-not $Webui) {
-    Write-Error "claude-code-webui not found. Run: npm install -g claude-code-webui"
+    $Webui = Get-Command claude-code-webui -ErrorAction SilentlyContinue
+}
+if (-not $Webui) {
+    Write-Error @"
+claude-code-webui not found.
+
+  Fork (recommended — appendSystemPrompt for presence-ui):
+    .\scripts\setup-claude-code-webui-fork.ps1
+
+  Upstream fallback:
+    npm install -g claude-code-webui
+"@
+}
+if ($Webui.Source -match "claude-code-webui-ma-home") {
+    Write-Host "    webui:    ma-home fork (appendSystemPrompt)"
+} else {
+    Write-Warning "Using upstream claude-code-webui — sociality may enrich user message text. Run .\scripts\setup-claude-code-webui-fork.ps1"
 }
 
 Set-Location $Repo

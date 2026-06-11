@@ -42,9 +42,10 @@
 
 ### 動作プラットフォーム
 
-**サポート対象:** macOS、Linux、WSL2（Ubuntu 24 推奨）
+**サポート対象:** macOS、Linux、WSL2（Ubuntu 24 推奨）、**Windows ネイティブ**（この fork の本番: ma-home）
 
-> Windows ネイティブは正式サポートしていません。WSL2 を使ってください。
+> 本家 README の汎用手順は WSL2 向けが多い。**こより fork の本番ランタイムは ma-home（Windows + LM Studio）**。
+> 手順・スクリプトは `scripts/*.ps1` と [docs/backlog-ma-home.md](./docs/backlog-ma-home.md) を参照。
 
 ### ハードウェア
 - **USB ウェブカメラ**（任意）: nuroum V11 等

@@ -296,6 +296,15 @@ def _pick_must_lists(
 
     if primary_move == "answer_directly":
         must_include.append("direct, contract-aware answer")
+    if ctx.session_history and primary_move in {
+        "answer_directly",
+        "answer_with_empathy",
+        "ask_one_clarifying_question",
+    }:
+        must_include.append(
+            "continue THIS room's thread — reference preceding turns in session_history; "
+            "do not cold-start or impersonate a different persona"
+        )
     if ctx.open_loops and primary_move in {"answer_directly", "write_private_reflection"}:
         must_include.append("reference at least one concrete open loop if relevant")
     if ctx.agent_state.interpretation_shifts >= 1 and primary_move != "stay_silent":

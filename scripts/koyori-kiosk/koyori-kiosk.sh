@@ -1,3 +1,4 @@
+#
 #!/usr/bin/env bash
 # Minimal X session: Chromium fullscreen → ma-home presence-ui (こよりの部屋).
 

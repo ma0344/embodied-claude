@@ -105,7 +105,7 @@ Browser POST /api/chat { message }
 | パス | 説明 |
 |------|------|
 | `claude-code-webui-fork/` | upstream `0.1.56` + ma-home 差分 |
-| `claude-code-webui-fork/FORK.md` | 差分一覧・ビルド手順 |
+| `claude-code-webui-fork/FORK.md` | 差分一覧・ビルド・**push 先リモート**（upstream は archived） |
 | `scripts/setup-claude-code-webui-fork.ps1` | build + `npm link` |
 | `scripts/run-webui-ma-home.ps1` | `claude-code-webui-ma-home` を優先起動 |
 

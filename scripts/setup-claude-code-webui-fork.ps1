@@ -18,14 +18,46 @@ $ForkRoot = Join-Path $Repo "claude-code-webui-fork"
 $ForkBackend = Join-Path $ForkRoot "backend"
 $ForkFrontend = Join-Path $ForkRoot "frontend"
 
-if (-not (Test-Path $ForkBackend)) {
-    Write-Error @"
-Missing $ForkBackend
+$MaHomeOrigin = "https://github.com/ma0344/claude-code-webui-ma-home.git"
 
-Clone upstream first:
-  git clone --depth 1 https://github.com/sugyan/claude-code-webui.git claude-code-webui-fork
-"@
+function Initialize-ForkRemotes {
+    param([string]$ForkDir, [string]$PushOrigin)
+
+    Push-Location $ForkDir
+    try {
+        if (-not (Test-Path ".git")) {
+            return
+        }
+
+        $remotes = @(git remote)
+        $hasUpstream = $remotes -contains "upstream"
+        $hasOrigin = $remotes -contains "origin"
+        if (-not $hasUpstream -and $hasOrigin) {
+            $originUrl = & git remote get-url origin
+            if ($originUrl -like "*sugyan/claude-code-webui*") {
+                & git remote rename origin upstream | Out-Null
+            }
+        }
+
+        $remotes = @(git remote)
+        if ($remotes -notcontains "origin") {
+            & git remote add origin $PushOrigin | Out-Null
+        }
+    }
+    finally {
+        Pop-Location
+    }
 }
+
+if (-not (Test-Path $ForkBackend)) {
+    Write-Host "    clone:    $ForkRoot (upstream, full history)"
+    git clone https://github.com/sugyan/claude-code-webui.git $ForkRoot
+    Initialize-ForkRemotes -ForkDir $ForkRoot -PushOrigin $MaHomeOrigin
+    Write-Host "    remotes:  upstream=sugyan, origin=ma0344/claude-code-webui-ma-home"
+    Write-Host "    NOTE: create empty GitHub repo before first push (see claude-code-webui-fork/FORK.md)"
+}
+
+Initialize-ForkRemotes -ForkDir $ForkRoot -PushOrigin $MaHomeOrigin
 
 $Node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $Node) {

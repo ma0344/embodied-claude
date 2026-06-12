@@ -13,6 +13,7 @@
 # Logs after reboot:
 #   cat /tmp/koyori-kiosk.log
 #   journalctl -u lightdm -b --no-pager | tail -30
+#
 
 set -euo pipefail
 

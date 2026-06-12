@@ -23,6 +23,15 @@ def test_health_reports_gateway_mode(client: TestClient) -> None:
     assert body["details"]["mode"] == "gateway"
 
 
+def test_legacy_webui_project_path_redirects_to_root(client: TestClient) -> None:
+    response = client.get(
+        "/projects/C:/Users/ma/src/embodied-claude",
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert response.headers["location"] == "/"
+
+
 def test_get_projects_proxies_unchanged(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

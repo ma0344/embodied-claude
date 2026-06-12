@@ -23,7 +23,7 @@ if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
 fi
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-WEBUI_URL="${KOYORI_WEBUI_URL:-http://ma-home.local:8090/projects/C:/Users/ma/src/embodied-claude}"
+WEBUI_URL="${KOYORI_WEBUI_URL:-http://ma-home.local:8090/}"
 KIOSK_ENV="/etc/default/koyori-kiosk"
 
 missing=()
@@ -121,7 +121,8 @@ cat >"$KIOSK_ENV" <<EOF
 #
 # Tip: if the kiosk shows "This site can't be reached", ma-home.local may resolve to IPv6
 # while presence-ui listens on IPv4. Use ma-home's LAN IPv4 (or Tailscale IP):
-#   KOYORI_WEBUI_URL='http://192.168.x.x:8090/projects/C:/Users/ma/src/embodied-claude'
+#   KOYORI_WEBUI_URL='http://192.168.x.x:8090/'
+# Do NOT use /projects/... here — that is claude-code-webui (:8080) only.
 KOYORI_WEBUI_URL='$WEBUI_URL'
 KOYORI_CHROMIUM_NO_SANDBOX=1
 # firefox: IBus/Mozc works on minimal X. snap chromium often cannot use host IME.

@@ -1,4 +1,3 @@
-#
 #!/usr/bin/env bash
 # Minimal X session: Chromium fullscreen → ma-home presence-ui (こよりの部屋).
 
@@ -47,11 +46,12 @@ if [[ -S "${XDG_RUNTIME_DIR}/bus" ]]; then
   export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 fi
 
-WEBUI_URL="${KOYORI_WEBUI_URL:-http://ma-home.local:8090/projects/C:/Users/ma/src/embodied-claude}"
+# presence-ui root (/) — NOT /projects/... (8080 SPA path; 8090 returns JSON 404 in Firefox)
+WEBUI_URL="${KOYORI_WEBUI_URL:-http://ma-home.local:8090/}"
 
 # Prefer IPv4 literal in /etc/default/koyori-kiosk if ma-home.local resolves to IPv6
 # but presence-ui listens on IPv4 only (typical: 0.0.0.0:8090).
-# Example: KOYORI_WEBUI_URL='http://192.168.10.50:8090/projects/C:/Users/ma/src/embodied-claude'
+# Example: KOYORI_WEBUI_URL='http://192.168.10.50:8090/'
 
 if command -v xset >/dev/null 2>&1 && [[ -n "${DISPLAY:-}" ]]; then
   xset s off || true

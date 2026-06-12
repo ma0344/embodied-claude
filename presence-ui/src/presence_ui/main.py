@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import StreamingResponse
 
@@ -143,6 +143,12 @@ def create_app() -> FastAPI:
     @app.get("/api/v1/camera/snapshot", response_model=CameraSnapshotResponse)
     async def get_camera_snapshot() -> CameraSnapshotResponse:
         return await fetch_camera_snapshot()
+
+    @app.get("/projects")
+    @app.get("/projects/{_rest:path}")
+    async def legacy_webui_project_path() -> RedirectResponse:
+        """8080 SPA paths bookmarked on kiosk — presence-ui lives at /."""
+        return RedirectResponse(url="/", status_code=302)
 
     @app.get("/")
     async def index() -> FileResponse:

@@ -45,7 +45,7 @@ sudo reboot
 ```bash
 KOYORI_BROWSER=firefox    # 推奨
 # 既定（フェーズ3）— 8080 直結ではない
-KOYORI_WEBUI_URL='http://ma-home.local:8090/projects/C:/Users/ma/src/embodied-claude'
+KOYORI_WEBUI_URL='http://ma-home.local:8090/'
 ```
 
 `This site can't be reached` のときは IPv4 リテラル（`http://192.168.x.x:8090/...`）を試す。

@@ -17,7 +17,7 @@ sudo ./install-koyori-kiosk.sh
 
 `/etc/default/koyori-kiosk` の `KOYORI_WEBUI_URL` を手で直す場合:
 
-`http://ma-home.local:8090/projects/C:/Users/ma/src/embodied-claude`
+`http://ma-home.local:8090/`（`/projects/...` は 8080 用。8090 だと JSON 404 画面になる）
 
 ## Input Leap — 見送り
 

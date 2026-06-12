@@ -7,7 +7,7 @@ _Exported on 2026/6/10 at 10:10:32 JST from Cursor (3.7.21)_
 > [cursor-session-export-2026-06.md](./cursor-session-export-2026-06.md) を参照。
 > koyori キオスクは **Firefox**（[koyori-kiosk-ime.md](./koyori-kiosk-ime.md)）。  
 > キオスクの接続先は **presence-ui `:8090`**（本文中の `:8080` 直結は当時の記述）。
-> 既定 URL: `http://ma-home.local:8090/projects/C:/Users/ma/src/embodied-claude`
+> 既定 URL: `http://ma-home.local:8090/`（`/projects/...` は 8080 用）
 
 ---
 

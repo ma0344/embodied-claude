@@ -121,5 +121,6 @@ Browser POST /api/chat { message }
 - [ ] `user_prompt.py` / `stripEnrichedUserPrompt` 削除（履歴クリーンアップ後）
 
 ### 【フェーズ3：キオスク】
-- [ ] **Task 7: キオスク自動起動** — Chromium → `http://ma-home:8090`（8080 直結ではない）
+- [x] **Task 7: キオスク URL** — `koyori-kiosk.sh` / `install-koyori-kiosk.sh` 既定を `http://ma-home:8090/projects/...` に変更（8080 直結ではない）
+- [ ] **Task 7b: キオスク実機反映** — koyori で `sudo ./install-koyori-kiosk.sh` 再実行（`/etc/default/koyori-kiosk` 更新）
 - [ ] **Task 8: イントロ演出**

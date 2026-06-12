@@ -113,6 +113,7 @@ def _desire_hint() -> list[str]:
     parts = []
     if dominant:
         parts.append(f"dominant={dominant}")
+
     def _as_float(value: object) -> float:
         try:
             return float(value)  # type: ignore[arg-type]

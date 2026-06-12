@@ -112,7 +112,7 @@ systemd timer / path unit（例: 30s ごと、または on-demand）
 
 ### Phase 4 — フロントエンド UI（任意）
 
-- koyori 本体: Chromium キオスク → claude-code-webui（ma-home 経由）
+- koyori 本体: キオスク → presence-ui `:8090`（内部で claude-code-webui `:8080` にプロキシ）
 - 常時 GStreamer プレビュー（別途）で AE 安定 + 見た目の「目」
 
 ---

@@ -87,7 +87,7 @@ Claude Code（オーケストレータ）
 
 ```
 koyori（Surface Go）          ma-home（Windows + RTX 3090）
-  Firefox キオスク ──LAN──▶  claude-code-webui
+  Firefox キオスク ──LAN──▶  presence-ui (:8090) ──▶ claude-code-webui (:8080)
   半/全 IME・BT キーボード        LM Studio（Gemma）
                                 Claude Code + 全 MCP
                                 記憶・sociality・Tapo カメラ・TTS
@@ -144,7 +144,7 @@ koyori（Surface Go）          ma-home（Windows + RTX 3090）
 ## 謝辞・系譜
 
 - 起点: [kmizu/embodied-claude](https://github.com/kmizu/embodied-claude)（MIT）
-- Web UI: [claude-code-webui](https://github.com/sugyan/claude-code-webui)（koyori キオスクから接続）
+- Web UI: [claude-code-webui](https://github.com/sugyan/claude-code-webui) + presence-ui（koyori キオスクは :8090）
 - ONVIF 等のコミュニティ貢献は [README-ja.md](../README-ja.md) の謝辞を参照
 
 ---

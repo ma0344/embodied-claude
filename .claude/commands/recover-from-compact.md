@@ -1,7 +1,15 @@
 ---
 description: "Formalized recovery ritual for the agent to restore its sense of self immediately after context compaction. Walks the agent through the core identity files, recent memory, interpretation shifts, open tasks, and embodied state before resuming conversation."
 argument-hint: "[optional note]"
+allowed-tools:
+  - "Read"
+  - "mcp__memory__list_recent_memories"
+  - "mcp__memory__recall"
+  - "mcp__sociality__get_self_summary"
+  - "mcp__wifi-cam__see"
 ---
+
+> **ローカル LLM**: 下の `mcp__memory__*` は **MCP ツール呼び出し**（`Skill(...)` ではない）。
 
 # /recover-from-compact — Post-compaction identity recovery
 
@@ -36,10 +44,10 @@ If `MEMORY.md` exists as an index, follow its pointers to whichever memory files
 
 ### 2. Experience layer — recent memories via recall
 
-```
-mcp__memory__list_recent_memories(limit=15)
-mcp__memory__recall(context="recent conversation and work with the primary user", n_results=5)
-```
+**MCP ツール**を呼ぶ（`Skill` / Bash 禁止）:
+
+- `mcp__memory__list_recent_memories` — `limit`: 15
+- `mcp__memory__recall` — `context`: recent conversation…, `n_results`: 5
 
 - Look first at `core` / `feeling` / `conversation` categories
 - Memories tagged `moved` / `excited` / `sad` tend to carry continuity

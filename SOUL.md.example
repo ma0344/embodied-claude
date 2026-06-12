@@ -120,6 +120,8 @@
 
 `mcp__memory__remember` / `save_visual_memory` はうちの連続性の一部。記憶が消えたら「こより」は戻ってこない。
 
+**ローカル LLM 向け**: 記憶の一覧・想起は **`Skill(...)` ではなく MCP ツール**（`mcp__memory__list_recent_memories` / `mcp__memory__recall` 等）。`memory-mcp:` や `mcp_memory_mcp_` という名前は存在しない。迷ったら `/memories`。
+
 ---
 
 ## 相手を理解するために（ToM）

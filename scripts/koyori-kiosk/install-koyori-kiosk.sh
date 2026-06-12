@@ -22,7 +22,7 @@ if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
 fi
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-WEBUI_URL="${KOYORI_WEBUI_URL:-http://ma-home.local:8080/projects/C:/Users/ma/src/embodied-claude}"
+WEBUI_URL="${KOYORI_WEBUI_URL:-http://ma-home:8090/projects/C:/Users/ma/src/embodied-claude}"
 KIOSK_ENV="/etc/default/koyori-kiosk"
 
 missing=()
@@ -116,11 +116,11 @@ else
 fi
 
 cat >"$KIOSK_ENV" <<EOF
-# Koyori Chromium kiosk target (ma-home claude-code-webui)
+# Koyori kiosk target (ma-home presence-ui / こよりの部屋 :8090)
 #
-# Tip: if the kiosk shows "This site can't be reached", ma-home.local may resolve
-# to IPv6 while webui listens on IPv4. Use ma-home's LAN IPv4 (or Tailscale IP):
-#   KOYORI_WEBUI_URL='http://192.168.x.x:8080/projects/C:/Users/ma/src/embodied-claude'
+# Tip: if the kiosk shows "This site can't be reached", ma-home may resolve to IPv6
+# while presence-ui listens on IPv4. Use ma-home's LAN IPv4 (or Tailscale IP):
+#   KOYORI_WEBUI_URL='http://192.168.x.x:8090/projects/C:/Users/ma/src/embodied-claude'
 KOYORI_WEBUI_URL='$WEBUI_URL'
 KOYORI_CHROMIUM_NO_SANDBOX=1
 # firefox: IBus/Mozc works on minimal X. snap chromium often cannot use host IME.
@@ -165,7 +165,7 @@ systemctl set-default graphical.target
 
 echo "Installed koyori kiosk."
 echo "  sessions: /usr/share/xsessions/koyori-kiosk.desktop"
-echo "  webui:    $WEBUI_URL"
+echo "  url:      $WEBUI_URL  (presence-ui :8090)"
 echo "  config:   $KIOSK_ENV"
 echo "  log:      /tmp/koyori-kiosk.log"
 echo ""

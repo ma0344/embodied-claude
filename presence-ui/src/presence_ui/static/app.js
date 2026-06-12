@@ -258,7 +258,27 @@ function setupSessionSwitcher() {
 
 function messageKey(msg) {
   const body = CcMessages.sanitizeDisplayText(msg.message || "");
-  return `${msg.sender}|${msg.timestamp}|${body}`;
+  return `${msg.sender}|${body}`;
+}
+
+function messageElementForKey(root, key) {
+  if (!root || !key) return null;
+  return root.querySelector(`[data-message-key="${CSS.escape(key)}"]`);
+}
+
+function updateMessageElement(el, msg) {
+  const body = CcMessages.sanitizeDisplayText(msg.message || "");
+  const bodyEl = el.querySelector(".message-body");
+  if (bodyEl) bodyEl.textContent = body;
+  if (msg.timestamp) {
+    const who = msg.sender === "ma" ? "まー" : "こより";
+    const label = msg.sender === "ma" ? "M" : "K";
+    const meta = el.querySelector(".meta-line");
+    if (meta) {
+      meta.innerHTML = `<span class="sender-badge">${label}</span> ${who} · ${formatTimestamp(msg.timestamp)}`;
+    }
+  }
+  el.classList.remove("is-pending", "is-streaming", "is-thinking");
 }
 
 function clearChatLog() {
@@ -310,7 +330,14 @@ function appendMessagesToDom(messages, { animate = false } = {}) {
   let added = 0;
   for (const msg of messages) {
     const key = messageKey(msg);
-    if (renderedMessageKeys.has(key)) continue;
+    const existingEl = messageElementForKey(root, key);
+    if (renderedMessageKeys.has(key) || existingEl) {
+      if (existingEl) {
+        updateMessageElement(existingEl, msg);
+        renderedMessageKeys.add(key);
+      }
+      continue;
+    }
     root.appendChild(buildMessageElement(msg, { animate }));
     renderedMessageKeys.add(key);
     added += 1;
@@ -526,28 +553,8 @@ async function sendChatMessage(text) {
     clearStreamingBubble();
     setChatThinking(false);
 
-    const root = document.getElementById("chat-log");
-    const pendingEl = root?.querySelector(".message.is-pending");
-    if (pendingEl) {
-      pendingEl.classList.remove("is-pending");
-      const key = messageKey(optimistic);
-      pendingEl.dataset.messageKey = key;
-      renderedMessageKeys.add(key);
-    }
-
-    chatMessages = chatMessages.filter((msg) => !msg._pending && !msg._thinking && !msg._streaming);
-    const finalizedUser = { ...optimistic, _pending: false };
-    chatMessages.push(finalizedUser);
-
-    if (assistantDraft) {
-      const reply = {
-        sender: "koyori",
-        message: assistantDraft,
-        timestamp: new Date().toISOString(),
-      };
-      chatMessages.push(reply);
-      appendMessagesToDom([reply], { animate: true });
-      if (chatPinnedToBottom) scrollChatToBottom();
+    if (activeProjectEncoded && activeSessionId) {
+      await loadConversationMessages({ fullRebuild: true });
     }
 
     if (activeProjectEncoded) {

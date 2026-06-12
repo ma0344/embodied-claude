@@ -5,6 +5,20 @@
 手順: `docs/koyori-input-sharing.md`（MAC はランダムでも名前でペア）  
 `koyori-pair-keychron.sh` / `koyori-connect-keychron.sh`
 
+## キオスク URL（フェーズ3）
+
+既定は **presence-ui `:8090`**（8080 直結ではない）。
+
+```bash
+# repo 更新後、koyori 実機で再インストール
+cd ~/src/embodied-claude/scripts/koyori-kiosk
+sudo ./install-koyori-kiosk.sh
+```
+
+`/etc/default/koyori-kiosk` の `KOYORI_WEBUI_URL` を手で直す場合:
+
+`http://ma-home:8090/projects/C:/Users/ma/src/embodied-claude`
+
 ## Input Leap — 見送り
 
 tar.gz インストール・接続がうまくいかず諦め。コードは残す（`koyori-input-leap-start.sh`）。

@@ -32,7 +32,7 @@ Cursor: **File → Open Folder** → `C:\Users\ma\src\embodied-claude`（Remote 
 ## 前提（必ず守る）
 
 - **本番ランタイムは ma-home のみ**（LM Studio + Claude Code + MCP + claude-code-webui）
-- **koyori** は Firefox キオスク → ma-home webui の表示端末（git pull はキオスク更新時だけ）
+- **koyori** は Firefox キオスク → ma-home **presence-ui (:8090)** の表示端末（8080 直結ではない。git pull はキオスク更新時だけ）
 - **ma-server** はもう開発に使わない（任意の旧箱）
 - エージェント名は **こより**。まーは幼馴染。人格は SOUL.md（リポジトリ直下、gitignore）
 - LLM: **google/gemma-4-12b-qat** @ LM Studio `http://127.0.0.1:1234`
@@ -67,7 +67,7 @@ Cursor: **File → Open Folder** → `C:\Users\ma\src\embodied-claude`（Remote 
 @docs/VISION.md @docs/cursor-session-export-2026-06.md @CLAUDE.md
 
 ma-home ローカルで embodied-claude（こより）開発を続ける。
-本番は ma-home（LM Studio + MCP + webui）、koyori はキオスクのみ。
+本番は ma-home（LM Studio + MCP + webui :8080 + presence-ui :8090）、koyori キオスクは :8090。
 以前 ma-server SSH で開発していたが履歴は無い。上記3ファイルで文脈を読んで、次のタスクを聞いてから進めて。
 ```
 

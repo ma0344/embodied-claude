@@ -9,7 +9,7 @@ Claude Code・claude-code-webui・wifi-cam ビジョンが LM Studio に送る *
 | マシン | 役割 |
 |--------|------|
 | **ma-home** (Windows) | LM Studio 本体、Claude Code CLI、claude-code-webui、全 MCP、開発（Cursor ローカル） |
-| **koyori** (Surface Go) | Firefox キオスク → ma-home の webui（表示・入力端末） |
+| **koyori** (Surface Go) | Firefox キオスク → ma-home の presence-ui `:8090`（表示・入力端末） |
 | **ma-server** (Linux) | 旧開発箱（任意）。本番経路・開発の主戦場ではない |
 
 ## クイック手順（ma-home・推奨）

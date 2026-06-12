@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Koyori Kiosk
-Comment=Chromium kiosk to ma-home claude-code-webui
+Comment=Firefox/Chromium kiosk to ma-home presence-ui (こよりの部屋 :8090)
 Exec=/usr/local/bin/koyori-kiosk
 Type=XSession
 DesktopNames=KoyoriKiosk

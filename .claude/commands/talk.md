@@ -7,6 +7,7 @@ allowed-tools:
   - "mcp__sociality__ingest_interaction"
   - "mcp__memory__remember"
   - "mcp__memory__recall"
+  - "mcp__memory__list_recent_memories"
   - "mcp__tts__say"
 ---
 

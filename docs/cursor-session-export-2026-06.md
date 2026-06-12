@@ -11,7 +11,7 @@
 | マシン | 役割 |
 |--------|------|
 | **ma-home** (Win, RTX 3090) | LM Studio (`google/gemma-4-12b-qat`)、Claude Code CLI、claude-code-webui、**全 MCP**、長期記憶 |
-| **koyori** (Surface Go, Ubuntu) | Firefox キオスク → ma-home webui。BT キーボード（Keychron K4 MAX, Fn+2） |
+| **koyori** (Surface Go, Ubuntu) | Firefox キオスク → ma-home presence-ui `:8090`。BT キーボード（Keychron K4 MAX, Fn+2） |
 | **ma-server** (Core2 Linux) | 旧箱（任意）。開発・本番とも ma-home に移行済み |
 
 ```
@@ -63,8 +63,9 @@ koyori ──webui──▶ ma-home ──LM Studio──▶ Gemma
 | 人格 | `SOUL.md` / `MEMORY.md`（gitignore 可） |
 | LM Studio token | `%USERPROFILE%\.config\embodied-claude\lmstudio.token` |
 | 長期記憶 DB | `%USERPROFILE%\.claude\memories\` |
-| webui | `http://ma-home:8080/projects/C:/Users/ma/src/embodied-claude` |
-| koyori キオスク URL | `/etc/default/koyori-kiosk` の `KOYORI_WEBUI_URL` |
+| webui（脳・デバッグ） | `http://ma-home:8080/projects/C:/Users/ma/src/embodied-claude` |
+| こよりの部屋（presence-ui） | `http://ma-home:8090/` |
+| koyori キオスク URL（既定） | `http://ma-home:8090/projects/C:/Users/ma/src/embodied-claude`（`/etc/default/koyori-kiosk` の `KOYORI_WEBUI_URL`） |
 
 **ma-server から移す必要は基本なし**（上記は ma-home で既に運用中）。
 

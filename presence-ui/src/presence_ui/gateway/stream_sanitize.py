@@ -1,4 +1,8 @@
-"""Filter Claude Code NDJSON stream to UI-safe SDK messages (structural, not string)."""
+"""Pass-through NDJSON stream from Claude Code backend to the room UI.
+
+The gateway must not rewrite SDK message content. Display filtering belongs in
+the frontend (cc-messages.js), not in the proxy.
+"""
 
 from __future__ import annotations
 
@@ -12,8 +16,6 @@ from starlette.responses import StreamingResponse
 
 from presence_ui.gateway.backend import backend_base_url
 from presence_ui.gateway.sdk_content import (
-    build_text_only_content,
-    extract_text_blocks,
     join_text_blocks,
     resolve_user_utterance,
 )
@@ -21,8 +23,11 @@ from presence_ui.gateway.user_prompt import strip_enriched_user_prompt
 
 logger = logging.getLogger(__name__)
 
+_PASSTHROUGH_LINE_TYPES = frozenset({"error", "done", "aborted", "social_silent"})
+
 
 def extract_assistant_speech(sdk_message: dict[str, Any]) -> str:
+    """Legacy helper: text blocks only (used by tests / diagnostics)."""
     if not sdk_message or sdk_message.get("type") != "assistant":
         return ""
     inner = sdk_message.get("message") or sdk_message
@@ -30,6 +35,7 @@ def extract_assistant_speech(sdk_message: dict[str, Any]) -> str:
 
 
 def extract_user_speech(sdk_message: dict[str, Any], *, user_text: str = "") -> str:
+    """Legacy helper: user utterance extraction (optional strip for history fallback)."""
     if not sdk_message or sdk_message.get("type") != "user":
         return ""
     inner = sdk_message.get("message") or sdk_message
@@ -40,75 +46,52 @@ def extract_user_speech(sdk_message: dict[str, Any], *, user_text: str = "") -> 
     return strip_enriched_user_prompt(utterance)
 
 
-def _set_message_content(message: dict[str, Any], text_blocks: list[str]) -> None:
-    message["content"] = build_text_only_content(text_blocks)
-
-
-def sanitize_claude_json_data(data: dict[str, Any], *, user_text: str) -> dict[str, Any] | None:
-    """Keep only UI-facing SDK fields; speech comes from content[type=text]."""
+def passthrough_claude_json_data(data: dict[str, Any]) -> dict[str, Any] | None:
+    """Return SDK payload unchanged (deep copy)."""
     if not data:
         return None
+    return copy.deepcopy(data)
 
-    msg_type = data.get("type")
 
-    if msg_type == "system":
-        if data.get("subtype") == "init":
-            return copy.deepcopy(data)
-        logger.debug("skipped system sdk message subtype=%s", data.get("subtype"))
+def passthrough_stream_line(
+    line_obj: dict[str, Any],
+    *,
+    user_text: str = "",
+) -> dict[str, Any] | None:
+    """Forward one NDJSON object without rewriting message content."""
+    del user_text  # kept for call-site compatibility; stream no longer strips user text
+
+    if not isinstance(line_obj, dict):
         return None
 
-    if msg_type == "result":
-        logger.debug("skipped result sdk message subtype=%s", data.get("subtype"))
-        return None
-
-    if msg_type == "user":
-        speech = extract_user_speech(data, user_text=user_text)
-        if not speech:
-            return None
-        out = copy.deepcopy(data)
-        inner_out = out.get("message") or out
-        _set_message_content(inner_out, [speech])
-        if "message" in out:
-            out["message"] = inner_out
-        return out
-
-    if msg_type == "assistant":
-        inner = data.get("message") or data
-        text_blocks = extract_text_blocks(inner.get("content"))
-        if not text_blocks:
-            return None
-        out = copy.deepcopy(data)
-        inner_out = out.get("message") or out
-        _set_message_content(inner_out, text_blocks)
-        if "message" in out:
-            out["message"] = inner_out
-        return out
-
-    logger.debug("skipped sdk message type=%s", msg_type)
-    return None
-
-
-def sanitize_stream_line(line_obj: dict[str, Any], *, user_text: str) -> dict[str, Any] | None:
-    """Filter one NDJSON object for the room UI."""
     line_type = line_obj.get("type")
-
-    if line_type in {"error", "done", "social_silent"}:
+    if line_type in _PASSTHROUGH_LINE_TYPES:
         return line_obj
 
     if line_type == "claude_json":
         data = line_obj.get("data")
         if not isinstance(data, dict):
             return None
-        cleaned = sanitize_claude_json_data(data, user_text=user_text)
-        if cleaned is None:
+        passed = passthrough_claude_json_data(data)
+        if passed is None:
             return None
-        return {"type": "claude_json", "data": cleaned}
+        return {"type": "claude_json", "data": passed}
 
+    logger.debug("skipped unknown stream line type=%s", line_type)
     return None
 
 
-async def stream_filtered_chat(*, path: str, payload: dict, user_text: str) -> AsyncIterator[bytes]:
-    """POST to Claude Code backend and yield structurally filtered NDJSON."""
+# Backward-compatible alias
+sanitize_stream_line = passthrough_stream_line
+
+
+async def stream_passthrough_chat(
+    *,
+    path: str,
+    payload: dict,
+    user_text: str,
+) -> AsyncIterator[bytes]:
+    """POST to Claude Code backend and yield NDJSON lines unchanged."""
     url = f"{backend_base_url()}{path}"
     buffer = ""
 
@@ -129,7 +112,7 @@ async def stream_filtered_chat(*, path: str, payload: dict, user_text: str) -> A
                             continue
                         if not isinstance(obj, dict):
                             continue
-                        out = sanitize_stream_line(obj, user_text=user_text)
+                        out = passthrough_stream_line(obj, user_text=user_text)
                         if out is not None:
                             yield (json.dumps(out, ensure_ascii=False) + "\n").encode("utf-8")
     except httpx.HTTPStatusError as exc:
@@ -144,7 +127,7 @@ async def stream_filtered_chat(*, path: str, payload: dict, user_text: str) -> A
         try:
             obj = json.loads(trailing)
             if isinstance(obj, dict):
-                out = sanitize_stream_line(obj, user_text=user_text)
+                out = passthrough_stream_line(obj, user_text=user_text)
                 if out is not None:
                     yield (json.dumps(out, ensure_ascii=False) + "\n").encode("utf-8")
         except json.JSONDecodeError:
@@ -158,7 +141,7 @@ async def proxy_post_stream_filtered(
     user_text: str,
 ) -> StreamingResponse:
     return StreamingResponse(
-        stream_filtered_chat(path=path, payload=payload, user_text=user_text),
+        stream_passthrough_chat(path=path, payload=payload, user_text=user_text),
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )

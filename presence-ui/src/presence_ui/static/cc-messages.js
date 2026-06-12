@@ -126,7 +126,7 @@ function extractUserText(sdkMessage) {
   if (!sdkMessage || sdkMessage.type !== "user") return "";
   const inner = sdkMessage.message || sdkMessage;
   const combined = joinTextBlocks(inner.content ?? inner.message?.content ?? inner.message);
-  return stripEnrichedUserPrompt(combined);
+  return combined.trim();
 }
 
 function extractAssistantText(sdkMessage) {

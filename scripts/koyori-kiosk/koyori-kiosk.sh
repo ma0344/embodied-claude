@@ -47,9 +47,9 @@ if [[ -S "${XDG_RUNTIME_DIR}/bus" ]]; then
   export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 fi
 
-WEBUI_URL="${KOYORI_WEBUI_URL:-http://ma-home:8090/projects/C:/Users/ma/src/embodied-claude}"
+WEBUI_URL="${KOYORI_WEBUI_URL:-http://ma-home.local:8090/projects/C:/Users/ma/src/embodied-claude}"
 
-# Prefer IPv4 literal in /etc/default/koyori-kiosk if ma-home resolves to IPv6
+# Prefer IPv4 literal in /etc/default/koyori-kiosk if ma-home.local resolves to IPv6
 # but presence-ui listens on IPv4 only (typical: 0.0.0.0:8090).
 # Example: KOYORI_WEBUI_URL='http://192.168.10.50:8090/projects/C:/Users/ma/src/embodied-claude'
 

@@ -64,8 +64,8 @@ koyori ──webui──▶ ma-home ──LM Studio──▶ Gemma
 | LM Studio token | `%USERPROFILE%\.config\embodied-claude\lmstudio.token` |
 | 長期記憶 DB | `%USERPROFILE%\.claude\memories\` |
 | webui（脳・デバッグ） | `http://ma-home:8080/projects/C:/Users/ma/src/embodied-claude` |
-| こよりの部屋（presence-ui） | `http://ma-home:8090/` |
-| koyori キオスク URL（既定） | `http://ma-home:8090/projects/C:/Users/ma/src/embodied-claude`（`/etc/default/koyori-kiosk` の `KOYORI_WEBUI_URL`） |
+| こよりの部屋（presence-ui） | `http://ma-home.local:8090/` |
+| koyori キオスク URL（既定） | `http://ma-home.local:8090/projects/C:/Users/ma/src/embodied-claude`（`/etc/default/koyori-kiosk` の `KOYORI_WEBUI_URL`） |
 
 **ma-server から移す必要は基本なし**（上記は ma-home で既に運用中）。
 

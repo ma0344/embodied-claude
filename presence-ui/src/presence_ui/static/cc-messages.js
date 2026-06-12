@@ -154,9 +154,10 @@ function flattenHistoryMessages(messages) {
   return rows;
 }
 
+/** Stream bubble: assistant speech only (never user echo). */
 function extractStreamText(chunk) {
   if (!chunk || chunk.type !== "claude_json") return "";
-  return extractAssistantText(chunk.data) || extractUserText(chunk.data);
+  return extractAssistantText(chunk.data);
 }
 
 function extractStreamSessionId(chunk) {

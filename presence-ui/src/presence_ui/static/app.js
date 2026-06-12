@@ -512,8 +512,8 @@ async function sendChatMessage(text) {
             persistActiveSession();
           }
           const piece = CcMessages.extractStreamText(chunk);
-          if (piece) {
-            assistantDraft = piece;
+          if (chunk.data?.type === "assistant" && piece) {
+            assistantDraft = (assistantDraft || "") + piece;
           }
         }
 

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from typing import AsyncIterator
+from dataclasses import dataclass, field
+from typing import Any, AsyncIterator
 
 from interaction_orchestrator_mcp.compose import compose_interaction_context
 from interaction_orchestrator_mcp.plan import plan_response
@@ -16,9 +16,20 @@ from interaction_orchestrator_mcp.schemas import (
 from social_core import utc_now
 
 from presence_ui.deps import get_stores
+from presence_ui.gateway.deterministic_memory import (
+    detect_remember_intent,
+    memory_saved_prompt_note,
+    persist_remember_intent,
+)
+from presence_ui.gateway.room_events import activity_event
 from presence_ui.services.llm import build_social_prompt_prefix
 
-_SILENT_MOVES = frozenset({"stay_silent", "defer", "write_private_reflection", "quietly_prepare"})
+# write_private_reflection must still reach Claude Code so it can call
+# mcp__sociality__append_private_reflection (voice.speak=false in the plan).
+_SILENT_MOVES = frozenset({"stay_silent", "defer", "quietly_prepare"})
+
+# Kiosk (:8090) has no webui permission UI; auto-accept edits within allow rules.
+_DEFAULT_PERMISSION_MODE = "acceptEdits"
 
 
 @dataclass(slots=True)
@@ -27,6 +38,7 @@ class ChatInterceptResult:
     payload: dict | None = None
     plan_move: str | None = None
     user_text: str | None = None
+    gateway_events: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _ingest_human(*, person_id: str, session_id: str | None, text: str) -> None:
@@ -71,6 +83,34 @@ def intercept_chat_request(*, payload: dict, person_id: str = "ma") -> ChatInter
 
     _ingest_human(person_id=person_id, session_id=session_key, text=message)
 
+    gateway_events: list[dict[str, Any]] = []
+    memory_notes: list[str] = []
+    remember_intent = detect_remember_intent(message)
+    if remember_intent:
+        gateway_events.append(
+            activity_event(
+                kind="remember",
+                label="記憶に保存してる…",
+                detail=remember_intent.content[:120],
+            )
+        )
+        outcome = persist_remember_intent(remember_intent)
+        if outcome.ok:
+            label = "もう覚えてある" if outcome.duplicate else "記憶に保存した"
+            gateway_events.append(
+                activity_event(kind="remember", label=label, detail=outcome.content[:120], ok=True)
+            )
+        else:
+            gateway_events.append(
+                activity_event(
+                    kind="remember",
+                    label="記憶の保存に失敗",
+                    detail=outcome.error or "unknown",
+                    ok=False,
+                )
+            )
+        memory_notes.append(memory_saved_prompt_note(outcome))
+
     stores = get_stores()
     ctx = compose_interaction_context(
         ComposeInteractionContextInput(
@@ -78,6 +118,7 @@ def intercept_chat_request(*, payload: dict, person_id: str = "ma") -> ChatInter
             channel="chat",
             user_text=message,
             session_id=session_key,
+            claude_session_resume=bool(session_key),
             include_private=True,
             max_chars=10000,
         ),
@@ -97,19 +138,30 @@ def intercept_chat_request(*, payload: dict, person_id: str = "ma") -> ChatInter
     )
 
     if plan.primary_move in _SILENT_MOVES:
-        return ChatInterceptResult(forward=False, plan_move=plan.primary_move, user_text=message)
+        return ChatInterceptResult(
+            forward=False,
+            plan_move=plan.primary_move,
+            user_text=message,
+            gateway_events=gateway_events,
+        )
 
     prefix = build_social_prompt_prefix(ctx=ctx, plan=plan)
+    if memory_notes:
+        note = "\n\n".join(memory_notes)
+        prefix = f"{prefix}\n\n{note}" if prefix else note
     enriched = payload.copy()
     enriched["message"] = message
     if prefix:
         enriched["appendSystemPrompt"] = prefix
+    if not enriched.get("permissionMode"):
+        enriched["permissionMode"] = _DEFAULT_PERMISSION_MODE
 
     return ChatInterceptResult(
         forward=True,
         payload=enriched,
         plan_move=plan.primary_move,
         user_text=message,
+        gateway_events=gateway_events,
     )
 
 

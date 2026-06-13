@@ -1,7 +1,29 @@
 {
-	"folders": [
-		{
-			"path": "."
-		}
-	]
+  "folders": [
+    {
+      "name": "embodied-claude",
+      "path": "."
+    },
+    {
+      "name": "memory-mcp",
+      "path": "memory-mcp",
+      "settings": {
+        "python.defaultInterpreterPath": "${workspaceFolder:memory-mcp}/.venv/Scripts/python.exe",
+        "basedpyright.analysis.venvPath": "${workspaceFolder:memory-mcp}",
+        "basedpyright.analysis.venv": ".venv"
+      }
+    },
+    {
+      "name": "sociality-mcp",
+      "path": "sociality-mcp",
+      "settings": {
+        "python.defaultInterpreterPath": "${workspaceFolder:sociality-mcp}/.venv/Scripts/python.exe",
+        "basedpyright.analysis.venvPath": "${workspaceFolder:sociality-mcp}",
+        "basedpyright.analysis.venv": ".venv"
+      }
+    }
+  ],
+  "settings": {
+    "python.terminal.activateEnvInCurrentTerminal": true
+  }
 }

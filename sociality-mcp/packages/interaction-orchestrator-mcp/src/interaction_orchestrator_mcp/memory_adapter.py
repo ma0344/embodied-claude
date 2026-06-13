@@ -1,15 +1,17 @@
 """Memory recall adapter for the interaction orchestrator.
 
-The orchestrator does not own the memory-mcp store; it just reads from the
-same SQLite file the user's ``remember`` calls populate. Keeping this as
-a read-only, file-backed adapter means the orchestrator stays testable
-without forcing ``memory-mcp`` to run in-process.
+The orchestrator does not own the memory-mcp store. Recall can use:
+
+- **HTTP** — ``memory-mcp`` semantic ``/recall`` (same as ``auto_context`` hook)
+- **SQLite** — read-only ``memory.db`` with LIKE keyword scoring (offline fallback)
+- **null** — no hits
 
 Selection is controlled by ``ORCHESTRATOR_MEMORY_BACKEND``:
 
-- ``sqlite`` (default when ``memory.db`` exists)
-- ``null`` or ``none``: always return empty
-- ``auto``: prefer sqlite, fall back to null
+- ``auto`` (default): HTTP semantic recall, then SQLite, then empty
+- ``http``: HTTP only, with SQLite fallback on empty/error
+- ``sqlite``: SQLite LIKE only
+- ``null`` / ``none`` / ``off``: always return empty
 
 The spec (§11.2) asks for a ``use_policy`` per recall hit. We default to
 ``mentionable`` for most memories and demote private categories to
@@ -18,13 +20,17 @@ The spec (§11.2) asks for a ``use_policy`` per recall hit. We default to
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import sqlite3
+import urllib.error
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Literal, Protocol
+from typing import Any, Iterable, Literal, Protocol
 
 UsePolicy = Literal["mentionable", "background_only", "do_not_surface"]
 
@@ -112,7 +118,7 @@ def _extract_keywords(text: str, *, max_keywords: int = 6) -> list[str]:
         if len(run) < 3:
             continue
         for i in range(len(run) - 1):
-            bigram = run[i : i + 2]
+            bigram = run[i:i + 2]
             if bigram[0] in _JP_PARTICLE_HEAD:
                 continue
             if not _push(bigram):
@@ -254,16 +260,154 @@ class NullMemoryAdapter:
         return []
 
 
+def _memory_http_base() -> str:
+    override = os.getenv("MEMORY_HTTP_RECALL_BASE", "").strip()
+    if override:
+        return override.rstrip("/")
+    port = os.getenv("MEMORY_HTTP_PORT", "18900")
+    return f"http://127.0.0.1:{port}"
+
+
+def _http_timeout_seconds() -> float:
+    raw = os.getenv("MEMORY_HTTP_RECALL_TIMEOUT", "3")
+    try:
+        return max(0.5, float(raw))
+    except ValueError:
+        return 3.0
+
+
+def _hits_from_http_items(
+    items: list[dict[str, Any]],
+    *,
+    max_results: int,
+    include_private: bool,
+) -> list[RecallHit]:
+    hits: list[RecallHit] = []
+    for item in items:
+        content = str(item.get("content") or "").strip()
+        if not content:
+            continue
+        score = float(item.get("score") or 0.0)
+        relevance = max(0.0, min(1.0, score))
+        importance = max(1, min(5, int(round(relevance * 5)) or 3))
+        category = "daily"
+        policy, reason = _use_policy_for(
+            category=category,
+            importance=importance,
+            include_private=include_private,
+        )
+        if policy == "do_not_surface":
+            continue
+        hits.append(
+            RecallHit(
+                memory_id="",
+                content=content,
+                timestamp="",
+                category=category,
+                emotion=str(item.get("emotion") or "neutral"),
+                importance=importance,
+                relevance=relevance,
+                use_policy=policy,
+                reason=f"{reason}; semantic recall score={relevance:.2f}",
+            )
+        )
+        if len(hits) >= max_results:
+            break
+    return hits
+
+
+@dataclass(slots=True)
+class HttpMemoryAdapter:
+    """Semantic recall via memory-mcp HTTP ``GET /recall``."""
+
+    base_url: str | None = None
+    timeout: float | None = None
+    fallback: OrchestratorMemoryAdapter | None = None
+
+    def _base(self) -> str:
+        return (self.base_url or _memory_http_base()).rstrip("/")
+
+    def _timeout(self) -> float:
+        return self.timeout if self.timeout is not None else _http_timeout_seconds()
+
+    def _fetch_http(
+        self,
+        *,
+        user_text: str,
+        max_results: int,
+        include_private: bool,
+    ) -> list[RecallHit]:
+        q = urllib.parse.quote(user_text)
+        url = f"{self._base()}/recall?q={q}&n={max_results}"
+        try:
+            with urllib.request.urlopen(url, timeout=self._timeout()) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            return []
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(payload, list):
+            return []
+        items = [item for item in payload if isinstance(item, dict)]
+        return _hits_from_http_items(
+            items,
+            max_results=max_results,
+            include_private=include_private,
+        )
+
+    def recall_for_response(
+        self,
+        *,
+        user_text: str | None,
+        person_id: str | None = None,
+        max_results: int = 6,
+        include_private: bool = True,
+        exclude_categories: Iterable[str] = (),
+    ) -> list[RecallHit]:
+        text = (user_text or "").strip()
+        if len(text) < 2:
+            return []
+
+        hits = self._fetch_http(
+            user_text=text,
+            max_results=max_results,
+            include_private=include_private,
+        )
+        if hits:
+            exclude = {str(c) for c in exclude_categories}
+            if exclude:
+                hits = [h for h in hits if h.category not in exclude]
+            return hits[:max_results]
+
+        if self.fallback is not None:
+            return self.fallback.recall_for_response(
+                user_text=user_text,
+                person_id=person_id,
+                max_results=max_results,
+                include_private=include_private,
+                exclude_categories=exclude_categories,
+            )
+        return []
+
+
 def make_default_adapter() -> OrchestratorMemoryAdapter:
     """Choose an adapter based on env + filesystem hints."""
 
     backend = os.getenv("ORCHESTRATOR_MEMORY_BACKEND", "auto").lower()
     sqlite_path = _default_sqlite_path()
+    sqlite_adapter: OrchestratorMemoryAdapter | None = (
+        SQLiteMemoryAdapter(sqlite_path) if sqlite_path.exists() else None
+    )
+
     if backend in {"null", "none", "off"}:
         return NullMemoryAdapter()
     if backend == "sqlite":
         return SQLiteMemoryAdapter(sqlite_path)
-    # auto
-    if sqlite_path.exists():
-        return SQLiteMemoryAdapter(sqlite_path)
-    return NullMemoryAdapter()
+    if backend in {"http", "auto"}:
+        fallback = sqlite_adapter or NullMemoryAdapter()
+        return HttpMemoryAdapter(fallback=fallback)
+    # Unknown value — behave like auto
+    fallback = sqlite_adapter or NullMemoryAdapter()
+    return HttpMemoryAdapter(fallback=fallback)

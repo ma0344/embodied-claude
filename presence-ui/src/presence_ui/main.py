@@ -14,9 +14,8 @@ from starlette.responses import StreamingResponse
 
 from presence_ui import __version__
 from presence_ui.gateway.backend import backend_base_url
+from presence_ui.gateway.chat_stream import stream_gateway_chat
 from presence_ui.gateway.proxy import proxy_get
-from presence_ui.gateway.social_chat import intercept_chat_request, stream_silent_response
-from presence_ui.gateway.stream_sanitize import proxy_post_stream_filtered
 from presence_ui.schemas import CameraSnapshotResponse, HealthResponse
 from presence_ui.services.camera import fetch_camera_snapshot
 from presence_ui.services.status import fetch_koyori_status
@@ -51,6 +50,16 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def no_cache_ui_assets(request: Request, call_next):  # type: ignore[no-untyped-def]
+        """Kiosk/PC must not keep stale app.js (crypto.randomUUID fix, send timeout)."""
+        response = await call_next(request)
+        path = request.url.path
+        if path == "/" or path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+        return response
 
     @app.get("/api/v1/health", response_model=HealthResponse)
     def health() -> HealthResponse:
@@ -91,23 +100,13 @@ def create_app() -> FastAPI:
         if not isinstance(payload, dict):
             raise HTTPException(status_code=400, detail="body must be a JSON object")
 
-        try:
-            result = intercept_chat_request(payload=payload, person_id=DEFAULT_PERSON_ID)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if not str(payload.get("message") or "").strip():
+            raise HTTPException(status_code=400, detail="message must not be empty")
 
-        if not result.forward:
-            return StreamingResponse(
-                stream_silent_response(plan_move=result.plan_move or "stay_silent"),
-                media_type="application/x-ndjson",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-            )
-
-        user_text = result.user_text or str(payload.get("message") or "").strip()
-        return await proxy_post_stream_filtered(
-            "/api/chat",
-            result.payload or payload,
-            user_text=user_text,
+        return StreamingResponse(
+            stream_gateway_chat(payload=payload, person_id=DEFAULT_PERSON_ID),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
     @app.post("/api/abort/{request_id}")
@@ -155,6 +154,7 @@ def create_app() -> FastAPI:
         return FileResponse(
             STATIC_DIR / "index.html",
             media_type="text/html; charset=utf-8",
+            headers={"Cache-Control": "no-store, must-revalidate"},
         )
 
     if STATIC_DIR.is_dir():

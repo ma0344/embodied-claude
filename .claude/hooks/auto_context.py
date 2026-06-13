@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import sys
 import urllib.error
@@ -54,17 +55,68 @@ def _should_skip(text: str) -> bool:
     return any(marker in text for marker in AUTONOMOUS_MARKERS)
 
 
+def _sqlite_recall_fallback(text: str, *, n: int = 2) -> str:
+    """Read memory.db directly when HTTP recall is down or hung."""
+    db_path = Path(
+        os.environ.get(
+            "MEMORY_DB_PATH",
+            str(Path.home() / ".claude" / "memories" / "memory.db"),
+        )
+    ).expanduser()
+    if not db_path.is_file():
+        return ""
+    keywords = [
+        tok
+        for tok in re.split(r"[\s\.,/!?？。、:;\-\(\)\[\]「」『』]+", text)
+        if len(tok) >= 2
+    ][:6]
+    if not keywords:
+        return ""
+
+    clauses = " OR ".join(["content LIKE ?"] * len(keywords))
+    params = [f"%{k}%" for k in keywords]
+    query = (
+        "SELECT content, emotion, importance FROM memories "
+        f"WHERE {clauses} ORDER BY timestamp DESC LIMIT ?"
+    )
+    try:
+        with sqlite3.connect(db_path) as conn:
+            rows = conn.execute(query, [*params, max(n * 3, 6)]).fetchall()
+    except sqlite3.Error:
+        return ""
+
+    hits: list[dict[str, object]] = []
+    for content, emotion, importance in rows:
+        if not any(kw in str(content) for kw in keywords):
+            continue
+        hits.append(
+            {
+                "content": str(content)[:200],
+                "emotion": str(emotion or ""),
+                "score": round(int(importance or 3) / 5.0, 3),
+            }
+        )
+        if len(hits) >= n:
+            break
+    if not hits:
+        return ""
+    return json.dumps(hits, ensure_ascii=False)
+
+
 def _recall_lines(text: str) -> list[str]:
     if len(text) < 5:
         return []
     port = os.environ.get("MEMORY_HTTP_PORT", "18900")
     q = urllib.parse.quote(text)
     url = f"http://127.0.0.1:{port}/recall?q={q}&n=2"
+    body = ""
     try:
         with urllib.request.urlopen(url, timeout=3) as resp:
             body = resp.read().decode("utf-8", errors="replace")
     except (urllib.error.URLError, TimeoutError, OSError):
-        return []
+        body = _sqlite_recall_fallback(text, n=2)
+    if not body or body.strip() in ("", "[]"):
+        body = _sqlite_recall_fallback(text, n=2)
     if not body or body.strip() in ("", "[]"):
         return []
     return [f"[associative_recall] {body.strip()}"]

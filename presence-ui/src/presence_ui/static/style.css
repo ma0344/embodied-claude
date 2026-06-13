@@ -564,6 +564,25 @@ body {
   font-style: italic;
 }
 
+.message.activity {
+  align-self: center;
+  max-width: 96%;
+  padding: 0.35rem 0.65rem;
+  background: rgba(138, 154, 140, 0.08);
+  border: 1px dashed rgba(138, 154, 140, 0.35);
+  border-radius: 999px;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  animation: messageIn 0.3s ease;
+}
+
+.message.activity.is-error {
+  background: rgba(168, 92, 92, 0.08);
+  border-color: rgba(168, 92, 92, 0.35);
+  color: #8a4a4a;
+}
+
 .chat-scroll::-webkit-scrollbar {
   width: 6px;
 }

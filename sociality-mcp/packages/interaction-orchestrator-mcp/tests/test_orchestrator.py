@@ -11,7 +11,6 @@ from interaction_orchestrator_mcp.schemas import (
     PlanResponseInput,
     RecordAgentExperienceInput,
     RecordInterpretationShiftInput,
-    SessionTurn,
 )
 
 
@@ -96,6 +95,55 @@ class TestCompose:
             PlanResponseInput(interaction_context=ctx, user_text="続き"),
         )
         assert any("THIS room's thread" in item for item in plan.must_include)
+
+    def test_claude_session_resume_omits_full_transcript_from_compact_block(
+        self, stores, db
+    ):
+        from interaction_orchestrator_mcp.session_adapter import SqliteRoomSessionAdapter
+        from social_core.events import EventStore, SocialEventCreate
+
+        session_id = "room_resume"
+        events = EventStore(db)
+        for kind, text in (
+            ("human_utterance", "部屋で最初の一言"),
+            ("agent_utterance", "うん、聞いてるで"),
+        ):
+            events.ingest(
+                SocialEventCreate(
+                    ts="2026-06-10T10:00:00+00:00",
+                    source="room",
+                    kind=kind,
+                    person_id="ma",
+                    session_id=session_id,
+                    confidence=1.0,
+                    payload={"text": text},
+                )
+            )
+
+        ctx = compose_interaction_context(
+            ComposeInteractionContextInput(
+                person_id="ma",
+                channel="chat",
+                user_text="続き",
+                session_id=session_id,
+                claude_session_resume=True,
+                max_chars=8000,
+            ),
+            social_state_store=stores["social_state"],
+            relationship_store=stores["relationship"],
+            joint_attention_store=stores["joint_attention"],
+            boundary_store=stores["boundary"],
+            self_narrative_store=stores["self_narrative"],
+            orchestrator_store=stores["orchestrator"],
+            policy_timezone="Asia/Tokyo",
+            memory_adapter=stores.get("memory_adapter"),
+            session_adapter=SqliteRoomSessionAdapter(db=db),
+        )
+        assert "部屋で最初の一言" in ctx.session_context_block
+        assert "部屋で最初の一言" not in ctx.compact_prompt_block
+        assert "[room_context session_id=room_resume]" in ctx.compact_prompt_block
+        assert "Full room transcript omitted" in ctx.compact_prompt_block
+        assert "Room arc:" in ctx.compact_prompt_block
 
     def test_agent_state_includes_counts(self, stores):
         ctx = _compose(stores)

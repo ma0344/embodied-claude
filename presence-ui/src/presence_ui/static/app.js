@@ -1,5 +1,7 @@
 const REFRESH_MS = 7000;
 const SCROLL_PIN_THRESHOLD = 56;
+/** Local LLM + MCP can be slow; beyond this, unlock compose and abort upstream. */
+const CHAT_SEND_TIMEOUT_MS = 180_000;
 const PROJECT_STORAGE_KEY = "koyori-cc-encoded-project";
 const SESSION_STORAGE_KEY = "koyori-cc-session-id";
 
@@ -15,6 +17,9 @@ let projectList = [];
 let conversationList = [];
 let sendTargetSessionId = null;
 let activeStreamController = null;
+let activeRequestId = null;
+let sendStartedAt = 0;
+let sendTimeoutId = null;
 
 function formatTime(date) {
   return date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
@@ -40,6 +45,18 @@ function escapeHtml(text) {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+/** randomUUID needs a secure context (HTTPS / localhost). Kiosk uses http://ma-home.local. */
+function newRequestId() {
+  try {
+    if (globalThis.crypto?.randomUUID) {
+      return globalThis.crypto.randomUUID();
+    }
+  } catch {
+    // non-secure context (e.g. http://192.168.x.x:8090)
+  }
+  return `req-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
 function updateClock() {
@@ -436,17 +453,21 @@ function updateChatHint() {
   hint.textContent = chatPinnedToBottom ? "" : "上にスクロール中";
 }
 
-function setChatThinking(active) {
+function setChatThinking(active, label = "送ってる…") {
   const root = document.getElementById("chat-log");
   if (!root) return;
 
   const existing = root.querySelector(".message.is-thinking");
   if (active) {
-    if (existing) return;
+    if (existing) {
+      const body = existing.querySelector(".message-body");
+      if (body && label) body.textContent = label;
+      return;
+    }
     const thinking = buildMessageElement(
       {
         sender: "koyori",
-        message: "考えてる…",
+        message: label,
         timestamp: new Date().toISOString(),
         _thinking: true,
       },
@@ -460,6 +481,30 @@ function setChatThinking(active) {
   if (existing) existing.remove();
 }
 
+const ACTIVITY_ICONS = {
+  remember: "📌",
+  recall: "💭",
+  see: "👁",
+  listen: "👂",
+  say: "🔊",
+  reflect: "📝",
+  tool: "⚙",
+};
+
+function appendActivityLine(event) {
+  const root = document.getElementById("chat-log");
+  if (!root || !event) return;
+  root.querySelector(".placeholder")?.remove();
+  const el = document.createElement("div");
+  el.className = `message activity${event.ok === false ? " is-error" : ""}`;
+  const icon = ACTIVITY_ICONS[event.kind] || "·";
+  let text = `${icon} ${event.label || "処理中"}`;
+  if (event.detail) text += ` — ${event.detail}`;
+  el.textContent = text;
+  root.appendChild(el);
+  if (chatPinnedToBottom) scrollChatToBottom();
+}
+
 function setComposeEnabled(enabled) {
   const input = document.getElementById("chat-input");
   const button = document.getElementById("chat-send");
@@ -467,9 +512,64 @@ function setComposeEnabled(enabled) {
   if (button) button.disabled = !enabled;
 }
 
+function setChatSendHint(text) {
+  const hint = document.getElementById("chat-hint");
+  if (!hint) return;
+  if (text) {
+    hint.textContent = text;
+    return;
+  }
+  updateChatHint();
+}
+
+async function abortActiveChatRequest() {
+  const requestId = activeRequestId;
+  if (!requestId) return;
+  try {
+    await fetch(`/api/abort/${encodeURIComponent(requestId)}`, { method: "POST" });
+  } catch {
+    // best-effort
+  }
+}
+
+function releaseComposeState() {
+  if (sendTimeoutId) {
+    clearTimeout(sendTimeoutId);
+    sendTimeoutId = null;
+  }
+  activeStreamController = null;
+  activeRequestId = null;
+  sendStartedAt = 0;
+  sendInProgress = false;
+  sendTargetSessionId = null;
+  setComposeEnabled(true);
+  clearStreamingBubble();
+  setChatThinking(false);
+  setChatSendHint("");
+}
+
+function forceResetComposeIfStuck() {
+  if (!sendInProgress || !sendStartedAt) return;
+  if (Date.now() - sendStartedAt < CHAT_SEND_TIMEOUT_MS) return;
+  void abortActiveChatRequest();
+  activeStreamController?.abort();
+  releaseComposeState();
+  const root = document.getElementById("chat-log");
+  if (root && !root.querySelector(".message.send-timeout")) {
+    const note = document.createElement("p");
+    note.className = "error send-timeout";
+    note.textContent = "応答が長すぎて送信を解除した。もう一度送ってみて。";
+    root.appendChild(note);
+  }
+}
+
 async function sendChatMessage(text) {
   const trimmed = text.trim();
-  if (!trimmed || sendInProgress) return;
+  if (!trimmed) return;
+  if (sendInProgress) {
+    setChatSendHint("まだ前の送信を処理中。しばらく待つか、再読み込みしてね");
+    return;
+  }
 
   const targetSessionId = syncActiveSessionFromSelect();
   sendInProgress = true;
@@ -477,30 +577,41 @@ async function sendChatMessage(text) {
   setComposeEnabled(false);
   chatPinnedToBottom = true;
 
-  const optimistic = {
-    sender: "ma",
-    message: trimmed,
-    timestamp: new Date().toISOString(),
-    _pending: true,
-  };
-  chatMessages = [...chatMessages, optimistic];
-  appendMessagesToDom([optimistic], { animate: true });
-  if (chatPinnedToBottom) scrollChatToBottom();
-  setChatThinking(true);
-
-  const requestId = crypto.randomUUID();
-  const payload = {
-    message: trimmed,
-    requestId,
-    workingDirectory: activeProjectPath || undefined,
-    sessionId: targetSessionId || undefined,
-  };
-
   try {
+    const optimistic = {
+      sender: "ma",
+      message: trimmed,
+      timestamp: new Date().toISOString(),
+      _pending: true,
+    };
+    chatMessages = [...chatMessages, optimistic];
+    appendMessagesToDom([optimistic], { animate: true });
+    if (chatPinnedToBottom) scrollChatToBottom();
+    setChatThinking(true, "送ってる…");
+
+    const requestId = newRequestId();
+    activeRequestId = requestId;
+    sendStartedAt = Date.now();
+    activeStreamController = new AbortController();
+    sendTimeoutId = setTimeout(() => {
+      void abortActiveChatRequest();
+      activeStreamController?.abort();
+    }, CHAT_SEND_TIMEOUT_MS);
+    setChatSendHint("返事を待ってる…");
+
+    const payload = {
+      message: trimmed,
+      requestId,
+      workingDirectory: activeProjectPath || undefined,
+      sessionId: targetSessionId || undefined,
+      // Kiosk has no :8080 permission dialog; gateway also sets acceptEdits server-side.
+      permissionMode: "acceptEdits",
+    };
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json; charset=utf-8", Accept: "application/x-ndjson" },
       body: JSON.stringify(payload),
+      signal: activeStreamController.signal,
     });
 
     if (!response.ok) {
@@ -528,7 +639,12 @@ async function sendChatMessage(text) {
           continue;
         }
 
-        if (chunk.type === "social_silent") {
+        if (chunk.type === "room_progress") {
+          setChatThinking(true, chunk.label || "考えてる…");
+        } else if (chunk.type === "room_activity") {
+          appendActivityLine(chunk);
+        } else if (chunk.type === "social_silent") {
+          setChatThinking(false);
           assistantDraft = "（いまは静かにしている）";
         } else if (chunk.type === "error") {
           throw new Error(chunk.error || "chat stream error");
@@ -540,6 +656,7 @@ async function sendChatMessage(text) {
           }
           const piece = CcMessages.extractStreamText(chunk);
           if (chunk.data?.type === "assistant" && piece) {
+            setChatThinking(false);
             assistantDraft = (assistantDraft || "") + piece;
           }
         }
@@ -572,15 +689,27 @@ async function sendChatMessage(text) {
     if (root) {
       const note = document.createElement("p");
       note.className = "error";
-      note.textContent = `送信できなかった: ${err.message}`;
+      const message =
+        err.name === "AbortError"
+          ? "応答がタイムアウトした。もう一度送ってみて。"
+          : `送信できなかった: ${err.message}`;
+      note.textContent = message;
       root.appendChild(note);
     }
   } finally {
+    if (sendTimeoutId) {
+      clearTimeout(sendTimeoutId);
+      sendTimeoutId = null;
+    }
+    activeStreamController = null;
+    activeRequestId = null;
+    sendStartedAt = 0;
     sendInProgress = false;
     sendTargetSessionId = null;
     setComposeEnabled(true);
     clearStreamingBubble();
     setChatThinking(false);
+    setChatSendHint("");
     const input = document.getElementById("chat-input");
     if (input) input.focus();
   }
@@ -596,7 +725,9 @@ function setupChatCompose() {
     const text = input.value;
     input.value = "";
     input.style.height = "auto";
-    sendChatMessage(text);
+    void sendChatMessage(text).catch((err) => {
+      console.error("sendChatMessage failed", err);
+    });
   });
 
   input.addEventListener("keydown", (event) => {
@@ -744,6 +875,9 @@ async function refreshAll() {
 
 setupChatScroll();
 setupChatCompose();
+releaseComposeState();
+document.addEventListener("visibilitychange", forceResetComposeIfStuck);
+setInterval(forceResetComposeIfStuck, 15_000);
 setupSessionSwitcher();
 updateClock();
 setInterval(updateClock, 1000);

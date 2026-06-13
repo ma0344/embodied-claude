@@ -47,6 +47,13 @@ per-file-ignores = {"src/memory_mcp/server.py" = ["E501"]}
 # Core2 / pre-x86-64-v2 CPUs: numpy 2.x wheels require X86_V2.
 constraint-dependencies = ["numpy==1.26.4"]
 
+[tool.pyright]
+include = ["src", "tests"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.10"
+extraPaths = ["src"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

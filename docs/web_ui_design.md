@@ -86,6 +86,7 @@ claude-code-webui をフォークし、社会性を `message` 文字列連結で
 
 - **`message`**: ユーザー発話そのもの。Claude Code JSONL の user 行にそのまま記録される。
 - **`appendSystemPrompt`**: compose/plan で組み立てた社会性ブロック。モデルへの system 追記のみ。JSONL には残らない。
+- **`sessionId` あり（JSONL resume）**: compose は部屋履歴の**全文を載せず** arc サマリのみ（`claude_session_resume=True`）。二重注入を避ける。
 - presence-ui はこのフィールドを透過転送する（ゲートウェイ側で再加工しない）。
 
 #### データフロー
@@ -116,8 +117,8 @@ Browser POST /api/chat { message }
 - [x] fork: vitest でオプション伝播を検証
 - [x] `social_chat.py` — prefix を `appendSystemPrompt` へ（`message` は純粋発話）
 - [x] `run-webui-ma-home.ps1` — ma-home fork バイナリ優先
-- [ ] `setup-claude-code-webui-fork.ps1` 実行・8080 再起動
-- [ ] JSONL 実機確認（user text に社会性ブロックが無いこと）
+- [x] `setup-claude-code-webui-fork.ps1` 実行・8080 再起動（2026-06-10: build + `npm link` → junction `claude-code-webui-fork/backend`; `restart-webui-ma-home.ps1` で PID 再起動、`claude-code-webui-ma-home/dist/cli/node.js` 確認）
+- [x] JSONL 実機確認（user text に社会性ブロックが無いこと）（Phase 2 以降の新規セッション例: `7e5c990e-…`, `0d59e6b2-…` — user 行は純発話のみ。旧 `6afd3195-…` の `[Social context]` 先頭行は Phase 2 前の履歴）
 - [ ] `user_prompt.py` / `stripEnrichedUserPrompt` 削除（履歴クリーンアップ後）
 
 ### 【フェーズ3：キオスク】

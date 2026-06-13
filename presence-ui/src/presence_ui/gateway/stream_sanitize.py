@@ -15,6 +15,11 @@ import httpx
 from starlette.responses import StreamingResponse
 
 from presence_ui.gateway.backend import backend_base_url
+from presence_ui.gateway.room_events import (
+    activities_from_sdk_message,
+    encode_event,
+    register_tool_uses,
+)
 from presence_ui.gateway.sdk_content import (
     join_text_blocks,
     resolve_user_utterance,
@@ -90,10 +95,12 @@ async def stream_passthrough_chat(
     path: str,
     payload: dict,
     user_text: str,
+    emit_tool_activity: bool = False,
 ) -> AsyncIterator[bytes]:
     """POST to Claude Code backend and yield NDJSON lines unchanged."""
     url = f"{backend_base_url()}{path}"
     buffer = ""
+    tool_names: dict[str, str] = {}
 
     try:
         async with httpx.AsyncClient(timeout=None) as client:
@@ -112,6 +119,14 @@ async def stream_passthrough_chat(
                             continue
                         if not isinstance(obj, dict):
                             continue
+                        if emit_tool_activity and obj.get("type") == "claude_json":
+                            data = obj.get("data")
+                            if isinstance(data, dict):
+                                register_tool_uses(data, tool_names)
+                                for event in activities_from_sdk_message(
+                                    data, tool_names=tool_names
+                                ):
+                                    yield encode_event(event)
                         out = passthrough_stream_line(obj, user_text=user_text)
                         if out is not None:
                             yield (json.dumps(out, ensure_ascii=False) + "\n").encode("utf-8")
@@ -127,6 +142,12 @@ async def stream_passthrough_chat(
         try:
             obj = json.loads(trailing)
             if isinstance(obj, dict):
+                if emit_tool_activity and obj.get("type") == "claude_json":
+                    data = obj.get("data")
+                    if isinstance(data, dict):
+                        register_tool_uses(data, tool_names)
+                        for event in activities_from_sdk_message(data, tool_names=tool_names):
+                            yield encode_event(event)
                 out = passthrough_stream_line(obj, user_text=user_text)
                 if out is not None:
                     yield (json.dumps(out, ensure_ascii=False) + "\n").encode("utf-8")

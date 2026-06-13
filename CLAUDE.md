@@ -325,7 +325,7 @@ X（x-mcp）は使わない。USB ウェブカメラは任意（`usb-webcam-mcp`
 3. **desire** — `~/.claude/desires.json` があれば `[desire_hint]` 注入
 
 有効化: `.claude/settings.local.json` を example からコピー（hooks + permissions）。
-`memory-mcp` 起動中であること（HTTP recall は memory プロセス内）。
+`memory-mcp` は **常駐デーモンではない** — Claude Code がセッションごとに `.mcp.json` から起動する。複数 `claude.exe` が並ぶと MCP 子プロセスも複数（Windows では uv のプロセス木で4段に見えることもある）。診断: `scripts/check-mcp-processes.ps1`。HTTP recall（既定 :18900）は先着1インスタンスのみ；失敗時は hook が `memory.db` 直読みにフォールバック。Cursor で同リポを開いていると `.cursor/mcp.json` も別経路で MCP を起動しうる。
 
 ### 会話ターン（LLM が compose/plan/record）
 

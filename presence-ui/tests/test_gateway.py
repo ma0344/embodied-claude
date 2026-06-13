@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -65,14 +64,14 @@ def test_post_chat_silent_does_not_forward(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from presence_ui.gateway.social_chat import ChatInterceptResult
+    async def fake_stream(**_kwargs):
+        yield (
+            '{"type":"room_progress","phase":"composing","label":"composing"}\n'
+        ).encode()
+        yield b'{"type":"social_silent","plan_move":"stay_silent"}\n'
+        yield b'{"type":"done"}\n'
 
-    monkeypatch.setattr(
-        "presence_ui.main.intercept_chat_request",
-        lambda **_: ChatInterceptResult(forward=False, plan_move="stay_silent"),
-    )
-    forward = AsyncMock()
-    monkeypatch.setattr("presence_ui.main.proxy_post_stream_filtered", forward)
+    monkeypatch.setattr("presence_ui.main.stream_gateway_chat", fake_stream)
 
     response = client.post(
         "/api/chat",
@@ -80,40 +79,31 @@ def test_post_chat_silent_does_not_forward(
     )
     assert response.status_code == 200
     lines = [json.loads(line) for line in response.text.strip().split("\n") if line]
-    assert lines[0]["type"] == "social_silent"
-    forward.assert_not_called()
+    assert lines[0]["type"] == "room_progress"
+    assert any(line.get("type") == "social_silent" for line in lines)
 
 
 def test_post_chat_forwards_enriched_payload(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from presence_ui.gateway.social_chat import ChatInterceptResult
+    async def fake_stream(**_kwargs):
+        yield (
+            '{"type":"room_progress","phase":"composing","label":"composing"}\n'
+        ).encode()
+        yield (
+            '{"type":"room_progress","phase":"replying","label":"replying"}\n'
+        ).encode()
+        yield b'{"type":"done"}\n'
 
-    enriched = {
-        "message": "hello",
-        "appendSystemPrompt": "[ctx]",
-        "requestId": "req-2",
-        "sessionId": "abc",
-    }
-
-    monkeypatch.setattr(
-        "presence_ui.main.intercept_chat_request",
-        lambda **_: ChatInterceptResult(forward=True, payload=enriched, user_text="hello"),
-    )
-
-    async def fake_filtered(path: str, payload: dict, *, user_text: str):
-        assert path == "/api/chat"
-        assert payload == enriched
-        assert user_text == "hello"
-
-        async def gen():
-            yield b'{"type":"done"}\n'
-
-        from starlette.responses import StreamingResponse
-
-        return StreamingResponse(gen(), media_type="application/x-ndjson")
-
-    monkeypatch.setattr("presence_ui.main.proxy_post_stream_filtered", fake_filtered)
+    monkeypatch.setattr("presence_ui.main.stream_gateway_chat", fake_stream)
     response = client.post("/api/chat", json={"message": "hello", "requestId": "req-2"})
     assert response.status_code == 200
+    lines = [json.loads(line) for line in response.text.strip().split("\n") if line]
+    assert lines[0]["type"] == "room_progress"
+    assert any(line.get("phase") == "replying" for line in lines)
+
+
+def test_post_chat_rejects_empty_message(client: TestClient) -> None:
+    response = client.post("/api/chat", json={"message": "  ", "requestId": "req-3"})
+    assert response.status_code == 400

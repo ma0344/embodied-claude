@@ -61,6 +61,7 @@ class ComposeInteractionContextInput(BaseModel):
     autonomous_trigger: str | None = None
     session_id: str | None = None
     session_history: list[SessionTurn] = Field(default_factory=list)
+    claude_session_resume: bool = False
     include_private: bool = True
     max_chars: int = Field(default=3000, ge=200, le=12000)
 

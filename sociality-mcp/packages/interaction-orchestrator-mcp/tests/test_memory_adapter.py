@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import io
+import json
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from interaction_orchestrator_mcp.memory_adapter import (
+    HttpMemoryAdapter,
     NullMemoryAdapter,
     SQLiteMemoryAdapter,
     _extract_keywords,
@@ -202,19 +207,110 @@ class TestNullAdapter:
         assert adapter.recall_for_response(user_text="anything") == []
 
 
+class TestHttpAdapter:
+    def test_maps_semantic_scores_to_recall_hits(self, monkeypatch):
+        payload = json.dumps(
+            [
+                {
+                    "content": "kokone.one の DNS を NS レコードで復旧した",
+                    "emotion": "neutral",
+                    "score": 0.82,
+                }
+            ],
+            ensure_ascii=False,
+        ).encode("utf-8")
+
+        def fake_urlopen(url, timeout=3):
+            assert "recall?q=" in url
+            assert "kokone" in url
+            return io.BytesIO(payload)
+
+        monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+        adapter = HttpMemoryAdapter(base_url="http://127.0.0.1:18999")
+        hits = adapter.recall_for_response(user_text="kokone の名前解決")
+        assert len(hits) == 1
+        assert hits[0].content.startswith("kokone.one")
+        assert hits[0].relevance == pytest.approx(0.82)
+        assert hits[0].use_policy == "mentionable"
+
+    def test_falls_back_to_sqlite_when_http_empty(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(
+            "urllib.request.urlopen",
+            lambda *args, **kwargs: io.BytesIO(b"[]"),
+        )
+        db = tmp_path / "memory.db"
+        _bootstrap(db)
+        _insert(
+            db,
+            id="dns",
+            content="kokone.one DNS 修復メモ",
+            timestamp="2026-04-19T10:00:00+00:00",
+            importance=4,
+        )
+        adapter = HttpMemoryAdapter(
+            base_url="http://127.0.0.1:18999",
+            fallback=SQLiteMemoryAdapter(db),
+        )
+        hits = adapter.recall_for_response(user_text="kokone.one DNS")
+        assert hits
+        assert hits[0].memory_id == "dns"
+
+    def test_falls_back_when_http_unreachable(self, monkeypatch, tmp_path):
+        import urllib.error
+
+        def boom(*args, **kwargs):
+            raise urllib.error.URLError("connection refused")
+
+        monkeypatch.setattr("urllib.request.urlopen", boom)
+        db = tmp_path / "memory.db"
+        _bootstrap(db)
+        _insert(
+            db,
+            id="dns",
+            content="kokone.one DNS 修復メモ",
+            timestamp="2026-04-19T10:00:00+00:00",
+            importance=4,
+        )
+        adapter = HttpMemoryAdapter(
+            base_url="http://127.0.0.1:18999",
+            fallback=SQLiteMemoryAdapter(db),
+        )
+        hits = adapter.recall_for_response(user_text="kokone.one DNS")
+        assert hits
+        assert hits[0].memory_id == "dns"
+
+
 class TestFactory:
     def test_respects_explicit_null(self, monkeypatch):
         monkeypatch.setenv("ORCHESTRATOR_MEMORY_BACKEND", "null")
         assert isinstance(make_default_adapter(), NullMemoryAdapter)
 
-    def test_returns_null_when_no_db(self, monkeypatch, tmp_path):
+    def test_auto_returns_http_with_null_fallback_when_no_db(self, monkeypatch, tmp_path):
         monkeypatch.delenv("ORCHESTRATOR_MEMORY_BACKEND", raising=False)
         monkeypatch.setenv("MEMORY_DB_FILE", str(tmp_path / "nope.db"))
-        assert isinstance(make_default_adapter(), NullMemoryAdapter)
+        adapter = make_default_adapter()
+        assert isinstance(adapter, HttpMemoryAdapter)
+        assert isinstance(adapter.fallback, NullMemoryAdapter)
 
-    def test_returns_sqlite_when_db_present(self, monkeypatch, tmp_path):
+    def test_auto_returns_http_with_sqlite_fallback_when_db_present(
+        self, monkeypatch, tmp_path
+    ):
         db = tmp_path / "memory.db"
         _bootstrap(db)
         monkeypatch.setenv("MEMORY_DB_FILE", str(db))
         monkeypatch.delenv("ORCHESTRATOR_MEMORY_BACKEND", raising=False)
+        adapter = make_default_adapter()
+        assert isinstance(adapter, HttpMemoryAdapter)
+        assert isinstance(adapter.fallback, SQLiteMemoryAdapter)
+
+    def test_explicit_sqlite_skips_http(self, monkeypatch, tmp_path):
+        db = tmp_path / "memory.db"
+        _bootstrap(db)
+        monkeypatch.setenv("MEMORY_DB_FILE", str(db))
+        monkeypatch.setenv("ORCHESTRATOR_MEMORY_BACKEND", "sqlite")
         assert isinstance(make_default_adapter(), SQLiteMemoryAdapter)
+
+    def test_explicit_http_uses_http_adapter(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("ORCHESTRATOR_MEMORY_BACKEND", "http")
+        monkeypatch.setenv("MEMORY_DB_FILE", str(tmp_path / "nope.db"))
+        assert isinstance(make_default_adapter(), HttpMemoryAdapter)

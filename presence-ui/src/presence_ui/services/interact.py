@@ -17,7 +17,7 @@ from presence_ui.services.llm import generate_koyori_reply
 from presence_ui.services.room_events import ROOM_WRITE_SOURCE
 from presence_ui.services.sessions import get_session, touch_session
 
-_SILENT_MOVES = frozenset({"stay_silent", "defer", "write_private_reflection", "quietly_prepare"})
+_SILENT_MOVES = frozenset({"stay_silent", "defer", "quietly_prepare"})
 _SPEAKING_MOVES = frozenset(
     {
         "answer_directly",

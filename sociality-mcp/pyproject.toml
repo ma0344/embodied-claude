@@ -53,6 +53,22 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
 
+[tool.pyright]
+include = ["src", "packages/**/src", "packages/**/tests", "tests"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
+extraPaths = [
+    "src",
+    "packages/social-core/src",
+    "packages/social-state-mcp/src",
+    "packages/relationship-mcp/src",
+    "packages/joint-attention-mcp/src",
+    "packages/boundary-mcp/src",
+    "packages/self-narrative-mcp/src",
+    "packages/interaction-orchestrator-mcp/src",
+]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

@@ -182,12 +182,17 @@ def compose_interaction_context(
         session_id=payload.session_id,
         session_history=session_history,
     )
+    prompt_session_block = _session_context_for_prompt(
+        session_id=payload.session_id,
+        session_history=session_history,
+        claude_session_resume=payload.claude_session_resume,
+    )
 
     compact_prompt_block = _compact_block(
         prompt_summary=prompt_summary,
         response_contract=response_contract,
         relevant_memories=relevant_memories,
-        session_context_block=session_context_block,
+        session_context_block=prompt_session_block,
         max_chars=payload.max_chars,
     )
 
@@ -458,6 +463,34 @@ def _build_prompt_summary(
         f"Recent agent experiences: {len(agent_state.recent_experiences)}; "
         f"interpretation_shifts so far: {agent_state.interpretation_shifts}."
     ).strip()
+
+
+def _session_context_for_prompt(
+    *,
+    session_id: str | None,
+    session_history: list[SessionTurn],
+    claude_session_resume: bool,
+) -> str:
+    """Room text for prompt injection — full transcript or arc summary only.
+
+    When Claude Code resumes a JSONL session (``claude_session_resume=True``),
+    dialogue is already in the model context; inject only a one-line arc summary
+    to avoid duplicating up to thousands of characters every turn.
+    """
+
+    if not session_id or not session_history:
+        return ""
+    if claude_session_resume:
+        arc = _session_arc_summary(session_history)
+        return (
+            f"[room_context session_id={session_id}]\n"
+            f"{arc}\n"
+            "Full room transcript omitted — Claude Code session resume carries dialogue."
+        )
+    return _format_session_context_block(
+        session_id=session_id,
+        session_history=session_history,
+    )
 
 
 def _format_session_context_block(

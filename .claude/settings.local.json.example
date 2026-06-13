@@ -21,7 +21,10 @@
       "mcp__sociality__*",
       "mcp__system-temperature__*",
       "mcp__tts__*",
-      "mcp__desire-system__*"
+      "mcp__desire-system__*",
+      "Read(//c/Users/ma/src/embodied-claude/**)",
+      "Edit(//c/Users/ma/src/embodied-claude/**)",
+      "Write(//c/Users/ma/src/embodied-claude/**)"
     ]
   },
   "hooks": {

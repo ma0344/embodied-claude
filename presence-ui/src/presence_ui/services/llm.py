@@ -115,6 +115,11 @@ def build_social_prompt_prefix(*, ctx: InteractionContext, plan: ResponsePlan) -
         parts.append(f"[Must avoid] {'; '.join(plan.must_avoid)}")
     if plan.why_this_move:
         parts.append(f"[Social move: {plan.primary_move}] {plan.why_this_move}")
+    if plan.primary_move == "write_private_reflection":
+        parts.append(
+            "[Action] Call mcp__sociality__append_private_reflection with your private note. "
+            "Do not send a visible chat reply to まー (no user-facing text)."
+        )
     return "\n\n".join(parts)
 
 

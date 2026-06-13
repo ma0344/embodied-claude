@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any
+from typing import Any, cast
 
 from boundary_mcp.anomaly_detection import analyze as _analyze_text_anomaly
 from boundary_mcp.policy import load_policy
@@ -13,8 +14,10 @@ from interaction_orchestrator_mcp.compose import compose_interaction_context
 from interaction_orchestrator_mcp.plan import plan_response
 from interaction_orchestrator_mcp.schemas import (
     AppendPrivateReflectionInput,
+    Channel,
     ComposeInteractionContextInput,
     ComposePrivateLetterInput,
+    InteractionContext,
     PlanResponseInput,
     RecordAgentExperienceInput,
     RecordInterpretationShiftInput,
@@ -458,6 +461,7 @@ def compose_interaction_context_tool(
     user_text: str | None = None,
     autonomous_trigger: str | None = None,
     session_id: str | None = None,
+    claude_session_resume: bool = False,
     include_private: bool = True,
     max_chars: int = 3000,
 ) -> dict[str, Any]:
@@ -475,10 +479,11 @@ def compose_interaction_context_tool(
     ctx = compose_interaction_context(
         ComposeInteractionContextInput(
             person_id=person_id,
-            channel=channel,
+            channel=cast(Channel, channel),
             user_text=user_text,
             autonomous_trigger=autonomous_trigger,
             session_id=session_id,
+            claude_session_resume=claude_session_resume,
             include_private=include_private,
             max_chars=max_chars,
         ),
@@ -511,7 +516,7 @@ def plan_response_tool(
     """
 
     payload = PlanResponseInput(
-        interaction_context=interaction_context,
+        interaction_context=InteractionContext.model_validate(interaction_context),
         user_text=user_text,
         candidate_goal=candidate_goal,
     )
@@ -607,9 +612,8 @@ def get_agent_state(person_id: str | None = None) -> dict[str, Any]:
     return ctx.agent_state.model_dump(mode="json")
 
 
-async def _handle_http(reader: __import__("asyncio").StreamReader, writer: __import__("asyncio").StreamWriter) -> None:
+async def _handle_http(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
     """Lightweight HTTP endpoints for hook integration."""
-    import asyncio
     import json
     import urllib.parse
 
@@ -707,13 +711,20 @@ async def _handle_http(reader: __import__("asyncio").StreamReader, writer: __imp
 
         elif "GET /interaction_context" in req:
             stores = _stores()
+            session_id = params.get("session_id", [None])[0]
+            resume_param = params.get("claude_session_resume", [None])[0]
+            if resume_param is None:
+                claude_session_resume = bool(session_id)
+            else:
+                claude_session_resume = resume_param == "true"
             ctx = compose_interaction_context(
                 ComposeInteractionContextInput(
                     person_id=params.get("person_id", ["ma"])[0],
-                    channel=params.get("channel", ["chat"])[0],
+                    channel=cast(Channel, params.get("channel", ["chat"])[0]),
                     user_text=params.get("text", [None])[0],
                     autonomous_trigger=params.get("trigger", [None])[0],
-                    session_id=params.get("session_id", [None])[0],
+                    session_id=session_id,
+                    claude_session_resume=claude_session_resume,
                     include_private=params.get("include_private", ["true"])[0] == "true",
                     max_chars=int(params.get("max_chars", ["3000"])[0]),
                 ),
@@ -781,22 +792,36 @@ def main() -> None:
 
     http_port = int(os.environ.get("SOCIALITY_HTTP_PORT", "18901"))
 
+    http_enabled = os.environ.get("SOCIALITY_HTTP", "1").lower() not in {"0", "false", "off"}
+
     def _run_http() -> None:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
         async def _serve() -> None:
-            server = await asyncio.start_server(_handle_http, "127.0.0.1", http_port)
             import logging
-            logging.getLogger("sociality-mcp").info(f"HTTP endpoint on 127.0.0.1:{http_port}")
+
+            log = logging.getLogger("sociality-mcp")
+            try:
+                server = await asyncio.start_server(_handle_http, "127.0.0.1", http_port)
+            except OSError as exc:
+                log.warning(
+                    "HTTP skipped on 127.0.0.1:%s (%s). "
+                    "Another sociality-mcp likely owns the port; stdio MCP continues.",
+                    http_port,
+                    exc,
+                )
+                return
+            log.info("HTTP endpoint on 127.0.0.1:%s", http_port)
             async with server:
                 await server.serve_forever()
 
         loop.run_until_complete(_serve())
 
-    # Start HTTP server in a background thread
-    http_thread = threading.Thread(target=_run_http, daemon=True)
-    http_thread.start()
+    # Start HTTP server in a background thread (optional; hooks can use social.db directly)
+    if http_enabled:
+        http_thread = threading.Thread(target=_run_http, daemon=True)
+        http_thread.start()
 
     # Run MCP server in main thread (it owns the event loop)
     mcp.run()

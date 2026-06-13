@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -1640,75 +1641,194 @@ Date Range:
         finally:
             await self.disconnect_memory()
 
-    # ── Lightweight HTTP recall endpoint ──────────────────────
-    async def _handle_http_recall(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        """Handle a single HTTP request for /recall."""
+    # ── Lightweight HTTP recall / remember endpoints ──────────
+    @staticmethod
+    def _http_json_response(*, status: int, payload: dict[str, Any]) -> bytes:
+        body = json.dumps(payload, ensure_ascii=False)
+        reason = {200: "OK", 400: "Bad Request", 404: "Not Found", 503: "Service Unavailable"}.get(
+            status, "Error"
+        )
+        encoded = body.encode("utf-8")
+        header = (
+            f"HTTP/1.1 {status} {reason}\r\n"
+            "Content-Type: application/json; charset=utf-8\r\n"
+            f"Content-Length: {len(encoded)}\r\n"
+            "Connection: close\r\n\r\n"
+        )
+        return header.encode("utf-8") + encoded
+
+    async def _http_recall(self, query: str, n: int) -> dict[str, Any]:
+        if not query or not self._memory_store:
+            return {"items": []}
+        try:
+            results = await asyncio.wait_for(
+                self._memory_store.recall(query, n_results=n),
+                timeout=8.0,
+            )
+        except (TimeoutError, Exception):
+            results = []
+        items = []
+        for r in results:
+            distance = float(getattr(r, "distance", 0.0))
+            # Smaller distance = closer match; map to a 0–1 relevance score for HTTP clients.
+            relevance = round(max(0.0, 1.0 - min(distance, 1.0)), 3)
+            items.append({
+                "content": r.memory.content[:200] if hasattr(r, "memory") else str(r)[:200],
+                "emotion": r.memory.emotion if hasattr(r, "memory") else "",
+                "score": relevance,
+            })
+        return {"items": items}
+
+    async def _http_remember(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        if self._memory_store is None:
+            return {"ok": False, "error": "memory store not connected"}
+
+        content = str(arguments.get("content") or "").strip()
+        if not content:
+            return {"ok": False, "error": "content is required"}
+
+        recent = await self._memory_store.list_recent(limit=30)
+        for memory in recent:
+            if memory.content.strip() == content:
+                return {"ok": True, "id": memory.id, "duplicate": True}
+
+        auto_link = bool(arguments.get("auto_link", False))
+        emotion = arguments.get("emotion", "neutral")
+        importance = int(arguments.get("importance", 3))
+        category = arguments.get("category", "daily")
+
+        if auto_link:
+            memory = await self._memory_store.save_with_auto_link(
+                content=content,
+                emotion=emotion,
+                importance=importance,
+                category=category,
+                link_threshold=arguments.get("link_threshold", 0.8),
+            )
+        else:
+            memory = await self._memory_store.save(
+                content=content,
+                emotion=emotion,
+                importance=importance,
+                category=category,
+            )
+        return {"ok": True, "id": memory.id, "duplicate": False}
+
+    async def _handle_http_request(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        """Handle a single HTTP request for /recall or /remember."""
         try:
             request_line = await asyncio.wait_for(reader.readline(), timeout=5)
-            # Read remaining headers
+            headers: dict[str, str] = {}
             while True:
                 line = await asyncio.wait_for(reader.readline(), timeout=5)
                 if line in (b"\r\n", b"\n", b""):
                     break
+                decoded = line.decode("utf-8", errors="replace").strip()
+                if ":" in decoded:
+                    key, value = decoded.split(":", 1)
+                    headers[key.strip().lower()] = value.strip()
 
-            # Parse GET /recall?q=...
             req = request_line.decode("utf-8", errors="replace")
+            method, _, _ = req.partition(" ")
             import urllib.parse
-            if "GET /recall" in req:
+
+            if method == "GET" and " /recall" in req:
                 path = req.split(" ")[1]
                 parsed = urllib.parse.urlparse(path)
                 params = urllib.parse.parse_qs(parsed.query)
                 query = params.get("q", [""])[0]
                 n = int(params.get("n", ["3"])[0])
-
-                if query and self._memory_store:
-                    results = await self._memory_store.recall(query, n_results=n)
-                    items = []
-                    for r in results:
-                        items.append({
-                            "content": r.memory.content[:200] if hasattr(r, "memory") else str(r)[:200],
-                            "emotion": r.memory.emotion if hasattr(r, "memory") else "",
-                            "score": round(r.score, 3) if hasattr(r, "score") else 0,
-                        })
-                    body = json.dumps(items, ensure_ascii=False)
+                payload = await self._http_recall(query, n)
+                # Backward-compatible: bare array for GET /recall
+                body_items = payload["items"]
+                body = json.dumps(body_items, ensure_ascii=False)
+                encoded = body.encode("utf-8")
+                response = (
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: application/json; charset=utf-8\r\n"
+                    f"Content-Length: {len(encoded)}\r\n"
+                    "Connection: close\r\n\r\n"
+                ).encode("utf-8") + encoded
+            elif method == "POST" and " /remember" in req:
+                content_length = int(headers.get("content-length", "0"))
+                raw_body = b""
+                if content_length > 0:
+                    raw_body = await asyncio.wait_for(reader.readexactly(content_length), timeout=10)
+                try:
+                    arguments = json.loads(raw_body.decode("utf-8") if raw_body else "{}")
+                except json.JSONDecodeError:
+                    response = self._http_json_response(
+                        status=400, payload={"ok": False, "error": "invalid JSON body"}
+                    )
                 else:
-                    body = "[]"
-
-                response = f"HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {len(body.encode())}\r\nConnection: close\r\n\r\n{body}"
+                    if not isinstance(arguments, dict):
+                        response = self._http_json_response(
+                            status=400, payload={"ok": False, "error": "body must be a JSON object"}
+                        )
+                    else:
+                        payload = await self._http_remember(arguments)
+                        status = 200 if payload.get("ok") else 503
+                        response = self._http_json_response(status=status, payload=payload)
             else:
-                body = '{"error":"use GET /recall?q=query"}'
-                response = f"HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: {len(body.encode())}\r\nConnection: close\r\n\r\n{body}"
+                response = self._http_json_response(
+                    status=404,
+                    payload={"error": "use GET /recall?q=query or POST /remember"},
+                )
 
-            writer.write(response.encode("utf-8"))
+            writer.write(response)
             await writer.drain()
         except Exception as e:
-            logger.debug(f"HTTP recall error: {e}")
+            logger.debug(f"HTTP memory error: {e}")
         finally:
             writer.close()
+
+    async def _run_stdio_mcp(self) -> None:
+        async with stdio_server() as (read_stream, write_stream):
+            await self._server.run(
+                read_stream,
+                write_stream,
+                self._server.create_initialization_options(),
+            )
 
     async def run(self) -> None:
         """Run the MCP server."""
         async with self.run_context():
-            # Start lightweight HTTP recall server
-            http_port = int(__import__("os").environ.get("MEMORY_HTTP_PORT", "18900"))
-            http_server = await asyncio.start_server(
-                self._handle_http_recall, "127.0.0.1", http_port
-            )
-            logger.info(f"HTTP recall endpoint listening on 127.0.0.1:{http_port}")
-
-            async with http_server:
-                async with stdio_server() as (read_stream, write_stream):
-                    await self._server.run(
-                        read_stream,
-                        write_stream,
-                        self._server.create_initialization_options(),
+            http_port = int(os.environ.get("MEMORY_HTTP_PORT", "18900"))
+            http_enabled = os.environ.get("MEMORY_HTTP_RECALL", "1").lower() not in {
+                "0",
+                "false",
+                "off",
+            }
+            http_server = None
+            if http_enabled:
+                try:
+                    http_server = await asyncio.start_server(
+                        self._handle_http_request, "127.0.0.1", http_port
                     )
+                    logger.info(
+                        "HTTP memory endpoint listening on 127.0.0.1:%s (GET /recall, POST /remember)",
+                        http_port,
+                    )
+                except OSError as exc:
+                    logger.warning(
+                        "HTTP recall skipped on 127.0.0.1:%s (%s). "
+                        "Another memory-mcp likely owns the port; stdio MCP continues. "
+                        "Hooks fall back to memory.db when HTTP is unavailable.",
+                        http_port,
+                        exc,
+                    )
+
+            if http_server is not None:
+                async with http_server:
+                    await self._run_stdio_mcp()
+            else:
+                await self._run_stdio_mcp()
 
 
 def main() -> None:
     """Entry point for the MCP server."""
     try:
-        import jurigged
+        import jurigged  # type: ignore[import-not-found]
         jurigged.watch(pattern="src/**/*.py", logger=None)
     except ImportError:
         pass

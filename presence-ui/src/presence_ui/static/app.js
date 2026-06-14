@@ -660,6 +660,26 @@ function setupSessionSwitcher() {
   }
 }
 
+function renderMessageBodyHtml(msg) {
+  const body = CcMessages.sanitizeDisplayText(msg.message || "");
+  if (typeof ChatMarkdown !== "undefined") {
+    return ChatMarkdown.toSafeHtml(body);
+  }
+  return escapeHtml(body);
+}
+
+function setMessageBodyContent(bodyEl, msg) {
+  if (!bodyEl) return;
+  const html = renderMessageBodyHtml(msg);
+  if (html.includes("<")) {
+    bodyEl.classList.add("message-body--md");
+    bodyEl.innerHTML = html;
+  } else {
+    bodyEl.classList.remove("message-body--md");
+    bodyEl.textContent = CcMessages.sanitizeDisplayText(msg.message || "");
+  }
+}
+
 function messageKey(msg) {
   const body = CcMessages.sanitizeDisplayText(msg.message || "");
   return `${msg.sender}|${body}`;
@@ -673,7 +693,7 @@ function messageElementForKey(root, key) {
 function updateMessageElement(el, msg) {
   const body = CcMessages.sanitizeDisplayText(msg.message || "");
   const bodyEl = el.querySelector(".message-body");
-  if (bodyEl) bodyEl.textContent = body;
+  setMessageBodyContent(bodyEl, msg);
   if (msg.timestamp) {
     const who = msg.sender === "ma" ? "まー" : "こより";
     const label = msg.sender === "ma" ? "M" : "K";
@@ -720,7 +740,8 @@ function buildMessageElement(msg, { animate = false } = {}) {
   el.dataset.sender = msg.sender;
   el.dataset.messageKey = messageKey({ ...msg, message: body });
   el.innerHTML = `<span class="meta-line"><span class="sender-badge">${label}</span> ${who} · ${formatTimestamp(msg.timestamp)}</span>
-        <div class="message-body">${escapeHtml(body)}</div>`;
+        <div class="message-body"></div>`;
+  setMessageBodyContent(el.querySelector(".message-body"), { ...msg, message: body });
   return el;
 }
 
@@ -816,8 +837,10 @@ function updateStreamingBubble(text) {
     streamingBubbleEl.classList.add("is-streaming");
     root.appendChild(streamingBubbleEl);
   } else {
-    const bodyEl = streamingBubbleEl.querySelector(".message-body");
-    if (bodyEl) bodyEl.textContent = body;
+    setMessageBodyContent(
+      streamingBubbleEl.querySelector(".message-body"),
+      { sender: "koyori", message: body },
+    );
   }
 
   if (chatPinnedToBottom) scrollChatToBottom();

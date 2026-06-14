@@ -656,6 +656,92 @@ body {
   word-break: break-word;
 }
 
+.message-body--md {
+  white-space: normal;
+}
+
+.message-body--md p {
+  margin: 0 0 0.55em;
+}
+
+.message-body--md p:last-child {
+  margin-bottom: 0;
+}
+
+.message-body--md ul,
+.message-body--md ol {
+  margin: 0.35em 0 0.55em;
+  padding-left: 1.25em;
+}
+
+.message-body--md li + li {
+  margin-top: 0.2em;
+}
+
+.message-body--md code {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.88em;
+  background: rgba(61, 56, 50, 0.08);
+  padding: 0.08em 0.35em;
+  border-radius: 4px;
+}
+
+.message-body--md pre {
+  margin: 0.45em 0;
+  padding: 0.55em 0.65em;
+  overflow-x: auto;
+  background: rgba(61, 56, 50, 0.1);
+  border-radius: 8px;
+  font-size: 0.84em;
+  line-height: 1.45;
+}
+
+.message-body--md pre code {
+  background: none;
+  padding: 0;
+}
+
+.message-body--md blockquote {
+  margin: 0.45em 0;
+  padding-left: 0.75em;
+  border-left: 3px solid var(--border);
+  color: var(--text-soft);
+}
+
+.message-body--md a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.message.ma .message-body--md a {
+  color: var(--ma);
+}
+
+.message.koyori .message-body--md a {
+  color: var(--koyori);
+}
+
+.message-body--md h1,
+.message-body--md h2,
+.message-body--md h3,
+.message-body--md h4 {
+  margin: 0.5em 0 0.35em;
+  font-size: 1em;
+  font-weight: 500;
+}
+
+.message-body--md table {
+  border-collapse: collapse;
+  margin: 0.45em 0;
+  font-size: 0.9em;
+}
+
+.message-body--md th,
+.message-body--md td {
+  border: 1px solid var(--border);
+  padding: 0.25em 0.45em;
+}
+
 .visual-room {
   display: flex;
   flex-direction: column;

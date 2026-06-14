@@ -186,7 +186,7 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 - [x] **C3** `/` チャット層 Native 化（`ui-config` + `app.js` SSE `/api/native/chat`）
 - [x] **C4** セッション UI 再設計（localStorage 履歴・一覧・削除。8080 ワンショット取込 **完了** → UI 撤去）
 - [x] **C5** キャンセル UI（「止める」ボタン + AbortController）
-- [ ] **C6** Markdown 表示
+- [x] **C6** Markdown 表示（marked + DOMPurify、`static/vendor/` 同梱）
 - [ ] **C7** 画面構成・レイアウト
 - [ ] **C8** デバッグ注入の非表示
 - [ ] **C9** 8080 依存の緩和（運用・smoke）

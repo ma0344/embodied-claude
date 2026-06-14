@@ -19,6 +19,7 @@ class MemoryConfig:
     #   "intfloat/multilingual-e5-base"  — 768-dim, ~1.1GB, higher quality (default)
     #   "intfloat/multilingual-e5-small" — 384-dim, ~471MB, lighter (good for low-resource envs)
     embedding_model: str = "intfloat/multilingual-e5-base"
+    embedding_device: str = "cpu"
     enable_bm25: bool = True
 
     @classmethod
@@ -30,6 +31,7 @@ class MemoryConfig:
             db_path=os.getenv("MEMORY_DB_PATH", default_path),
             collection_name=os.getenv("MEMORY_COLLECTION_NAME", "claude_memories"),
             embedding_model=os.getenv("MEMORY_EMBEDDING_MODEL", "intfloat/multilingual-e5-base"),
+            embedding_device=os.getenv("MEMORY_EMBEDDING_DEVICE", "cpu"),
             enable_bm25=os.getenv("MEMORY_ENABLE_BM25", "true").lower() != "false",
         )
 

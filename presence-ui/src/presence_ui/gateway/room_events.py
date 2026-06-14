@@ -35,6 +35,7 @@ _TOOL_LABELS: dict[str, tuple[str, str]] = {
     "mcp__memory__recall": ("recall", "思い出し"),
     "mcp__memory__search_memories": ("recall", "記憶を検索"),
     "mcp__memory__list_recent_memories": ("recall", "最近の記憶"),
+    "mcp__memory__get_memory_stats": ("recall", "記憶統計"),
     "mcp__wifi-cam__see": ("see", "見てる"),
     "mcp__wifi-cam__see_right": ("see", "右目で見てる"),
     "mcp__wifi-cam__see_both": ("see", "両目で見てる"),
@@ -44,11 +45,51 @@ _TOOL_LABELS: dict[str, tuple[str, str]] = {
 }
 
 
+def _is_mcp_tool(tool_name: str) -> bool:
+    return tool_name.startswith("mcp__")
+
+
+# Pill UI: embodied “senses + memory” only (hide sociality orchestrator noise).
+_MCP_UI_SERVERS = frozenset({"memory", "tts", "wifi-cam", "usb-webcam"})
+
+
+def _show_in_mcp_ui(tool_name: str) -> bool:
+    parts = tool_name.split("__")
+    return len(parts) >= 3 and parts[1] in _MCP_UI_SERVERS
+
+
+def _label_for_mcp_tool(tool_name: str) -> tuple[str, str]:
+    if tool_name in _TOOL_LABELS:
+        return _TOOL_LABELS[tool_name]
+    parts = tool_name.split("__")
+    if len(parts) >= 3:
+        return ("mcp", f"{parts[1]} · {parts[2].replace('_', ' ')}")
+    return ("mcp", tool_name.removeprefix("mcp__"))
+
+
+def mcp_activity_event(
+    *,
+    kind: str,
+    label: str,
+    detail: str = "",
+    ok: bool = True,
+) -> dict[str, Any]:
+    return {
+        "type": "mcp_activity",
+        "kind": kind,
+        "label": label,
+        "detail": detail[:240],
+        "ok": ok,
+    }
+
+
 def activity_for_tool_use(
     tool_name: str,
     tool_input: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
-    kind, label = _TOOL_LABELS.get(tool_name, ("tool", "処理してる"))
+    if not _is_mcp_tool(tool_name) or not _show_in_mcp_ui(tool_name):
+        return None
+    kind, label = _label_for_mcp_tool(tool_name)
     detail = ""
     if tool_input:
         if tool_name.endswith("__remember"):
@@ -59,7 +100,7 @@ def activity_for_tool_use(
             detail = str(tool_input.get("query") or "")[:80]
         elif "context" in tool_input:
             detail = str(tool_input.get("context") or "")[:80]
-    return activity_event(kind=kind, label=label, detail=detail, ok=True)
+    return mcp_activity_event(kind=kind, label=label, detail=detail, ok=True)
 
 
 def activity_for_tool_result(
@@ -68,17 +109,17 @@ def activity_for_tool_result(
     *,
     is_error: bool,
 ) -> dict[str, Any] | None:
-    kind, label = _TOOL_LABELS.get(tool_name, ("tool", "処理"))
-    if is_error:
-        return activity_event(kind=kind, label=f"{label} · 失敗", detail=content[:160], ok=False)
-    if tool_name.endswith("__remember"):
-        return activity_event(
-            kind="remember",
-            label="記憶に保存した",
-            detail=content[:120],
-            ok=True,
-        )
-    return None
+    if not _is_mcp_tool(tool_name) or not _show_in_mcp_ui(tool_name):
+        return None
+    if not is_error:
+        return None
+    kind, label = _label_for_mcp_tool(tool_name)
+    return mcp_activity_event(
+        kind=kind,
+        label=f"{label} · 失敗",
+        detail=content[:160],
+        ok=False,
+    )
 
 
 def register_tool_uses(

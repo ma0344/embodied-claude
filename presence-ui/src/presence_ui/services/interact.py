@@ -13,8 +13,8 @@ from social_core import utc_now
 
 from presence_ui.deps import get_stores
 from presence_ui.schemas import ChatMessage, ChatSendResponse
+from presence_ui.gateway.room_ingest import ingest_agent_turn, ingest_human_turn
 from presence_ui.services.llm import generate_koyori_reply
-from presence_ui.services.room_events import ROOM_WRITE_SOURCE
 from presence_ui.services.sessions import get_session, touch_session
 
 _SILENT_MOVES = frozenset({"stay_silent", "defer", "quietly_prepare"})
@@ -31,35 +31,21 @@ _SPEAKING_MOVES = frozenset(
 
 
 def _ingest_human_message(*, person_id: str, session_id: str, text: str, ts: str) -> str:
-    stores = get_stores()
-    result = stores.social_state.ingest_social_event(
-        {
-            "ts": ts,
-            "source": ROOM_WRITE_SOURCE,
-            "kind": "human_utterance",
-            "person_id": person_id,
-            "session_id": session_id,
-            "confidence": 1.0,
-            "payload": {"text": text},
-        }
+    return ingest_human_turn(
+        person_id=person_id,
+        session_id=session_id,
+        text=text,
+        ts=ts,
     )
-    return result["event_id"]
 
 
 def _ingest_koyori_message(*, person_id: str, session_id: str, text: str, ts: str) -> str:
-    stores = get_stores()
-    result = stores.social_state.ingest_social_event(
-        {
-            "ts": ts,
-            "source": ROOM_WRITE_SOURCE,
-            "kind": "agent_utterance",
-            "person_id": person_id,
-            "session_id": session_id,
-            "confidence": 1.0,
-            "payload": {"text": text},
-        }
+    return ingest_agent_turn(
+        person_id=person_id,
+        session_id=session_id,
+        text=text,
+        ts=ts,
     )
-    return result["event_id"]
 
 
 def _compose_and_plan(

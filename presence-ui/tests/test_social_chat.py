@@ -1,4 +1,4 @@
-"""social_chat intercept behavior."""
+"""social_chat intercept with KV-stable injection."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import pytest
 
 from interaction_orchestrator_mcp.schemas import InteractionContext, ResponseContract, ResponsePlan
 from presence_ui.gateway import social_chat
+from presence_ui.services.llm import GATEWAY_STABLE_APPEND
 
 
 def _minimal_ctx() -> InteractionContext:
@@ -26,7 +27,7 @@ def _minimal_ctx() -> InteractionContext:
         },
         response_contract=ResponseContract(),
         prompt_summary="test",
-        compact_prompt_block="",
+        compact_prompt_block="[interaction_context]\nphase=chat",
     )
 
 
@@ -57,12 +58,53 @@ def mock_stores(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
         "plan_response",
         lambda *args, **kwargs: _minimal_plan(),
     )
+    return stores
+
+
+def test_intercept_stable_append_in_message_not_dynamic_append(
+    mock_stores: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PRESENCE_KV_STABLE_APPEND", "1")
+    result = social_chat.intercept_chat_request(
+        payload={"message": "hello", "sessionId": "sess-abc"},
+        person_id="ma",
+    )
+    assert result.forward is True
+    assert result.payload is not None
+    assert result.payload["appendSystemPrompt"] == GATEWAY_STABLE_APPEND
+    assert "[gateway_turn_context" in result.payload["message"]
+    assert result.payload["message"].endswith("hello")
+    assert "[interaction_context]" in result.payload["message"]
+    assert result.payload["permissionMode"] == "acceptEdits"
+
+
+def test_intercept_includes_vision_prefetch(
+    mock_stores: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PRESENCE_KV_STABLE_APPEND", "1")
     monkeypatch.setattr(
         social_chat,
-        "build_social_prompt_prefix",
-        lambda **_: "[ctx]",
+        "compose_interaction_context",
+        lambda *args, **kwargs: _minimal_ctx(),
     )
-    return stores
+    monkeypatch.setattr(
+        social_chat,
+        "plan_response",
+        lambda *args, **kwargs: _minimal_plan(),
+    )
+    prefetch = (
+        "[vision_prefetch]\nmode=current\n=== VISION_CAPTION ===\nDesk.\n"
+        "[Gateway directive — not for the user]\nDo NOT call mcp__wifi-cam__see."
+    )
+    result = social_chat.intercept_chat_request(
+        payload={"message": "何が見える？", "sessionId": "sess-see"},
+        person_id="ma",
+        vision_prefetch=prefetch,
+    )
+    assert result.forward is True
+    msg = result.payload["message"] if result.payload else ""
+    assert "[vision_prefetch]" in msg
+    assert "何が見える？" in msg
 
 
 def test_intercept_injects_accept_edits_when_missing(

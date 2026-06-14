@@ -481,28 +481,31 @@ function setChatThinking(active, label = "送ってる…") {
   if (existing) existing.remove();
 }
 
-const ACTIVITY_ICONS = {
+const MCP_ACTIVITY_ICONS = {
   remember: "📌",
   recall: "💭",
   see: "👁",
   listen: "👂",
   say: "🔊",
   reflect: "📝",
-  tool: "⚙",
+  mcp: "🔧",
 };
 
-function appendActivityLine(event) {
+function appendMcpActivityLine(event) {
   const root = document.getElementById("chat-log");
   if (!root || !event) return;
   root.querySelector(".placeholder")?.remove();
   const el = document.createElement("div");
-  el.className = `message activity${event.ok === false ? " is-error" : ""}`;
-  const icon = ACTIVITY_ICONS[event.kind] || "·";
-  let text = `${icon} ${event.label || "処理中"}`;
-  if (event.detail) text += ` — ${event.detail}`;
-  el.textContent = text;
+  el.className = `message mcp-activity${event.ok === false ? " is-error" : ""}`;
+  const icon = MCP_ACTIVITY_ICONS[event.kind] || MCP_ACTIVITY_ICONS.mcp;
+  el.textContent = `${icon} ${event.label || "MCP"}`;
+  if (event.detail) el.title = event.detail;
   root.appendChild(el);
   if (chatPinnedToBottom) scrollChatToBottom();
+}
+
+function appendActivityLine(event) {
+  appendMcpActivityLine(event);
 }
 
 function setComposeEnabled(enabled) {
@@ -641,8 +644,10 @@ async function sendChatMessage(text) {
 
         if (chunk.type === "room_progress") {
           setChatThinking(true, chunk.label || "考えてる…");
+        } else if (chunk.type === "mcp_activity") {
+          appendMcpActivityLine(chunk);
         } else if (chunk.type === "room_activity") {
-          appendActivityLine(chunk);
+          appendMcpActivityLine(chunk);
         } else if (chunk.type === "social_silent") {
           setChatThinking(false);
           assistantDraft = "（いまは静かにしている）";

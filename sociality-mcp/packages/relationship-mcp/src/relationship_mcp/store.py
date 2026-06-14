@@ -20,11 +20,16 @@ from .inference import (
     FUTURE_MARKERS,
     STRESS_KEYWORDS,
     compute_snapshot_metrics,
+    extract_dismiss_topic,
+    is_dismiss_utterance,
+    is_recall_loop_topic,
+    is_recall_utterance,
     suggest_followup_text,
     summarize_relationship,
 )
 from .schemas import (
     CommitmentRecord,
+    DismissOutcome,
     OpenLoopRecord,
     PersonModel,
     PreferenceRecord,
@@ -113,11 +118,155 @@ class RelationshipStore:
                 payload={"text": text, "direction": direction},
             )
         )
-        self._update_open_loops(
-            person_id=person_id, text=text, source_event_id=event.event_id, ts=ts
-        )
+        if direction == "human_to_ai":
+            self.dismiss_from_utterance(
+                person_id=person_id,
+                text=text,
+                ts=ts,
+                source_event_id=event.event_id,
+            )
+            if not is_dismiss_utterance(text):
+                self._update_open_loops(
+                    person_id=person_id,
+                    text=text,
+                    source_event_id=event.event_id,
+                    ts=ts,
+                    direction=direction,
+                )
+        else:
+            self._update_open_loops(
+                person_id=person_id,
+                text=text,
+                source_event_id=event.event_id,
+                ts=ts,
+                direction=direction,
+            )
         self.refresh_snapshot(person_id)
         return {"event_id": event.event_id}
+
+    def note_human_utterance_for_loops(
+        self,
+        *,
+        person_id: str,
+        text: str,
+        ts: str,
+        source_event_id: str,
+    ) -> DismissOutcome:
+        """Update or close/cancel relationship threads from a human room utterance."""
+
+        self._ensure_person(person_id)
+        outcome = self.dismiss_from_utterance(
+            person_id=person_id,
+            text=text,
+            ts=ts,
+            source_event_id=source_event_id,
+        )
+        outcome = outcome.model_copy(
+            update={
+                "closed_loops": [
+                    *outcome.closed_loops,
+                    *self._close_recall_noise_loops(
+                        person_id=person_id,
+                        ts=ts,
+                        source_event_id=source_event_id,
+                        source_text=text,
+                    ),
+                ]
+            }
+        )
+        if is_dismiss_utterance(text) or is_recall_utterance(text):
+            return outcome
+        self._update_open_loops(
+            person_id=person_id,
+            text=text,
+            source_event_id=source_event_id,
+            ts=ts,
+            direction="human_to_ai",
+        )
+        return outcome
+
+    def dismiss_from_utterance(
+        self,
+        *,
+        person_id: str,
+        text: str,
+        ts: str,
+        source_event_id: str,
+    ) -> DismissOutcome:
+        """Close matching open loops and cancel active commitments on dismiss."""
+        if not is_dismiss_utterance(text):
+            return DismissOutcome()
+
+        explicit_topic = extract_dismiss_topic(text)
+        closed_loops: list[str] = []
+        for loop in self.list_open_loops(person_id=person_id, limit=20):
+            if not self._matches_dismiss_target(loop.topic, text, explicit_topic):
+                continue
+            self._close_open_loop(
+                loop_id=loop.id,
+                person_id=person_id,
+                topic=loop.topic,
+                ts=ts,
+                source_event_id=source_event_id,
+                source_text=text,
+            )
+            closed_loops.append(loop.topic)
+
+        cancelled_commitments: list[str] = []
+        for commitment in self.list_active_commitments(person_id=person_id, limit=20):
+            if not self._matches_dismiss_target(commitment.text, text, explicit_topic):
+                continue
+            self._cancel_commitment(
+                commitment_id=commitment.id,
+                ts=ts,
+                source_text=text,
+            )
+            cancelled_commitments.append(_commitment_label(commitment.text))
+
+        return DismissOutcome(
+            closed_loops=closed_loops,
+            cancelled_commitments=cancelled_commitments,
+        )
+
+    def _close_recall_noise_loops(
+        self,
+        *,
+        person_id: str,
+        ts: str,
+        source_event_id: str,
+        source_text: str,
+    ) -> list[str]:
+        """Close stale recall-shaped loops (e.g. '煎餅の話、覚えてる')."""
+        closed: list[str] = []
+        for loop in self.list_open_loops(person_id=person_id, limit=20):
+            if not is_recall_loop_topic(loop.topic):
+                continue
+            self._close_open_loop(
+                loop_id=loop.id,
+                person_id=person_id,
+                topic=loop.topic,
+                ts=ts,
+                source_event_id=source_event_id,
+                source_text=source_text,
+            )
+            closed.append(loop.topic)
+        return closed
+
+    def close_open_loops_from_utterance(
+        self,
+        *,
+        person_id: str,
+        text: str,
+        ts: str,
+        source_event_id: str,
+    ) -> list[str]:
+        """Backward-compatible wrapper — loops only."""
+        return self.dismiss_from_utterance(
+            person_id=person_id,
+            text=text,
+            ts=ts,
+            source_event_id=source_event_id,
+        ).closed_loops
 
     def create_commitment(
         self,
@@ -192,6 +341,51 @@ class RelationshipStore:
                 confidence=0.95,
                 payload={"text": row["text"]},
             )
+        )
+        return {"commitment_id": commitment_id}
+
+    def list_active_commitments(
+        self, *, person_id: str, limit: int = 20
+    ) -> list[CommitmentRecord]:
+        rows = self.db.fetchall(
+            """
+            SELECT commitment_id, text, due_at, source
+            FROM commitments
+            WHERE person_id = ? AND status = 'active'
+            ORDER BY COALESCE(due_at, created_at)
+            LIMIT ?
+            """,
+            (person_id, limit),
+        )
+        return [
+            CommitmentRecord(
+                id=row["commitment_id"],
+                text=row["text"],
+                due_at=row["due_at"],
+                source=row["source"],
+            )
+            for row in rows
+        ]
+
+    def cancel_commitment(self, commitment_id: str, *, source_text: str = "") -> dict[str, str]:
+        """Mark a commitment cancelled (e.g. まー said to forget the plan)."""
+        row = self.db.fetchone(
+            """
+            SELECT person_id, text FROM commitments
+            WHERE commitment_id = ? AND status = 'active'
+            """,
+            (commitment_id,),
+        )
+        if row is None:
+            raise ValueError(f"Unknown or inactive commitment_id: {commitment_id}")
+        cancelled_at = ensure_iso8601(
+            self.events.get_latest_timestamp(person_id=row["person_id"])
+            or "2026-01-01T12:00:00+00:00"
+        )
+        self._cancel_commitment(
+            commitment_id=commitment_id,
+            ts=cancelled_at,
+            source_text=source_text,
         )
         return {"commitment_id": commitment_id}
 
@@ -417,9 +611,15 @@ class RelationshipStore:
         self.upsert_person(person_id=person_id, canonical_name=person_id, aliases=[], role=None)
 
     def _update_open_loops(
-        self, *, person_id: str, text: str, source_event_id: str, ts: str
+        self,
+        *,
+        person_id: str,
+        text: str,
+        source_event_id: str,
+        ts: str,
+        direction: str = "human_to_ai",
     ) -> None:
-        topic = self._extract_topic(text)
+        topic = self._extract_topic(text, direction=direction)
         if topic is None:
             return
         existing = self.db.fetchone(
@@ -463,17 +663,110 @@ class RelationshipStore:
                 ),
             )
 
-    def _extract_topic(self, text: str) -> str | None:
+    def _extract_topic(self, text: str, *, direction: str = "human_to_ai") -> str | None:
+        if direction != "human_to_ai":
+            return None
+        if is_dismiss_utterance(text):
+            return None
+        if is_recall_utterance(text):
+            return None
         lowered = text.lower()
-        if any(marker in lowered for marker in FUTURE_MARKERS):
+        if any(marker in lowered or marker in text for marker in FUTURE_MARKERS):
             if "dentist" in lowered or "歯医者" in text:
                 return "dentist"
-            if "pr" in lowered and "review" in lowered:
+            if "pr" in lowered and ("review" in lowered or "レビュー" in text):
                 return "pr review"
             return _normalize_topic(text)
-        if "?" in text or "？" in text:
-            return _normalize_topic(text)
         return None
+
+    def _loop_matches_dismiss(
+        self,
+        loop_topic: str,
+        text: str,
+        explicit_topic: str | None,
+    ) -> bool:
+        return self._matches_dismiss_target(loop_topic, text, explicit_topic)
+
+    def _matches_dismiss_target(
+        self,
+        target: str,
+        text: str,
+        explicit_topic: str | None,
+    ) -> bool:
+        if explicit_topic and target == explicit_topic:
+            return True
+        target_lower = target.lower()
+        text_lower = text.lower()
+        if target_lower in text_lower or target_lower in text:
+            return True
+        tokens = [word for word in target_lower.split() if len(word) >= 2]
+        if tokens and all(word in text_lower or word in text for word in tokens):
+            return True
+        if explicit_topic:
+            explicit_lower = explicit_topic.lower()
+            if explicit_lower in target_lower or target_lower in explicit_lower:
+                return True
+        return False
+
+    def _cancel_commitment(
+        self,
+        *,
+        commitment_id: str,
+        ts: str,
+        source_text: str,
+    ) -> None:
+        with self.db.transaction() as connection:
+            connection.execute(
+                """
+                UPDATE commitments
+                SET status = 'cancelled', completed_at = ?, metadata_json = ?
+                WHERE commitment_id = ? AND status = 'active'
+                """,
+                (
+                    ts,
+                    json.dumps(
+                        {
+                            "kind": "dismissed",
+                            "source_text": source_text[:240],
+                        },
+                        ensure_ascii=False,
+                    ),
+                    commitment_id,
+                ),
+            )
+
+    def _close_open_loop(
+        self,
+        *,
+        loop_id: str,
+        person_id: str,
+        topic: str,
+        ts: str,
+        source_event_id: str,
+        source_text: str,
+    ) -> None:
+        with self.db.transaction() as connection:
+            connection.execute(
+                """
+                UPDATE open_loops
+                SET status = 'closed', updated_at = ?, source_event_id = ?,
+                    detail_json = ?
+                WHERE loop_id = ? AND person_id = ? AND status = 'open'
+                """,
+                (
+                    ts,
+                    source_event_id,
+                    json.dumps(
+                        {
+                            "kind": "dismissed",
+                            "source_text": source_text[:240],
+                        },
+                        ensure_ascii=False,
+                    ),
+                    loop_id,
+                    person_id,
+                ),
+            )
 
     def _salient_preferences(
         self, person_id: str, boundaries: list[str]
@@ -528,3 +821,8 @@ class RelationshipStore:
 def _normalize_topic(text: str) -> str:
     compact = re.sub(r"\s+", " ", text.strip("。.!?？ "))
     return compact[:48]
+
+
+def _commitment_label(text: str) -> str:
+    compact = re.sub(r"\s+", " ", (text or "").strip())
+    return compact[:48] if compact else "commitment"

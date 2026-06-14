@@ -7,6 +7,8 @@ e5 モデルはクエリと文書で異なるプレフィックスが必要。
 from __future__ import annotations
 
 import logging
+import os
+import threading
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -23,18 +25,33 @@ class E5EmbeddingFunction:
         model_name: SentenceTransformer モデル名
     """
 
-    def __init__(self, model_name: str = "intfloat/multilingual-e5-base") -> None:
+    def __init__(
+        self,
+        model_name: str = "intfloat/multilingual-e5-base",
+        *,
+        device: str | None = None,
+    ) -> None:
         self._model_name = model_name
+        self._device = device or os.environ.get("MEMORY_EMBEDDING_DEVICE", "cpu")
         self._model: Any = None  # lazy load; actual type is SentenceTransformer
+        self._load_lock = threading.Lock()
 
     def _load_model(self) -> None:
-        """モデルを遅延ロード。"""
-        if self._model is None:
+        """モデルを遅延ロード（スレッドセーフ）。"""
+        if self._model is not None:
+            return
+        with self._load_lock:
+            if self._model is not None:
+                return
             try:
                 from sentence_transformers import SentenceTransformer
 
-                self._model = SentenceTransformer(self._model_name)
-                logger.info("E5EmbeddingFunction: loaded model %s", self._model_name)
+                self._model = SentenceTransformer(self._model_name, device=self._device)
+                logger.info(
+                    "E5EmbeddingFunction: loaded model %s on %s",
+                    self._model_name,
+                    self._device,
+                )
             except ImportError as e:
                 raise ImportError(
                     "sentence-transformers が必要です。"

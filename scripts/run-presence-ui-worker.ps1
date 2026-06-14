@@ -28,12 +28,23 @@ function Write-Log([string]$Message) {
 
 Initialize-PresenceUiEnv -Repo $Repo -Port $Port -BackendPort $BackendPort
 
+$SettingsLocal = Join-Path $Repo ".claude\settings.local.json"
+if (Test-Path $SettingsLocal) {
+    . (Join-Path $PSScriptRoot "lmstudio-env.ps1")
+    $Model = Get-LmStudioModelFromSettings -SettingsLocal $SettingsLocal
+    $Settings = Get-Content $SettingsLocal -Raw | ConvertFrom-Json
+    Set-LmStudioProcessEnv -Model $Model -SettingsEnv $Settings.env -ForceModel
+    if ($env:PRESENCE_NATIVE_CHAT -match '^(1|true|yes)$') {
+        Write-Log "native chat model=$Model"
+    }
+} else {
+    Write-Log "WARN: missing $SettingsLocal — Claude may pick wrong LM Studio model"
+}
+
 Push-Location $PresenceDir
 try {
-    if (-not (Test-Path "uv.lock")) {
-        Write-Log "uv sync"
-        uv sync 2>&1 | ForEach-Object { Write-Log $_ }
-    }
+    Write-Log "uv sync (reinstall sociality path deps)"
+    uv sync --reinstall-package interaction-orchestrator-mcp --reinstall-package relationship-mcp 2>&1 | ForEach-Object { Write-Log $_ }
 
     Write-Log "starting presence-ui port=$Port backend=$env:CLAUDE_CODE_BACKEND_URL"
     uv run presence-ui 2>&1 | ForEach-Object { Write-Log $_ }

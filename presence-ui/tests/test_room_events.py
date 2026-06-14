@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from presence_ui.gateway.room_events import (
     activities_from_sdk_message,
+    activity_for_tool_result,
     activity_for_tool_use,
     encode_event,
     progress_event,
@@ -29,8 +30,28 @@ def test_activity_for_remember_tool() -> None:
         {"content": "明日は買い物"},
     )
     assert evt is not None
+    assert evt["type"] == "mcp_activity"
     assert evt["kind"] == "remember"
-    assert "明日" in evt["detail"]
+    assert evt["detail"] == "明日は買い物"
+
+
+def test_activity_ignores_non_mcp_tools() -> None:
+    assert activity_for_tool_use("Skill", {"command": "memories"}) is None
+    assert activity_for_tool_use("Read", {"path": "/x"}) is None
+
+
+def test_activity_hides_sociality_orchestrator_tools() -> None:
+    assert activity_for_tool_use("mcp__sociality__get_social_state", {}) is None
+    assert activity_for_tool_use("mcp__memory__list_recent_memories", {"limit": 10}) is not None
+
+
+def test_activity_for_tool_result_only_on_error() -> None:
+    ok = activity_for_tool_result("mcp__memory__remember", "saved", is_error=False)
+    assert ok is None
+    err = activity_for_tool_result("mcp__memory__recall", "timeout", is_error=True)
+    assert err is not None
+    assert err["type"] == "mcp_activity"
+    assert err["ok"] is False
 
 
 def test_activities_from_assistant_tool_use() -> None:
@@ -44,6 +65,7 @@ def test_activities_from_assistant_tool_use() -> None:
     }
     events = activities_from_sdk_message(data)
     assert len(events) == 1
+    assert events[0]["type"] == "mcp_activity"
     assert events[0]["kind"] == "see"
 
 
@@ -76,5 +98,4 @@ def test_activities_from_tool_result_with_name_map() -> None:
         },
     }
     events = activities_from_sdk_message(user, tool_names=tool_names)
-    assert len(events) == 1
-    assert events[0]["label"] == "記憶に保存した"
+    assert len(events) == 0

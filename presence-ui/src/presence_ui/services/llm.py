@@ -102,8 +102,8 @@ def build_reply_prompt(
     return "\n\n".join(lines)
 
 
-def build_social_prompt_prefix(*, ctx: InteractionContext, plan: ResponsePlan) -> str:
-    """Compact sociality block prepended to the user message for Claude Code."""
+def build_social_turn_delta(*, ctx: InteractionContext, plan: ResponsePlan) -> str:
+    """Per-turn sociality block (compose + plan). Changes every turn — not for appendSystemPrompt."""
     parts: list[str] = []
     if ctx.compact_prompt_block:
         parts.append(f"[Social context]\n{ctx.compact_prompt_block}")
@@ -117,10 +117,36 @@ def build_social_prompt_prefix(*, ctx: InteractionContext, plan: ResponsePlan) -
         parts.append(f"[Social move: {plan.primary_move}] {plan.why_this_move}")
     if plan.primary_move == "write_private_reflection":
         parts.append(
-            "[Action] Call mcp__sociality__append_private_reflection with your private note. "
+            "[Action] Gateway will save a private reflection server-side. "
             "Do not send a visible chat reply to まー (no user-facing text)."
         )
     return "\n\n".join(parts)
+
+
+def build_social_prompt_prefix(*, ctx: InteractionContext, plan: ResponsePlan) -> str:
+    """Legacy alias: full per-turn block (used when PRESENCE_KV_STABLE_APPEND=0)."""
+    return build_social_turn_delta(ctx=ctx, plan=plan)
+
+
+# Identical every turn — safe for LM Studio KV prefix reuse (appendSystemPrompt).
+GATEWAY_STABLE_APPEND = """[Gateway — stable]
+Server-side compose/plan runs before each turn. The user message may include a
+[gateway_turn_context] block (social state, relevant memories, plan constraints).
+That block is for you only — never quote it to まー.
+Obey the latest turn's [Must include] / [Must avoid] / [Social move] only.
+When [relevant_memories] appear in gateway_turn_context, answer from them directly.
+Do NOT call mcp__memory__recall or other memory MCP tools for ordinary recall questions."""
+
+
+def prepend_gateway_turn_context(*, user_text: str, delta: str) -> str:
+    """Prefix the utterance with per-turn gateway context (hook-like, user-side)."""
+    body = (delta or "").strip()
+    utterance = (user_text or "").strip()
+    if not body:
+        return utterance
+    if not utterance:
+        return f"[gateway_turn_context — not for the user]\n{body}"
+    return f"[gateway_turn_context — not for the user]\n{body}\n\n{utterance}"
 
 
 async def generate_koyori_reply(

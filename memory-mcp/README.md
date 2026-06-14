@@ -31,6 +31,20 @@ uv sync
 uv run memory-mcp
 ```
 
+### Windows + HTTP daemon (`:18900`)
+
+If `scripts/run-memory-daemon.ps1` (or `memory-mcp-http-daemon`) is running, plain `uv run memory-mcp`
+can fail with **os error 32** (script `.exe` locked). Claude Code then shows **memory: Failed to connect**
+and `mcp__memory__*` never appears in LM Studio tool lists.
+
+**Fix:** use `--no-sync` in `.mcp.json` (see repo root) and in the daemon script:
+
+```json
+"args": ["run", "--no-sync", "--directory", "memory-mcp", "memory-mcp"]
+```
+
+Verify: `claude mcp list` → `memory: ✓ Connected`.
+
 ## Configuration
 
 | Variable | Default | Description |

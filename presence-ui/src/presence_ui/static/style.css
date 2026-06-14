@@ -564,7 +564,8 @@ body {
   font-style: italic;
 }
 
-.message.activity {
+.message.activity,
+.message.mcp-activity {
   align-self: center;
   max-width: 96%;
   padding: 0.35rem 0.65rem;
@@ -577,7 +578,15 @@ body {
   animation: messageIn 0.3s ease;
 }
 
-.message.activity.is-error {
+.message.mcp-activity {
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  opacity: 0.88;
+  border-style: dotted;
+}
+
+.message.activity.is-error,
+.message.mcp-activity.is-error {
   background: rgba(168, 92, 92, 0.08);
   border-color: rgba(168, 92, 92, 0.35);
   color: #8a4a4a;

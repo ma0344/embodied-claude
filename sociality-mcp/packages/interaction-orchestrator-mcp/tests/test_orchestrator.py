@@ -181,6 +181,83 @@ class TestRecord:
         )
         ctx = _compose(stores)
         assert ctx.agent_state.interpretation_shifts == 1
+        assert len(ctx.agent_state.recent_interpretation_shifts) == 1
+        assert "[interpretation_shifts]" in ctx.compact_prompt_block
+        assert "policy purpose (protect sleep)" in ctx.compact_prompt_block
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text="夜中どうする？")
+        )
+        assert any("policy purpose (protect sleep)" in item for item in plan.must_include)
+
+    def test_soul_sections_in_compact_block(self, stores, monkeypatch, tmp_path):
+        import json as _json
+
+        stores["relationship"].upsert_person(
+            person_id="ma", canonical_name="まー", aliases=[], role="companion"
+        )
+        stores["relationship"].ingest_interaction(
+            person_id="ma",
+            channel="chat",
+            direction="human_to_ai",
+            text="PR review 明日やるの覚えといて",
+            ts="2026-04-15T19:20:00+09:00",
+        )
+        stores["relationship"].ingest_interaction(
+            person_id="ma",
+            channel="chat",
+            direction="human_to_ai",
+            text="PR review 忘れんように",
+            ts="2026-04-15T19:25:00+09:00",
+        )
+        stores["orchestrator"].record_agent_experience(
+            RecordAgentExperienceInput(
+                person_id="ma",
+                kind="agent_response",
+                summary="PR review の open loop を確認した",
+                importance=3,
+            )
+        )
+        fake_desires = tmp_path / "desires.json"
+        fake_desires.write_text(
+            _json.dumps(
+                {
+                    "desires": {"browse_curiosity": 0.82, "observe_room": 0.3},
+                    "discomforts": {"browse_curiosity": 0.4, "observe_room": 0.0},
+                    "dominant": "browse_curiosity",
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("DESIRES_PATH", str(fake_desires))
+
+        ctx = _compose(stores, user_text="続き")
+        block = ctx.compact_prompt_block
+        assert "[desires]" in block
+        assert "browse_curiosity" in block
+        assert "[open_loops]" in block
+        assert "pr review" in block.lower()
+        assert "[recent_experiences]" in block
+        assert "open loop" in block.lower()
+
+    def test_noise_open_loops_filtered_from_compose(self, stores):
+        stores["relationship"].upsert_person(
+            person_id="ma", canonical_name="まー", aliases=[], role="companion"
+        )
+        with stores["relationship"].db.transaction() as conn:
+            conn.execute(
+                """
+                INSERT INTO open_loops(
+                    loop_id, person_id, topic, status, source_event_id, updated_at, detail_json
+                )
+                VALUES ('loop_bad', 'ma', ?, 'open', 'evt1', '2026-06-14T00:00:00+00:00', '{}')
+                """,
+                (
+                    "まー、どないしたん？急に呼んでびっくりしたわ。 うち、ここに居るよ。",
+                ),
+            )
+        ctx = _compose(stores, user_text="hello")
+        assert "どないしたん" not in ctx.prompt_summary
+        assert "どないしたん" not in ctx.compact_prompt_block
 
     def test_append_private_reflection_counts_up(self, stores):
         stores["orchestrator"].append_private_reflection(
@@ -247,7 +324,7 @@ class TestPlan:
             PlanResponseInput(interaction_context=ctx, user_text="please help")
         )
         joined = " ".join(plan.must_avoid)
-        assert "generic reassurance" in joined
+        assert "generic assistant tone" in joined
 
     def test_ambiguous_short_input_asks_clarifying_question(self, stores):
         ctx = _compose(stores, user_text="ね")

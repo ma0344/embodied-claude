@@ -20,6 +20,8 @@ $Repo = Split-Path $PSScriptRoot -Parent
 
 Write-Host "==> restart-presence-ui"
 
+& (Join-Path $PSScriptRoot "sync-presence-deps.ps1")
+
 $Stopped = Stop-PresenceUiMaHome -Port $Port -TaskName $TaskName
 if ($Stopped.Count -eq 0) {
     Write-Host "    was not running"

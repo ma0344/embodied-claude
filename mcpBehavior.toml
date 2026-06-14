@@ -28,6 +28,7 @@ go2rtc_auto_start = true
 db_path = ""                   # "" = default (~/.claude/memories/memory.db)
 collection_name = "claude_memories"
 embedding_model = "intfloat/multilingual-e5-base"
+embedding_device = "cpu"       # keep CPU while LM Studio uses GPU
 enable_bm25 = true
 
 [mobility]

@@ -18,22 +18,22 @@ from .memory_adapter import (
 from .memory_adapter import (
     make_default_adapter as make_default_memory_adapter,
 )
-from .session_adapter import (
-    OrchestratorSessionAdapter,
-)
-from .session_adapter import (
-    make_default_session_adapter,
-)
 from .schemas import (
     AgentStateSummary,
     CommitmentSummary,
     ComposeInteractionContextInput,
     FollowupSuggestion,
     InteractionContext,
+    InterpretationShiftSummary,
     OpenLoopSummary,
+    RecentExperienceRef,
     RelevantMemoryRef,
     ResponseContract,
     SessionTurn,
+)
+from .session_adapter import (
+    OrchestratorSessionAdapter,
+    make_default_session_adapter,
 )
 from .store import InteractionOrchestratorStore
 
@@ -86,6 +86,7 @@ def compose_interaction_context(
             for item in _optional_list(
                 relationship_store, "list_open_loops", person_id=payload.person_id
             )
+            if not _is_noise_open_loop(str(item.get("topic") or ""))
         ]
         commitments = [
             CommitmentSummary(
@@ -109,6 +110,9 @@ def compose_interaction_context(
 
     recent_experiences = orchestrator_store.recent_agent_experiences(
         person_id=payload.person_id, limit=5, include_private=payload.include_private
+    )
+    recent_shifts = orchestrator_store.recent_interpretation_shifts(
+        person_id=payload.person_id, limit=3
     )
 
     memory = memory_adapter or make_default_memory_adapter()
@@ -158,6 +162,7 @@ def compose_interaction_context(
             person_id=payload.person_id
         ),
         interpretation_shifts=orchestrator_store.count_interpretation_shifts(),
+        recent_interpretation_shifts=recent_shifts,
     )
 
     prompt_summary = _build_prompt_summary(
@@ -193,6 +198,12 @@ def compose_interaction_context(
         response_contract=response_contract,
         relevant_memories=relevant_memories,
         session_context_block=prompt_session_block,
+        dominant_desire=dominant_desire,
+        desires=desires,
+        discomforts=discomforts,
+        open_loops=open_loops,
+        recent_shifts=recent_shifts,
+        recent_experiences=recent_experiences,
         max_chars=payload.max_chars,
     )
 
@@ -554,12 +565,113 @@ def _trim_session_context_block(block: str, *, max_chars: int) -> str:
     return trimmed
 
 
+def _is_noise_open_loop(topic: str) -> bool:
+    """Skip legacy garbage loops (full agent lines mistaken as topics)."""
+
+    compact = topic.strip()
+    if not compact:
+        return True
+    if len(compact) > 40:
+        return True
+    if "うち、" in compact or "こより" in compact:
+        return True
+    if compact.count("、") >= 2:
+        return True
+    if "覚えてる" in compact or "覚えてます" in compact or "覚えとる" in compact:
+        return True
+    return False
+
+
+def _format_desire_section(
+    *,
+    dominant_desire: str | None,
+    desires: dict[str, Any],
+    discomforts: dict[str, Any],
+    max_lines: int = 4,
+) -> list[str]:
+    if not desires and not dominant_desire:
+        return []
+    lines = ["[desires]"]
+    if dominant_desire:
+        lvl = desires.get(dominant_desire)
+        dcom = discomforts.get(dominant_desire, 0.0)
+        if isinstance(lvl, (int, float)):
+            lines.append(
+                f"dominant: {dominant_desire} level={float(lvl):.2f} "
+                f"discomfort={float(dcom):.2f}"
+            )
+        else:
+            lines.append(f"dominant: {dominant_desire}")
+    ranked = sorted(
+        ((name, value) for name, value in desires.items() if isinstance(value, (int, float))),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    shown = 0
+    for name, lvl in ranked:
+        if name == dominant_desire:
+            continue
+        dcom = discomforts.get(name, 0.0)
+        lines.append(f"- {name}: {float(lvl):.2f} (discomfort {float(dcom):.2f})")
+        shown += 1
+        if shown >= max_lines:
+            break
+    return lines if len(lines) > 1 else []
+
+
+def _format_open_loops_section(
+    open_loops: list[OpenLoopSummary], *, max_items: int = 3
+) -> list[str]:
+    if not open_loops:
+        return []
+    lines = ["[open_loops]"]
+    for loop in open_loops[:max_items]:
+        status = loop.status or "open"
+        lines.append(f"- {loop.topic} ({status})")
+    return lines
+
+
+def _format_shifts_section(
+    shifts: list[InterpretationShiftSummary], *, max_items: int = 2
+) -> list[str]:
+    if not shifts:
+        return []
+    lines = ["[interpretation_shifts]"]
+    for shift in shifts[:max_items]:
+        old = shift.old_interpretation[:80] + (
+            "…" if len(shift.old_interpretation) > 80 else ""
+        )
+        new = shift.new_interpretation[:80] + (
+            "…" if len(shift.new_interpretation) > 80 else ""
+        )
+        lines.append(f"- {shift.topic}: OLD「{old}」→ NEW「{new}」")
+    return lines
+
+
+def _format_experiences_section(
+    experiences: list[RecentExperienceRef], *, max_items: int = 3
+) -> list[str]:
+    if not experiences:
+        return []
+    lines = ["[recent_experiences]"]
+    for exp in experiences[:max_items]:
+        summary = exp.summary[:100] + ("…" if len(exp.summary) > 100 else "")
+        lines.append(f"- [{exp.kind}] {summary}")
+    return lines
+
+
 def _compact_block(
     *,
     prompt_summary: str,
     response_contract: ResponseContract,
     relevant_memories: list[RelevantMemoryRef],
     session_context_block: str = "",
+    dominant_desire: str | None = None,
+    desires: dict[str, Any] | None = None,
+    discomforts: dict[str, Any] | None = None,
+    open_loops: list[OpenLoopSummary] | None = None,
+    recent_shifts: list[InterpretationShiftSummary] | None = None,
+    recent_experiences: list[RecentExperienceRef] | None = None,
     max_chars: int,
 ) -> str:
     contract_lines = [f"treat_user_as: {response_contract.treat_user_as}"]
@@ -593,6 +705,18 @@ def _compact_block(
         "[interaction_context]",
         prompt_summary,
     ]
+    soul_sections = [
+        *_format_desire_section(
+            dominant_desire=dominant_desire,
+            desires=desires or {},
+            discomforts=discomforts or {},
+        ),
+        *_format_open_loops_section(open_loops or []),
+        *_format_shifts_section(recent_shifts or []),
+        *_format_experiences_section(recent_experiences or []),
+    ]
+    if soul_sections:
+        sections.extend(["", *soul_sections])
     if trimmed_session:
         sections.extend(["", trimmed_session])
     sections.extend(

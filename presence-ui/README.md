@@ -44,3 +44,24 @@ cd C:\Users\ma\src\embodied-claude
 - `GET /api/v1/koyori/status`
 - `GET /api/v1/camera/snapshot`
 - `GET /api/v1/health`
+
+## Native chat PoC (claude-code-server)
+
+Python-native Claude CLI wrapper (MIT, `.research/claude-code-server`) embedded via `include_router`.
+Requires clone under `.research/` and `uv sync` in `presence-ui/`.
+
+```powershell
+$env:PRESENCE_NATIVE_CHAT = "1"
+$env:PRESENCE_CCS_PASSWORD = "koyori-poc"   # optional
+.\scripts\restart-presence-ui.ps1
+```
+
+| Route | 説明 |
+|-------|------|
+| `POST /api/native/login` | Bearer token（password 上記） |
+| `POST /api/native/chat` | SSE; 記憶リストは **Claude を経由せず直接返答**（8192 ctx 対策） |
+| `GET /poc/native` | 最小ブラウザテスタ |
+
+記憶リスト以外の native chat は compose **lite**（`PRESENCE_LITE_*`）で append を抑える。LM Studio の ctx が 8192 のときは MCP 定義だけで溢れやすい — リスト質問は direct 経路を使う。
+
+`:8080` プロキシは従来どおり。Native PoC は **並行** で試せる（将来 Node 層を置き換える想定）。

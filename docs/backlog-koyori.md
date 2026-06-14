@@ -1,5 +1,7 @@
 # koyori バックログ
 
+ma-home 側の全体優先順・記憶 E2E: [backlog-ma-home.md](./backlog-ma-home.md)（2026-06-13 更新）。
+
 ## 本番: Keychron K4 MAX Bluetooth
 
 手順: `docs/koyori-input-sharing.md`（MAC はランダムでも名前でペア）  

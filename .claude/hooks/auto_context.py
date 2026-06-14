@@ -23,6 +23,7 @@ _HOOKS_DIR = Path(__file__).resolve().parent
 if str(_HOOKS_DIR) not in sys.path:
     sys.path.insert(0, str(_HOOKS_DIR))
 from hook_io import ensure_utf8_stdio  # noqa: E402
+from memory_auto_save import try_auto_remember  # noqa: E402
 from soul_pulse import identity_line  # noqa: E402
 
 SKIP_SUBSTRINGS = (
@@ -103,6 +104,16 @@ def _sqlite_recall_fallback(text: str, *, n: int = 2) -> str:
     return json.dumps(hits, ensure_ascii=False)
 
 
+def _http_memory_healthy(port: str, *, timeout: float = 1.5) -> bool:
+    """Fast liveness check — avoids waiting on a hung /recall."""
+    url = f"http://127.0.0.1:{port}/health"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            return resp.status == 200
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return False
+
+
 def _recall_lines(text: str) -> list[str]:
     if len(text) < 5:
         return []
@@ -110,11 +121,14 @@ def _recall_lines(text: str) -> list[str]:
     q = urllib.parse.quote(text)
     url = f"http://127.0.0.1:{port}/recall?q={q}&n=2"
     body = ""
-    try:
-        with urllib.request.urlopen(url, timeout=3) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-    except (urllib.error.URLError, TimeoutError, OSError):
+    if not _http_memory_healthy(port):
         body = _sqlite_recall_fallback(text, n=2)
+    else:
+        try:
+            with urllib.request.urlopen(url, timeout=3) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+        except (urllib.error.URLError, TimeoutError, OSError):
+            body = _sqlite_recall_fallback(text, n=2)
     if not body or body.strip() in ("", "[]"):
         body = _sqlite_recall_fallback(text, n=2)
     if not body or body.strip() in ("", "[]"):
@@ -192,6 +206,9 @@ def main() -> int:
         if pulse:
             lines.append(pulse)
         lines.extend(_recall_lines(text))
+        save_note = try_auto_remember(text)
+        if save_note:
+            lines.append(save_note)
         lines.extend(_desire_hint())
         _social_ingest(text)
 

@@ -1,186 +1,147 @@
-"""Deterministic long-term memory saves for explicit remember requests.
+"""Deterministic long-term memory for presence-ui Gateway (list + auto-save).
 
-When the user asks to remember something, persist via memory-mcp HTTP without
-waiting for the local LLM to call ``mcp__memory__remember``.
+Auto-save logic lives in ``.claude/hooks/memory_auto_save.py`` (shared with CLI hook).
 """
 
 from __future__ import annotations
 
-import json
-import os
 import re
-import urllib.error
-import urllib.parse
-import urllib.request
+import sqlite3
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 
-_VALID_CATEGORIES = frozenset(
-    {
-        "core",
-        "daily",
-        "philosophical",
-        "technical",
-        "memory",
-        "observation",
-        "feeling",
-        "conversation",
-    }
+_HOOKS = Path(__file__).resolve().parents[4] / ".claude" / "hooks"
+if _HOOKS.is_dir() and str(_HOOKS) not in sys.path:
+    sys.path.insert(0, str(_HOOKS))
+
+import memory_auto_save as _mas  # noqa: E402
+
+RememberIntent = _mas.RememberIntent
+RememberOutcome = _mas.RememberOutcome
+detect_personal_fact_intent = _mas.detect_personal_fact_intent
+detect_remember_intent = _mas.detect_remember_intent
+memory_saved_prompt_note = _mas.memory_saved_prompt_note
+persist_remember_intent = _mas.persist_remember_intent
+
+_LIST_HINT = re.compile(
+    r"(記憶|メモリ|memory).*(?:リスト|一覧|完全|出して|見せ|教え)|"
+    r"(?:リスト|一覧).*(?:記憶|メモリ)|"
+    r"(?:list|show).*(?:memor|memories)|"
+    r"(?:直近|最近).*(?:記憶|メモリ)|"
+    r"\d+\s*(?:個|件).*(?:記憶|メモリ)|"
+    r"(?:記憶|メモリ).*\d+\s*(?:個|件)",
+    re.IGNORECASE,
 )
 
-# Content before/after remember imperatives (Japanese + English).
-_CONTENT_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(
-        r"^(.+?)(?:を|って)?(?:覚えておいて|覚えといて|覚えとく|記憶して|記憶しといて)[。．!！]?$",
-        re.DOTALL,
-    ),
-    re.compile(
-        r"^(?:覚えておいて|覚えといて|記憶して|記憶しといて)[：:\s]+(.+)$",
-        re.DOTALL,
-    ),
-    re.compile(
-        r"^(?:remember(?:\s+this|\s+forever)?|store\s+this(?:\s+permanently)?)"
-        r"[：:\s]+(.+)$",
-        re.IGNORECASE | re.DOTALL,
-    ),
-    re.compile(
-        r"^(.+?)\s+(?:please\s+)?remember(?:\s+this|\s+forever)?[.!]?$",
-        re.IGNORECASE | re.DOTALL,
-    ),
-)
-
-_IMPERATIVE_ONLY = re.compile(
-    r"^(?:これ|それ|あれ)?(?:を)?(?:覚えておいて|覚えといて|記憶して|記憶しといて)[。．!！]?$",
-)
-
-_TRIGGER_HINT = re.compile(
-    r"(覚えておいて|覚えといて|覚えとく|記憶して|記憶しといて|"
-    r"remember\s+forever|remember\s+this|store\s+this)",
+_MEMORIES_COMMAND = re.compile(
+    r"^/?(?:memories|memory)(?:\s+(?P<limit>\d+))?\s*$",
     re.IGNORECASE,
 )
 
 
 @dataclass(slots=True, frozen=True)
-class RememberIntent:
-    content: str
-    category: str = "conversation"
+class MemoryListRequest:
+    limit: int
+    oldest_first: bool
 
 
-@dataclass(slots=True, frozen=True)
-class RememberOutcome:
-    ok: bool
-    content: str
-    memory_id: str | None = None
-    duplicate: bool = False
-    error: str | None = None
+def _parse_list_limit(text: str, *, default: int = 10) -> int:
+    match = re.search(r"(\d+)\s*(?:個|件)", text)
+    if match:
+        return min(int(match.group(1)), 30)
+    return default
 
 
-def detect_remember_intent(user_text: str) -> RememberIntent | None:
-    """Return content to save when the message is an explicit remember request."""
-
+def detect_memory_list_request(user_text: str) -> MemoryListRequest | None:
+    """User wants a concrete memory list (not social state / not Skill)."""
     text = (user_text or "").strip()
-    if len(text) < 4 or not _TRIGGER_HINT.search(text):
-        return None
-    if _IMPERATIVE_ONLY.match(text):
+    if not text:
         return None
 
-    for pattern in _CONTENT_PATTERNS:
-        match = pattern.match(text)
-        if not match:
-            continue
-        content = match.group(1).strip()
-        content = re.sub(r"^[「『\"']+|[」』\"']+$", "", content).strip()
-        if len(content) >= 2:
-            category = _guess_category(content)
-            return RememberIntent(content=content, category=category)
-    return None
+    cmd = _MEMORIES_COMMAND.match(text)
+    if cmd:
+        raw_limit = cmd.group("limit")
+        limit = min(int(raw_limit), 30) if raw_limit else 10
+        return MemoryListRequest(limit=limit, oldest_first=False)
+
+    if len(text) < 4 or not _LIST_HINT.search(text):
+        return None
+    limit = _parse_list_limit(text)
+    oldest_first = bool(re.search(r"最初|古い順|早い順|古い方", text))
+    return MemoryListRequest(limit=limit, oldest_first=oldest_first)
 
 
-def _guess_category(content: str) -> str:
-    lowered = content.lower()
-    if any(k in content for k in ("作戦", "Cursor", "実装", "調査", "プロンプト", "技術")):
-        return "technical"
-    if any(k in lowered for k in ("feel", "感情", "嬉し", "悲し")):
-        return "feeling"
-    return "conversation"
-
-
-def _memory_http_base() -> str:
-    override = os.getenv("MEMORY_HTTP_RECALL_BASE", "").strip()
-    if override:
-        return override.rstrip("/")
-    port = os.getenv("MEMORY_HTTP_PORT", "18900")
-    return f"http://127.0.0.1:{port}"
-
-
-def _http_timeout() -> float:
-    raw = os.getenv("MEMORY_HTTP_REMEMBER_TIMEOUT", "20")
+def fetch_memory_list(*, limit: int, oldest_first: bool) -> list[dict[str, str]]:
+    """Read memories from memory.db (no embedding required)."""
+    db_path = _mas.memory_db_path()
+    if not db_path.is_file():
+        return []
+    order = "ASC" if oldest_first else "DESC"
+    query = (
+        "SELECT id, content, timestamp, category, emotion "
+        f"FROM memories ORDER BY timestamp {order} LIMIT ?"
+    )
     try:
-        return max(2.0, float(raw))
-    except ValueError:
-        return 20.0
-
-
-def persist_remember_intent(intent: RememberIntent) -> RememberOutcome:
-    """POST to memory-mcp HTTP ``/remember`` (falls back gracefully on failure)."""
-
-    category = intent.category if intent.category in _VALID_CATEGORIES else "conversation"
-    payload = json.dumps(
+        with sqlite3.connect(db_path) as conn:
+            rows = conn.execute(query, (limit,)).fetchall()
+    except sqlite3.Error:
+        return []
+    return [
         {
-            "content": intent.content,
-            "category": category,
-            "emotion": "neutral",
-            "importance": 4,
-            "auto_link": False,
-        },
-        ensure_ascii=False,
-    ).encode("utf-8")
-    url = f"{_memory_http_base()}/remember"
-    request = urllib.request.Request(
-        url,
-        data=payload,
-        headers={"Content-Type": "application/json; charset=utf-8"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=_http_timeout()) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
-        return RememberOutcome(ok=False, content=intent.content, error=str(exc))
-
-    try:
-        data = json.loads(body)
-    except json.JSONDecodeError:
-        return RememberOutcome(
-            ok=False,
-            content=intent.content,
-            error="invalid JSON from memory HTTP",
-        )
-
-    if not data.get("ok"):
-        return RememberOutcome(
-            ok=False,
-            content=intent.content,
-            error=str(data.get("error") or "remember failed"),
-        )
-    return RememberOutcome(
-        ok=True,
-        content=intent.content,
-        memory_id=str(data.get("id") or "") or None,
-        duplicate=bool(data.get("duplicate")),
-    )
+            "id": str(row[0]),
+            "content": str(row[1]),
+            "timestamp": str(row[2]),
+            "category": str(row[3] or ""),
+            "emotion": str(row[4] or ""),
+        }
+        for row in rows
+    ]
 
 
-def memory_saved_prompt_note(outcome: RememberOutcome) -> str:
-    if not outcome.ok:
+def memory_list_prefetch_note(
+    rows: list[dict[str, str]],
+    *,
+    limit: int,
+    oldest_first: bool,
+) -> str:
+    if not rows:
         return (
-            "[memory_save_failed]\n"
-            f"Server-side remember failed for: {outcome.content[:200]}\n"
-            f"Error: {outcome.error or 'unknown'}"
+            "[memory_list_prefetch]\n"
+            "FACT: No memories in memory.db (store is empty).\n"
+            "Reply in Japanese: まだ記憶がない、と伝える。\n"
+            "Do NOT call mcp__memory__*, mcp__sociality__*, Skill, or /memories.\n"
+            "Do NOT say a tool error occurred — there is nothing to read."
         )
-    dup = " (already stored)" if outcome.duplicate else ""
-    mid = outcome.memory_id or "unknown"
-    return (
-        "[memory_saved_server]\n"
-        f"Persisted{dup} (id={mid}): {outcome.content}\n"
-        "Do not call mcp__memory__remember again for this same fact."
-    )
+    order_label = "oldest-first" if oldest_first else "newest-first"
+    lines = [
+        "[memory_list_prefetch]",
+        f"FACT: Gateway loaded {len(rows)} memories ({order_label}, limit={limit}).",
+        "Reply NOW by copying this numbered list into your answer (Japanese).",
+        "Do NOT call mcp__memory__*, mcp__sociality__*, Skill, or /memories.",
+        "Do NOT mention Cursor, 作戦, or that you cannot run commands.",
+        "",
+    ]
+    for i, row in enumerate(rows, 1):
+        lines.append(
+            f"{i}. [{row['timestamp']}] ({row['category']}) {row['content'][:300]}"
+        )
+    return "\n".join(lines)
+
+
+def format_memory_list_reply(
+    rows: list[dict[str, str]],
+    *,
+    limit: int,
+    oldest_first: bool,
+) -> str:
+    """User-visible numbered list (Gateway direct reply, no LLM)."""
+    if not rows:
+        return "記憶ストアは空っぽや。まだ何も覚えてへん。"
+    order_label = "古い順" if oldest_first else "新しい順"
+    lines = [f"直近の記憶 {len(rows)} 件（{order_label}、上限 {limit}）:", ""]
+    for i, row in enumerate(rows, 1):
+        lines.append(
+            f"{i}. [{row['timestamp']}] ({row['category']}) {row['content'][:300]}"
+        )
+    return "\n".join(lines)

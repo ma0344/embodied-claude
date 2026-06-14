@@ -1,0 +1,208 @@
+"""Gateway camera capture + LM Studio vision (MCP-compatible text)."""
+
+from __future__ import annotations
+
+import logging
+import os
+from dataclasses import dataclass
+
+from presence_ui.gateway.deterministic_memory import RememberIntent, persist_remember_intent
+from presence_ui.gateway.see_intent import SeeIntent, SeeMode
+from presence_ui.services.camera import (
+    CaptureOutcome,
+    camera_failure_hint,
+    capture_for_mode,
+)
+from presence_ui.services.camera_locations import CAMERA_LOCATIONS
+
+logger = logging.getLogger(__name__)
+
+
+def vision_prefetch_enabled() -> bool:
+    from presence_ui.gateway.direct_actions import direct_actions_enabled
+
+    if not direct_actions_enabled():
+        return False
+    return os.getenv("PRESENCE_GATEWAY_VISION_PREFETCH", "1").lower() not in {
+        "0",
+        "false",
+        "no",
+    }
+
+
+@dataclass(slots=True)
+class VisionCaptureResult:
+    ok: bool
+    mode: SeeMode | str
+    label: str
+    mcp_text: str
+    caption: str | None
+    file_path: str | None
+    error: str | None = None
+    remember_ok: bool = False
+
+
+async def capture_and_describe(*, mode: SeeMode, label: str = "") -> VisionCaptureResult:
+    """Capture with optional PTZ, vision-describe, return MCP-shaped text."""
+    try:
+        from wifi_cam_mcp.vision import (
+            describe_image_via_lm_studio,
+            format_capture_text,
+            vision_describe_enabled,
+        )
+    except ImportError as exc:
+        return VisionCaptureResult(
+            ok=False,
+            mode=mode,
+            label=label or mode,
+            mcp_text="",
+            caption=None,
+            file_path=None,
+            error=f"wifi_cam_mcp.vision unavailable ({exc}). Run sync-presence-deps + restart.",
+        )
+
+    outcome: CaptureOutcome = await capture_for_mode(mode)
+    if not outcome.ok or not outcome.capture:
+        hint = outcome.error or camera_failure_hint() or "capture failed"
+        return VisionCaptureResult(
+            ok=False,
+            mode=mode,
+            label=label or mode,
+            mcp_text="",
+            caption=None,
+            file_path=None,
+            error=hint,
+        )
+
+    capture = outcome.capture
+    view_label = label or outcome.view_label or mode
+    caption: str | None = None
+    if vision_describe_enabled() and capture.image_base64:
+        caption = await describe_image_via_lm_studio(capture.image_base64)
+
+    mcp_text = format_capture_text(capture, view_label, vision_caption=caption)
+    return VisionCaptureResult(
+        ok=True,
+        mode=mode,
+        label=view_label,
+        mcp_text=mcp_text,
+        caption=caption,
+        file_path=capture.file_path,
+    )
+
+
+async def describe_existing_capture(
+    capture: object,
+    *,
+    mode: str,
+    label: str,
+    extra_line: str = "",
+) -> VisionCaptureResult:
+    """Vision-describe an existing CaptureResult (e.g. center frame from look_around)."""
+    try:
+        from wifi_cam_mcp.vision import (
+            describe_image_via_lm_studio,
+            format_capture_text,
+            vision_describe_enabled,
+        )
+    except ImportError as exc:
+        return VisionCaptureResult(
+            ok=False,
+            mode=mode,
+            label=label,
+            mcp_text="",
+            caption=None,
+            file_path=getattr(capture, "file_path", None),
+            error=f"wifi_cam_mcp.vision unavailable ({exc}). Run sync-presence-deps + restart.",
+        )
+
+    caption: str | None = None
+    image_b64 = getattr(capture, "image_base64", None)
+    if vision_describe_enabled() and image_b64:
+        caption = await describe_image_via_lm_studio(image_b64)
+    mcp_text = format_capture_text(capture, label, vision_caption=caption)
+    if extra_line.strip():
+        mcp_text = f"{mcp_text}\n{extra_line.strip()}"
+    return VisionCaptureResult(
+        ok=True,
+        mode=mode,
+        label=label,
+        mcp_text=mcp_text,
+        caption=caption,
+        file_path=getattr(capture, "file_path", None),
+    )
+
+
+def remember_vision_capture(result: VisionCaptureResult) -> bool:
+    if not result.ok or not result.mcp_text.strip():
+        return False
+    outcome = persist_remember_intent(
+        RememberIntent(content=result.mcp_text, category="observation")
+    )
+    result.remember_ok = outcome.ok
+    return outcome.ok
+
+
+def vision_prefetch_note(
+    result: VisionCaptureResult,
+    *,
+    intent: SeeIntent,
+    user_text: str,
+) -> str:
+    """Build turn_delta block for pattern A (chat intercept)."""
+    if not result.ok:
+        err = result.error or "capture failed"
+        return (
+            "[vision_prefetch]\n"
+            f"mode={intent.mode}\n"
+            f"reason={intent.reason}\n"
+            f"user_text={user_text[:200]}\n"
+            f"error={err}\n"
+            "\n"
+            "[Gateway directive — not for the user]\n"
+            "Camera capture failed. Tell まー honestly; do NOT guess the scene.\n"
+            "Do NOT call mcp__wifi-cam__see or look_around."
+        )
+
+    body = result.mcp_text.strip()
+    return (
+        "[vision_prefetch]\n"
+        f"mode={intent.mode}\n"
+        f"reason={intent.reason}\n"
+        f"trigger={user_text[:240]}\n"
+        f"remember={'ok' if result.remember_ok else 'skipped'}\n"
+        "\n"
+        f"{body}\n"
+        "\n"
+        "[Gateway directive — not for the user]\n"
+        "Gateway already captured the camera view above (MCP-equivalent text).\n"
+        "Answer まー from VISION_CAPTION only when present; never invent details.\n"
+        "Do NOT call mcp__wifi-cam__see, look_around, or other wifi-cam tools.\n"
+        "Reply naturally in Koyori voice; do not mention gateway_turn_context."
+    )
+
+
+VISION_PREFETCH_DIRECTIVE_ONLY = (
+    "[Gateway directive — not for the user]\n"
+    "Do NOT call mcp__wifi-cam__see or look_around (vision_prefetch is in this turn)."
+)
+
+
+async def prefetch_vision_for_chat(
+    *,
+    intent: SeeIntent,
+    user_text: str,
+    remember: bool = True,
+) -> tuple[VisionCaptureResult, str]:
+    """Run capture + describe; optionally remember; return (result, turn_delta note)."""
+    label_map: dict[SeeMode, str] = {
+        "current": "--- Current View ---",
+        "look_around": "--- Center View (room scan) ---",
+    }
+    for key, spec in CAMERA_LOCATIONS.items():
+        label_map[key] = spec.capture_label  # type: ignore[literal-required]
+    result = await capture_and_describe(mode=intent.mode, label=label_map.get(intent.mode, ""))
+    if remember and result.ok:
+        remember_vision_capture(result)
+    note = vision_prefetch_note(result, intent=intent, user_text=user_text)
+    return result, note

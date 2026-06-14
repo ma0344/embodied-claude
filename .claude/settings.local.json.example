@@ -13,6 +13,14 @@
     "CLAUDE_CODE_SUBAGENT_MODEL": "google/gemma-4-12b-qat",
     "LM_STUDIO_VISION_MODEL": "google/gemma-4-12b-qat"
   },
+  "enabledMcpjsonServers": [
+    "system-temperature"
+  ],
+  "_enabledMcpjsonServers_comment": "Daily: system-temperature only. Gateway (:8090) runs compose/plan in-process; hook + :18900 for recall/remember. See docs/lmstudio-kv-cache.md",
+  "_mcp_profile_voice": ["system-temperature", "tts"],
+  "_mcp_profile_see_listen": ["system-temperature", "wifi-cam"],
+  "_mcp_profile_talk": ["system-temperature", "memory", "sociality"],
+  "_mcp_profile_full": ["memory", "system-temperature", "sociality", "tts", "wifi-cam"],
   "permissions": {
     "allow": [
       "mcp__wifi-cam__*",
@@ -34,7 +42,7 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/run_auto_context.cmd\"",
-            "timeout": 5
+            "timeout": 30
           }
         ]
       }

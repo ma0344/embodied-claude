@@ -307,7 +307,15 @@ def _pick_must_lists(
         )
     if ctx.open_loops and primary_move in {"answer_directly", "write_private_reflection"}:
         must_include.append("reference at least one concrete open loop if relevant")
-    if ctx.agent_state.interpretation_shifts >= 1 and primary_move != "stay_silent":
+    if ctx.agent_state.recent_interpretation_shifts and primary_move != "stay_silent":
+        latest = ctx.agent_state.recent_interpretation_shifts[0]
+        must_include.append(
+            "interpretation shift on "
+            f"'{latest.topic}': do NOT revert to "
+            f"「{latest.old_interpretation}」 — hold "
+            f"「{latest.new_interpretation}」"
+        )
+    elif ctx.agent_state.interpretation_shifts >= 1 and primary_move != "stay_silent":
         must_include.append(
             "respect the most recent interpretation shift (do not regress to old interpretation)"
         )

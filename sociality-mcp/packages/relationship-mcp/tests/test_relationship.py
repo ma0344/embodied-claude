@@ -1,6 +1,6 @@
 """Tests for relationship abstractions."""
 
-from relationship_mcp.store import RelationshipStore
+from relationship_mcp.store import RelationshipStore, _commitment_label
 
 
 def test_alias_matching_works(store):
@@ -52,6 +52,116 @@ def test_repeated_mentions_of_future_task_create_open_loop(store):
     )
     loops = store.list_open_loops(person_id="ma")
 
+    assert len(loops) == 1
+    assert loops[0].topic == "pr review"
+
+
+def test_agent_utterance_does_not_create_open_loop(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.ingest_interaction(
+        person_id="ma",
+        channel="chat",
+        direction="ai_to_human",
+        text="まー、どないしたん？急に呼んでびっくりしたわ。",
+        ts="2026-04-15T19:12:00+09:00",
+    )
+    assert store.list_open_loops(person_id="ma") == []
+
+
+def test_dismiss_closes_pr_review_loop_without_creating_new(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.ingest_interaction(
+        person_id="ma",
+        channel="chat",
+        direction="human_to_ai",
+        text="PR review 明日やるの覚えといて",
+        ts="2026-04-15T19:20:00+09:00",
+    )
+    closed = store.note_human_utterance_for_loops(
+        person_id="ma",
+        text="あ、PRのレビューは中止になったの。その予定は忘れて。",
+        ts="2026-06-14T16:36:00+09:00",
+        source_event_id="evt_dismiss_1",
+    )
+    assert closed.closed_loops == ["pr review"]
+    assert store.list_open_loops(person_id="ma") == []
+
+
+def test_dismiss_cancels_matching_commitment(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    created = store.create_commitment(
+        person_id="ma",
+        text="remind ma about PR review tomorrow",
+        due_at="2026-06-15T09:00:00+09:00",
+        source="conversation",
+    )
+    outcome = store.note_human_utterance_for_loops(
+        person_id="ma",
+        text="PRのレビューは中止。その予定は忘れて。",
+        ts="2026-06-14T16:40:00+09:00",
+        source_event_id="evt_dismiss_commit",
+    )
+    assert outcome.cancelled_commitments == [_commitment_label("remind ma about PR review tomorrow")]
+    model = store.get_person_model(person_id="ma")
+    assert all(c.id != created["commitment_id"] for c in model.active_commitments)
+
+
+def test_recall_question_does_not_create_open_loop(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.note_human_utterance_for_loops(
+        person_id="ma",
+        text="煎餅の話、覚えてる？",
+        ts="2026-06-14T16:50:00+09:00",
+        source_event_id="evt_recall_1",
+    )
+    assert store.list_open_loops(person_id="ma") == []
+
+
+def test_recall_noise_loop_gets_closed_on_next_recall_utterance(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    with store.db.transaction() as conn:
+        conn.execute(
+            """
+            INSERT INTO open_loops(
+                loop_id, person_id, topic, status, source_event_id, updated_at, detail_json
+            )
+            VALUES ('loop_senbei', 'ma', ?, 'open', 'evt_old', '2026-06-14T00:00:00+00:00', '{}')
+            """,
+            ("煎餅の話、覚えてる",),
+        )
+    outcome = store.note_human_utterance_for_loops(
+        person_id="ma",
+        text="明日の会議、覚えておいて",
+        ts="2026-06-14T16:51:00+09:00",
+        source_event_id="evt_recall_2",
+    )
+    assert "煎餅の話、覚えてる" in outcome.closed_loops
+    topics = [loop.topic for loop in store.list_open_loops(person_id="ma")]
+    assert "煎餅の話、覚えてる" not in topics
+
+
+def test_dismiss_does_not_create_open_loop_from_review_keyword(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.note_human_utterance_for_loops(
+        person_id="ma",
+        text="あ、PRのレビューは中止になったの。その予定は忘れて。",
+        ts="2026-06-14T16:36:00+09:00",
+        source_event_id="evt_dismiss_2",
+    )
+    assert store.list_open_loops(person_id="ma") == []
+
+
+def test_note_human_utterance_for_loops_without_duplicate_event(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    closed = store.note_human_utterance_for_loops(
+        person_id="ma",
+        text="PR review 明日やるの覚えといて",
+        ts="2026-04-15T19:20:00+09:00",
+        source_event_id="evt_room_1",
+    )
+    loops = store.list_open_loops(person_id="ma")
+    assert closed.closed_loops == []
+    assert closed.cancelled_commitments == []
     assert len(loops) == 1
     assert loops[0].topic == "pr review"
 

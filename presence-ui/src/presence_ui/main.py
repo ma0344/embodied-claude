@@ -25,18 +25,19 @@ STATIC_DIR = Path(__file__).parent / "static"
 DEFAULT_PERSON_ID = os.getenv("PRESENCE_PERSON_ID", "ma")
 
 
+def _native_chat_enabled() -> bool:
+    return os.getenv("PRESENCE_NATIVE_CHAT", "").lower() in {"1", "true", "yes"}
+
+
 def _load_repo_env() -> None:
-    try:
-        from dotenv import load_dotenv
-    except ImportError:
-        return
-    repo_root = Path(__file__).resolve().parents[3]
-    load_dotenv(repo_root / "wifi-cam-mcp" / ".env")
-    load_dotenv(repo_root / ".env")
+    from presence_ui.repo_env import load_repo_env
+
+    load_repo_env()
 
 
 def create_app() -> FastAPI:
     _load_repo_env()
+    native_chat = _native_chat_enabled()
     app = FastAPI(
         title="Koyori's Room",
         description="Gateway UI for Claude Code Web UI + sociality filter",
@@ -69,9 +70,24 @@ def create_app() -> FastAPI:
             details={
                 "person_id": DEFAULT_PERSON_ID,
                 "claude_code_backend": backend_base_url(),
-                "mode": "gateway",
+                "mode": "gateway+native" if native_chat else "gateway",
+                "native_chat": native_chat,
+                "native_chat_prefix": "/api/native" if native_chat else None,
             },
         )
+
+    if native_chat:
+        from presence_ui.gateway.ccs_integration import mount_claude_code_server_router
+
+        mount_claude_code_server_router(app, person_id=DEFAULT_PERSON_ID)
+
+        @app.get("/poc/native")
+        async def poc_native_page() -> FileResponse:
+            return FileResponse(
+                STATIC_DIR / "poc-native.html",
+                media_type="text/html; charset=utf-8",
+                headers={"Cache-Control": "no-store, must-revalidate"},
+            )
 
     # --- Claude Code mirror: transparent GET proxy (8090 → 8080) ---
 
@@ -142,6 +158,55 @@ def create_app() -> FastAPI:
     @app.get("/api/v1/camera/snapshot", response_model=CameraSnapshotResponse)
     async def get_camera_snapshot() -> CameraSnapshotResponse:
         return await fetch_camera_snapshot()
+
+    @app.post("/api/v1/autonomous-tick")
+    async def post_autonomous_tick(request: Request) -> JSONResponse:
+        """Run one bounded autonomous action (compose/plan/execute, no MCP body tools)."""
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            body = {}
+        if body is None:
+            body = {}
+        if not isinstance(body, dict):
+            raise HTTPException(status_code=400, detail="body must be a JSON object")
+
+        person_id = str(body.get("person_id") or DEFAULT_PERSON_ID)
+        trigger = body.get("trigger")
+        speech_text = body.get("speech_text")
+        smoke_action = body.get("smoke_action")
+
+        from presence_ui.gateway.autonomous_tick import run_autonomous_tick
+
+        try:
+            result = await run_autonomous_tick(
+                person_id=person_id,
+                trigger=str(trigger) if trigger else None,
+                speech_text=str(speech_text) if speech_text else None,
+                smoke_action=str(smoke_action) if smoke_action else None,
+            )
+        except Exception as exc:  # noqa: BLE001
+            import logging
+
+            logging.getLogger(__name__).exception("autonomous-tick failed")
+            payload = {
+                "ok": False,
+                "primary_move": "error",
+                "action": smoke_action or "none",
+                "summary": str(exc) or type(exc).__name__,
+                "detail": type(exc).__name__,
+                "events": [],
+            }
+            return utf8_json(payload)
+        payload = {
+            "ok": result.ok,
+            "primary_move": result.primary_move,
+            "action": result.action,
+            "summary": result.summary,
+            "detail": result.detail,
+            "events": result.events,
+        }
+        return utf8_json(payload)
 
     @app.get("/projects")
     @app.get("/projects/{_rest:path}")

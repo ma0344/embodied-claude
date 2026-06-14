@@ -1,0 +1,136 @@
+# Gateway 直実行 — 判断は compose/plan、身体は MCP 外
+
+**合意**: 2026-06-14（まー）  
+**方針**: オリジナル embodied-claude の判断/行動機構（compose / plan / stores / boundary / desires）は維持。**実行**は LLM→MCP ではなく gateway が代行してよい（remember 直実行と同型）。
+
+---
+
+## すでに gateway 直実行済み
+
+| 機能 | 実装 | MCP 不要 |
+|------|------|----------|
+| remember | `deterministic_memory.persist_remember_intent` → `:18900` | ✓ |
+| 記憶リスト | `fetch_memory_list` → direct / prefetch | ✓ |
+| compose recall | `HttpMemoryAdapter` in orchestrator | ✓ |
+| compose / plan | `social_chat.intercept_chat_request` in-process | ✓ |
+| human / agent ingest | `room_ingest` | ✓ |
+
+参照: `presence-ui/src/presence_ui/gateway/deterministic_memory.py`
+
+---
+
+## これから gateway に寄せる（身体・自律）
+
+plan の `initiative.allowed_actions`（`plan.py`）を gateway が解釈し、**boundary 評価後**に Python/HTTP で実行する。
+
+| allowed_action | 直実行候補 | 備考 |
+|----------------|-----------|------|
+| `camera_look_around` | wifi-cam `look_around` + `see` | observe_room |
+| `camera_look_outside` | PTZ preset / pan + `see` | look_outside |
+| `talk_to_companion` | tts `say`（boundary OK 時） | miss_companion |
+| `write_private_reflection` | orchestrator `append_private_reflection` | quiet hours |
+| `recall_memories` | `:18900/recall` | identity_coherence |
+| （followup）`satisfy_desire` | desire_updater / memory marker | 1 action 1 satisfy |
+
+**触らない**: compose / plan のルール本体。MCP サーバー実装も `.mcp.json` からは削除しない（CLI `/talk` 用に残す）。
+
+---
+
+## フロー（自律 tick / act_autonomously）
+
+```
+desires.json
+  → compose (in-process) → plan (primary_move=act_autonomously, allowed_actions=[…])
+  → gateway: evaluate_action (boundary store)
+  → gateway: execute bounded action (see / say / private note)
+  → record_agent_experience + satisfy_desire + room_activity
+  → LLM には結果サマリだけ注入（または silent / 短い報告）
+```
+
+8090 に `POST /api/autonomous-tick`（仮）を足すか、既存 intercept に `autonomous_trigger` + empty message を正式化。
+
+---
+
+## MCP 削減との関係
+
+- **日常 chat**: `enabledMcpjsonServers` = `system-temperature` のまま
+- **手動プロファイル切替**: 移行期の逃げ道。gateway 直実行が揃えば **voice/see 用にまーが settings を触る必要はなくなる**
+- **トークン**: wifi-cam / sociality / memory の tool JSON が LLM ctx から消える
+
+---
+
+## 実装順（提案）
+
+1. [x] **A3a** `write_private_reflection` gateway 直実行（`direct_actions.py` + `social_chat` intercept）
+2. [x] **A3b** `observe_room` — `camera_look_around` + `:18900` remember（`observe_room_direct`）
+3. [x] **A3c** `miss_companion` — boundary → `talk_to_companion_direct` + `services/tts.py`
+4. [x] **A3d** 自律 tick — `POST /api/v1/autonomous-tick` + `satisfy_desire_direct`
+5. [x] **A3e** スモーク — autonomous-tick + observe_room（2026-06-14）
+6. [x] **A3f** **vision prefetch（A）** — 会話「見て」→ capture + LM Studio caption → `[vision_prefetch]` 通訳 → forward
+7. [x] **A3g** **desire see（B）** — observe_room / look_outside → MCP 同等 caption → remember + experience
+
+### カメラ向き（named presets）
+
+`wifi-cam-mcp/.env` または `presence-ui.local.env`:
+
+```env
+TAPO_WINDOW_PRESET=1
+TAPO_MADESK_PRESET=2
+TAPO_DINING_PRESET=3
+# または PRESENCE_CAMERA_*_PRESET= で上書き
+```
+
+| 場所 | 会話例 | preset env |
+|------|--------|------------|
+| 窓/外 | 「窓の外どう？」 | `TAPO_WINDOW_PRESET` |
+| まーのデスク | 「まーのデスク見て」 | `TAPO_MADESK_PRESET` |
+| ダイニング | 「ダイニングの様子どう？」 | `TAPO_DINING_PRESET` |
+
+`look_outside` desire と会話 see は preset 移動後に capture。未設定時は現位置のまま。
+
+### 「忘れて」→ open loop を閉じる
+
+まーが **中止 / キャンセル / 忘れて** と言ったとき、relationship の open loop を `closed` にし、
+compose 前に `[open_loop_dismiss]` を注入する（plan が再提示しにくくする）。
+
+例: 「PRのレビューは中止。その予定は忘れて。」→ `pr review` open loop を閉じ、
+文言が一致する **active commitment** を `cancelled` にする。
+
+環境変数: `PRESENCE_GATEWAY_VISION_PREFETCH=1`（既定 ON）。`0` で会話 A のみ無効（B は caption 継続）。
+
+### API
+
+```powershell
+# 自律 tick（compose → plan → 1 bounded action）
+Invoke-RestMethod -Method POST http://127.0.0.1:8090/api/v1/autonomous-tick `
+  -ContentType application/json `
+  -Body '{"person_id":"ma","trigger":"manual"}' | ConvertTo-Json
+
+# 全経路スモーク（observe_room は ~45s、TTS 未設定なら miss_companion は自動 skip）
+.\scripts\test-gateway-direct-actions.ps1
+
+# TTS 要: tts-mcp/.env（ELEVENLABS_API_KEY または VOICEVOX_URL）
+#   または ~/.config/embodied-claude/presence-ui.local.env に同キーを記載
+Copy-Item tts-mcp\.env.example tts-mcp\.env   # 初回のみ。API キーを編集してから restart
+
+# 個別強制（compose/plan は走るが実行は smoke_action 指定）
+Invoke-RestMethod -Method POST http://127.0.0.1:8090/api/v1/autonomous-tick `
+  -ContentType application/json `
+  -Body '{"smoke_action":"observe_room","trigger":"smoke"}' | ConvertTo-Json
+
+Invoke-RestMethod -Method POST http://127.0.0.1:8090/api/v1/autonomous-tick `
+  -ContentType application/json `
+  -Body '{"smoke_action":"miss_companion","speech_text":"まー、おる？"}' | ConvertTo-Json
+```
+
+環境変数: `PRESENCE_GATEWAY_DIRECT_ACTIONS=1`（既定 ON）。`0` で従来 MCP 経路に戻す。
+
+デプロイ: `.\scripts\sync-presence-deps.ps1` → `.\scripts\restart-presence-ui.ps1`
+
+---
+
+## 関連
+
+- [lmstudio-kv-cache.md](./lmstudio-kv-cache.md) — daily MCP プロファイル
+- [backlog-ma-home.md](./backlog-ma-home.md) — A3 トラック
+- [mission-A_Investigation-Report.md](./mission-A_Investigation-Report.md) — compose 経路

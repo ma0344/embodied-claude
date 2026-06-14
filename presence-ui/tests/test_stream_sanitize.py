@@ -56,6 +56,16 @@ Room arc: 1 turns.
     assert strip_enriched_user_prompt(raw) == "やあ"
 
 
+def test_strip_enriched_user_prompt_gateway_turn_context() -> None:
+    raw = """[gateway_turn_context — not for the user]
+[Social context]
+[interaction_context]
+phase=chat
+
+こんばんは"""
+    assert strip_enriched_user_prompt(raw) == "こんばんは"
+
+
 def test_passthrough_stream_line_keeps_thinking_only_assistant() -> None:
     line = {
         "type": "claude_json",

@@ -13,6 +13,7 @@ from social_core import SocialDB, utc_now
 from .schemas import (
     AppendPrivateReflectionInput,
     ComposePrivateLetterInput,
+    InterpretationShiftSummary,
     RecentExperienceRef,
     RecordAgentExperienceInput,
     RecordInterpretationShiftInput,
@@ -222,3 +223,39 @@ class InteractionOrchestratorStore:
     def count_interpretation_shifts(self) -> int:
         row = self.db.fetchone("SELECT COUNT(*) FROM interpretation_shifts")
         return int(row[0]) if row else 0
+
+    def recent_interpretation_shifts(
+        self,
+        *,
+        person_id: str | None = None,
+        limit: int = 3,
+    ) -> list[InterpretationShiftSummary]:
+        where: list[str] = []
+        args: list[Any] = []
+        if person_id is not None:
+            where.append("(person_id = ? OR person_id IS NULL)")
+            args.append(person_id)
+        clause = f"WHERE {' AND '.join(where)}" if where else ""
+        rows = self.db.fetchall(
+            f"""
+            SELECT shift_id, ts, topic, old_interpretation, new_interpretation,
+                   trigger, confidence
+            FROM interpretation_shifts
+            {clause}
+            ORDER BY ts DESC, created_at DESC
+            LIMIT ?
+            """,
+            (*args, max(1, min(limit, 10))),
+        )
+        return [
+            InterpretationShiftSummary(
+                shift_id=row[0],
+                ts=row[1],
+                topic=row[2],
+                old_interpretation=row[3],
+                new_interpretation=row[4],
+                trigger=row[5],
+                confidence=float(row[6]),
+            )
+            for row in rows
+        ]

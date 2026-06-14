@@ -1,0 +1,116 @@
+"""Autonomous tick — compose/plan/execute without Claude MCP body tools."""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+from typing import Any
+
+from interaction_orchestrator_mcp.compose import compose_interaction_context
+from interaction_orchestrator_mcp.plan import plan_response
+from interaction_orchestrator_mcp.schemas import (
+    ComposeInteractionContextInput,
+    PlanResponseInput,
+    ResponsePlan,
+)
+
+from presence_ui.deps import get_stores
+from presence_ui.gateway.direct_actions import (
+    DirectActionOutcome,
+    direct_actions_enabled,
+    execute_autonomous_plan,
+)
+
+
+@dataclass(slots=True)
+class AutonomousTickResult:
+    ok: bool
+    primary_move: str
+    action: str
+    summary: str
+    detail: str = ""
+    events: list[dict[str, Any]] = field(default_factory=list)
+    plan: ResponsePlan | None = None
+
+
+async def run_autonomous_tick(
+    *,
+    person_id: str = "ma",
+    trigger: str | None = None,
+    speech_text: str | None = None,
+    smoke_action: str | None = None,
+) -> AutonomousTickResult:
+    if not direct_actions_enabled():
+        return AutonomousTickResult(
+            ok=False,
+            primary_move="disabled",
+            action="none",
+            summary="PRESENCE_GATEWAY_DIRECT_ACTIONS is off.",
+        )
+
+    allow_smoke = os.getenv("PRESENCE_ALLOW_SMOKE_ACTION", "1").lower() not in {
+        "0",
+        "false",
+        "no",
+    }
+    if smoke_action and not allow_smoke:
+        return AutonomousTickResult(
+            ok=False,
+            primary_move="denied",
+            action="none",
+            summary="smoke_action requires PRESENCE_ALLOW_SMOKE_ACTION=1",
+        )
+
+    stores = get_stores()
+    ctx = compose_interaction_context(
+        ComposeInteractionContextInput(
+            person_id=person_id,
+            channel="autonomous",
+            user_text=None,
+            autonomous_trigger=trigger or "gateway_tick",
+            include_private=True,
+            max_chars=int(os.getenv("PRESENCE_COMPOSE_MAX_CHARS", "10000")),
+        ),
+        social_state_store=stores.social_state,
+        relationship_store=stores.relationship,
+        joint_attention_store=stores.joint_attention,
+        boundary_store=stores.boundary,
+        self_narrative_store=stores.self_narrative,
+        orchestrator_store=stores.orchestrator,
+        policy_timezone=stores.policy_timezone,
+    )
+    plan = plan_response(
+        PlanResponseInput(interaction_context=ctx, user_text=None),
+    )
+
+    if smoke_action:
+        from presence_ui.gateway.direct_actions import execute_smoke_action
+
+        outcome = await execute_smoke_action(
+            stores,
+            person_id=person_id,
+            ctx=ctx,
+            plan=plan,
+            smoke_action=smoke_action,
+            speech_text=speech_text,
+        )
+        primary = f"smoke:{smoke_action}"
+    else:
+        outcome = await execute_autonomous_plan(
+            stores,
+            person_id=person_id,
+            ctx=ctx,
+            plan=plan,
+            speech_text=speech_text,
+        )
+        primary = plan.primary_move
+
+    return AutonomousTickResult(
+        ok=outcome.ok,
+        primary_move=primary,
+        action=outcome.action,
+        summary=outcome.summary,
+        detail=outcome.detail,
+        events=outcome.events,
+        plan=plan,
+    )

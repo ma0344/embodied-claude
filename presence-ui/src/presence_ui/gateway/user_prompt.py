@@ -7,6 +7,7 @@ import re
 # Phase 1 fallback for history JSONL where sociality was prepended to user text.
 _SYSTEM_BLOCK_RES = (
     re.compile(r"^\[Social context\]\s*$", re.I),
+    re.compile(r"^\[gateway_turn_context\b", re.I),
     re.compile(r"^\[interaction_context\]\s*$", re.I),
     re.compile(r"^\[response_contract\]\s*$", re.I),
     re.compile(r"^\[recent_room_context\b", re.I),

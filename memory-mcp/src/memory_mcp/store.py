@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import os
 import sqlite3
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -293,6 +295,35 @@ def _row_to_episode(row: sqlite3.Row) -> Episode:
 # MemoryStore
 # ──────────────────────────────────────────────
 
+_EMBED_EXECUTOR: ThreadPoolExecutor | None = None
+_HEAVY_EXECUTOR: ThreadPoolExecutor | None = None
+
+
+def _embed_executor() -> ThreadPoolExecutor:
+    global _EMBED_EXECUTOR
+    if _EMBED_EXECUTOR is None:
+        _EMBED_EXECUTOR = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="memory-embed",
+        )
+    return _EMBED_EXECUTOR
+
+
+def _heavy_executor() -> ThreadPoolExecutor:
+    global _HEAVY_EXECUTOR
+    if _HEAVY_EXECUTOR is None:
+        workers = max(1, int(os.environ.get("MEMORY_HEAVY_THREADS", "2")))
+        _HEAVY_EXECUTOR = ThreadPoolExecutor(
+            max_workers=workers,
+            thread_name_prefix="memory-heavy",
+        )
+    return _HEAVY_EXECUTOR
+
+
+async def _run_in_executor(executor: ThreadPoolExecutor, fn, /, *args):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(executor, fn, *args)
+
 
 class MemoryStore:
     """SQLite + numpy memory storage (Phase 11)."""
@@ -305,7 +336,10 @@ class MemoryStore:
         self._association_engine = AssociationEngine()
         self._consolidation_engine = ConsolidationEngine()
         self._hopfield = ModernHopfieldNetwork(beta=4.0, n_iters=3)
-        self._embedding_fn = E5EmbeddingFunction(config.embedding_model)
+        self._embedding_fn = E5EmbeddingFunction(
+            config.embedding_model,
+            device=config.embedding_device,
+        )
         self._bm25_index = BM25Index()
 
     # ── Connection ──────────────────────────────
@@ -411,10 +445,20 @@ class MemoryStore:
     # ── Embedding helpers ───────────────────────
 
     async def _encode_document(self, text: str) -> list[float]:
-        return (await asyncio.to_thread(self._embedding_fn, [text]))[0]
+        return (await _run_in_executor(_embed_executor(), self._embedding_fn, [text]))[0]
 
     async def _encode_query(self, text: str) -> list[float]:
-        return (await asyncio.to_thread(self._embedding_fn.encode_query, [text]))[0]
+        return (
+            await _run_in_executor(
+                _embed_executor(),
+                self._embedding_fn.encode_query,
+                [text],
+            )
+        )[0]
+
+    async def warm_up_embedding(self) -> None:
+        """Load the embedding model in a worker thread (first recall is faster)."""
+        await self._encode_query("warmup")
 
     # ── Coactivation helpers ────────────────────
 
@@ -571,7 +615,6 @@ class MemoryStore:
         db = self._ensure_connected()
         normalized_query = normalize_japanese(query)
         query_emb = await self._encode_query(normalized_query)
-        query_vec = np.array(query_emb, dtype=np.float32)
 
         # Build WHERE clause for filters
         conditions: list[str] = []
@@ -600,22 +643,22 @@ class MemoryStore:
         if not rows_with_vecs:
             return []
 
-        # Stack vectors for batch cosine similarity
-        vecs = np.stack([decode_vector(blob) for _, blob in rows_with_vecs])
-        scores = cosine_similarity(query_vec, vecs)  # higher = more similar
+        def _rank_rows(query_emb: list[float]) -> list[tuple[int, float]]:
+            query_vec = np.array(query_emb, dtype=np.float32)
+            vecs = np.stack([decode_vector(blob) for _, blob in rows_with_vecs])
+            scores = cosine_similarity(query_vec, vecs)
+            indexed = list(enumerate(rows_with_vecs))
+            ranked = sorted(indexed, key=lambda t: scores[t[0]], reverse=True)
+            return [(idx, float(1.0 - scores[idx])) for idx, _ in ranked[:n_results]]
 
-        # Convert similarity to distance (like ChromaDB cosine distance)
-        # cosine distance = 1 - similarity
-        indexed = list(enumerate(rows_with_vecs))
-        ranked = sorted(indexed, key=lambda t: scores[t[0]], reverse=True)
-        ranked = ranked[:n_results]
+        ranked_pairs = await _run_in_executor(_heavy_executor(), _rank_rows, query_emb)
 
         results: list[tuple[Memory, float]] = []
-        for idx, (row, _) in ranked:
+        for idx, distance in ranked_pairs:
+            row, _ = rows_with_vecs[idx]
             memory_id = row["id"]
             coactivation = await asyncio.to_thread(self._get_coactivation, db, memory_id)
             memory = _row_to_memory(row, coactivation)
-            distance = float(1.0 - scores[idx])
             results.append((memory, distance))
 
         return results
@@ -696,37 +739,46 @@ class MemoryStore:
                 )
             )
 
-        # Phase 9: BM25 hybrid re-ranking
+        # Phase 9: BM25 hybrid re-ranking (CPU-heavy; keep off event loop)
         if self._config.enable_bm25 and scored_results:
+
+            def _rerank_bm25() -> list[ScoredMemory]:
+                local_results = list(scored_results)
+                if self._bm25_index.is_dirty:
+                    # build() must be called from async context before rerank when dirty
+                    return local_results
+                result_ids = [sr.memory.id for sr in local_results]
+                bm25_scores = self._bm25_index.scores(query, result_ids)
+                query_reading = get_reading(query)
+                bm25_weight = 0.2
+                reading_weight = 0.15
+                reranked: list[ScoredMemory] = []
+                for sr in local_results:
+                    boost = bm25_scores.get(sr.memory.id, 0.0) * bm25_weight
+                    if query_reading:
+                        doc_reading = get_reading(sr.memory.content) or ""
+                        if doc_reading and query_reading == doc_reading:
+                            boost += reading_weight
+                    reranked.append(
+                        ScoredMemory(
+                            memory=sr.memory,
+                            semantic_distance=sr.semantic_distance,
+                            time_decay_factor=sr.time_decay_factor,
+                            emotion_boost=sr.emotion_boost,
+                            importance_boost=sr.importance_boost,
+                            final_score=sr.final_score - boost,
+                        )
+                    )
+                return reranked
+
             if self._bm25_index.is_dirty:
                 all_memories = await self.get_all()
-                await asyncio.to_thread(
+                await _run_in_executor(
+                    _heavy_executor(),
                     self._bm25_index.build,
                     [(m.id, m.content) for m in all_memories],
                 )
-            result_ids = [sr.memory.id for sr in scored_results]
-            bm25_scores = self._bm25_index.scores(query, result_ids)
-            query_reading = get_reading(query)
-            bm25_weight = 0.2
-            reading_weight = 0.15
-            reranked: list[ScoredMemory] = []
-            for sr in scored_results:
-                boost = bm25_scores.get(sr.memory.id, 0.0) * bm25_weight
-                if query_reading:
-                    doc_reading = get_reading(sr.memory.content) or ""
-                    if doc_reading and query_reading == doc_reading:
-                        boost += reading_weight
-                reranked.append(
-                    ScoredMemory(
-                        memory=sr.memory,
-                        semantic_distance=sr.semantic_distance,
-                        time_decay_factor=sr.time_decay_factor,
-                        emotion_boost=sr.emotion_boost,
-                        importance_boost=sr.importance_boost,
-                        final_score=sr.final_score - boost,
-                    )
-                )
-            scored_results = reranked
+            scored_results = await _run_in_executor(_heavy_executor(), _rerank_bm25)
 
         scored_results.sort(key=lambda x: x.final_score)
         return scored_results[:n_results]
@@ -1821,14 +1873,16 @@ class MemoryStore:
             self._hopfield.beta = beta
 
         try:
-            normalized_query = normalize_japanese(query)
-            query_emb = await self._encode_query(normalized_query)
-            _, similarities = self._hopfield.retrieve(query_emb)
-            results = self._hopfield.recall_results(similarities, k=n_results)
+
+            def _hopfield_work() -> list[HopfieldRecallResult]:
+                normalized_query = normalize_japanese(query)
+                query_emb = self._embedding_fn.encode_query([normalized_query])[0]
+                _, similarities = self._hopfield.retrieve(query_emb)
+                return self._hopfield.recall_results(similarities, k=n_results)
+
+            return await _run_in_executor(_heavy_executor(), _hopfield_work)
         finally:
             self._hopfield.beta = original_beta
-
-        return results
 
     # ── Diagnostics helper ───────────────────────
 

@@ -113,6 +113,18 @@ class RecentExperienceRef(BaseModel):
     importance: int
 
 
+class InterpretationShiftSummary(BaseModel):
+    """Latest interpretation updates — injected so plan can forbid regression."""
+
+    shift_id: str
+    ts: str
+    topic: str
+    old_interpretation: str
+    new_interpretation: str
+    trigger: str
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
 class AgentStateSummary(BaseModel):
     """Compact self-state for introspection and for the orchestrator."""
 
@@ -124,6 +136,7 @@ class AgentStateSummary(BaseModel):
     active_arcs: list[dict[str, Any]] = Field(default_factory=list)
     private_reflections: int = 0
     interpretation_shifts: int = 0
+    recent_interpretation_shifts: list[InterpretationShiftSummary] = Field(default_factory=list)
 
 
 class InteractionContext(BaseModel):

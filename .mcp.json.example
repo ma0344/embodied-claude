@@ -19,7 +19,7 @@
     },
     "memory": {
       "command": "uv",
-      "args": ["run", "--directory", "memory-mcp", "memory-mcp"]
+      "args": ["run", "--no-sync", "--directory", "memory-mcp", "memory-mcp"]
     },
     "system-temperature": {
       "command": "uv",

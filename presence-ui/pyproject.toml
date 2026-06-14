@@ -12,13 +12,17 @@ dependencies = [
     "fastapi>=0.115.0",
     "httpx>=0.27.0",
     "uvicorn[standard]>=0.32.0",
+    "claude-code-server",
     "social-core",
     "social-state-mcp",
     "self-narrative-mcp",
     "interaction-orchestrator-mcp",
     "boundary-mcp",
+    "relationship-mcp",
+    "joint-attention-mcp",
     "system-temperature-mcp",
     "wifi-cam-mcp",
+    "tts-mcp",
     "tzdata>=2024.1; sys_platform == 'win32'",
 ]
 
@@ -38,6 +42,7 @@ room-nav = "presence_ui.cli.room_nav:main"
 packages = ["src/presence_ui"]
 
 [tool.uv.sources]
+claude-code-server = { path = "../.research/claude-code-server" }
 social-core = { path = "../sociality-mcp/packages/social-core" }
 social-state-mcp = { path = "../sociality-mcp/packages/social-state-mcp" }
 self-narrative-mcp = { path = "../sociality-mcp/packages/self-narrative-mcp" }
@@ -48,6 +53,7 @@ relationship-mcp = { path = "../sociality-mcp/packages/relationship-mcp" }
 joint-attention-mcp = { path = "../sociality-mcp/packages/joint-attention-mcp" }
 system-temperature-mcp = { path = "../system-temperature-mcp" }
 wifi-cam-mcp = { path = "../wifi-cam-mcp" }
+tts-mcp = { path = "../tts-mcp" }
 
 [tool.ruff]
 line-length = 100

@@ -4,6 +4,7 @@
       "command": "/home/ma/.local/bin/uv",
       "args": [
         "run",
+        "--no-sync",
         "--directory",
         "/home/ma/src/embodied-claude/memory-mcp",
         "memory-mcp"

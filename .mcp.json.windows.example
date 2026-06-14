@@ -4,6 +4,7 @@
       "command": "uv",
       "args": [
         "run",
+        "--no-sync",
         "--directory",
         "C:\\Users\\ma\\src\\embodied-claude\\memory-mcp",
         "memory-mcp"

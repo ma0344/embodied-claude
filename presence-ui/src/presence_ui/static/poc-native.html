@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Native chat PoC (claude-code-server)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 1rem auto; padding: 0 1rem; }
+    #log { white-space: pre-wrap; background: #111; color: #eee; padding: 1rem; min-height: 200px; border-radius: 8px; }
+    #reply { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #333; white-space: pre-wrap; }
+    #status { color: #666; font-size: 0.9rem; margin: 0.5rem 0; }
+    input, button, textarea { font: inherit; }
+    textarea { width: 100%; min-height: 4rem; }
+    .row { display: flex; gap: 0.5rem; margin-top: 0.5rem; align-items: center; }
+    button:disabled { opacity: 0.5; }
+  </style>
+</head>
+<body>
+  <h1>Native chat PoC</h1>
+  <p>SSE via <code>POST /api/native/chat</code> + Gateway intercept.</p>
+  <p>Password: <code>PRESENCE_CCS_PASSWORD</code> (default <code>koyori-poc</code>). Override: <code>?pw=...</code></p>
+  <textarea id="prompt">直近10件の記憶リストを出して。</textarea>
+  <div class="row">
+    <button id="send" type="button">Send</button>
+    <button id="cancel" type="button">Cancel</button>
+  </div>
+  <div id="status">Ready</div>
+  <div id="log"></div>
+  <script>
+    const logEl = document.getElementById("log");
+    const statusEl = document.getElementById("status");
+    const sendBtn = document.getElementById("send");
+    const password = new URLSearchParams(location.search).get("pw") || "koyori-poc";
+    let token = "";
+    let controller = null;
+    let sessionId = null;
+    let replyEl = null;
+
+    function log(line) {
+      const row = document.createElement("div");
+      row.textContent = line;
+      logEl.appendChild(row);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function beginReply() {
+      if (replyEl) return;
+      replyEl = document.createElement("div");
+      replyEl.id = "reply";
+      logEl.appendChild(replyEl);
+    }
+
+    function appendReply(chunk) {
+      beginReply();
+      replyEl.textContent += chunk;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
+
+    async function login() {
+      const res = await fetch("/api/native/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error("login HTTP " + res.status + ": " + body);
+      }
+      token = (await res.json()).token;
+      log("[login ok]");
+    }
+
+    sendBtn.addEventListener("click", async () => {
+      sendBtn.disabled = true;
+      logEl.textContent = "";
+      replyEl = null;
+      setStatus("Sending…");
+      try {
+        if (!token) {
+          setStatus("Logging in…");
+          await login();
+        }
+        controller = new AbortController();
+        const prompt = document.getElementById("prompt").value.trim();
+        if (!prompt) {
+          throw new Error("prompt is empty");
+        }
+        log(">> " + prompt);
+        setStatus("Streaming…");
+        const res = await fetch("/api/native/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token,
+          },
+          body: JSON.stringify({ prompt, session_id: sessionId }),
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          const body = await res.text();
+          throw new Error("chat HTTP " + res.status + ": " + body);
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const parts = buf.split("\n\n");
+          buf = parts.pop() || "";
+          for (const block of parts) {
+            const lines = block.split("\n");
+            let evt = "message";
+            let data = "";
+            for (const line of lines) {
+              if (line.startsWith("event:")) evt = line.slice(6).trim();
+              if (line.startsWith("data:")) data = line.slice(5).trim();
+            }
+            if (evt === "session") {
+              try {
+                const p = JSON.parse(data);
+                if (p.claude_session !== false) sessionId = p.session_id;
+              } catch (_) {}
+            }
+            if (evt === "text") {
+              try { appendReply(JSON.parse(data).content || ""); } catch (_) {}
+            }
+            if (evt === "error") log("[sse error] " + data);
+            if (evt === "done") log("[done] " + data);
+          }
+        }
+        setStatus("Done");
+      } catch (err) {
+        const msg = err && err.message ? err.message : String(err);
+        log("[error] " + msg);
+        setStatus("Error — see log");
+        if (msg.includes("401") || msg.includes("login")) {
+          token = "";
+        }
+      } finally {
+        sendBtn.disabled = false;
+      }
+    });
+
+    document.getElementById("cancel").addEventListener("click", () => {
+      controller?.abort();
+      setStatus("Cancelled");
+    });
+  </script>
+</body>
+</html>

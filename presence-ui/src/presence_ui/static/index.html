@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>こよりの部屋</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260610-markdown" />
+  <link rel="stylesheet" href="/static/style.css?v=20260610-md-persist" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500&family=Cormorant+Garamond:wght@400;500&display=swap" rel="stylesheet" />
@@ -43,7 +43,13 @@
             <button type="button" id="chat-cancel" class="session-import" hidden title="送信中の応答を止める">止める</button>
           </div>
         </div>
-        <span class="chat-hint" id="chat-hint"></span>
+        <div class="chat-header-aside">
+          <span class="chat-hint" id="chat-hint"></span>
+          <label class="debug-injection-toggle" title="gateway_turn_context 等の注入ブロックを表示">
+            <input type="checkbox" id="debug-injection-toggle" />
+            <span>注入</span>
+          </label>
+        </div>
       </div>
       <div class="chat-scroll" id="chat-log" tabindex="0">
         <p class="placeholder">読み込み中…</p>
@@ -75,8 +81,8 @@
   <script src="/static/vendor/marked.min.js"></script>
   <script src="/static/vendor/purify.min.js"></script>
   <script src="/static/chat-markdown.js?v=20260610-md-both"></script>
-  <script src="/static/cc-messages.js?v=20260612-sendfix"></script>
+  <script src="/static/cc-messages.js?v=20260610-md-persist"></script>
   <script src="/static/koyori-voice.js?v=20260612-sendfix"></script>
-  <script src="/static/app.js?v=20260610-md-both"></script>
+  <script src="/static/app.js?v=20260610-md-persist"></script>
 </body>
 </html>

@@ -8,6 +8,7 @@ const NATIVE_TOKEN_STORAGE_KEY = "koyori-native-token";
 const NATIVE_SESSIONS_INDEX_KEY = "koyori-native-sessions-v1";
 const NATIVE_MESSAGES_KEY_PREFIX = "koyori-native-msgs-v1:";
 const NATIVE_MAX_SESSIONS = 40;
+const SHOW_DEBUG_INJECTION_KEY = "koyori-show-debug-injection";
 
 let chatPinnedToBottom = true;
 let chatMessages = [];
@@ -27,6 +28,7 @@ let sendTimeoutId = null;
 let uiConfig = { chat_backend: "proxy8080", native_chat: false };
 let nativeAuthToken = sessionStorage.getItem(NATIVE_TOKEN_STORAGE_KEY) || "";
 let nativeSessionList = [];
+let showDebugInjection = localStorage.getItem(SHOW_DEBUG_INJECTION_KEY) === "1";
 
 function isNativeChat() {
   return uiConfig.chat_backend === "native" || uiConfig.native_chat === true;
@@ -359,7 +361,6 @@ function applyNativeSessionEvent(payload, userPreview) {
   activeSessionId = payload.session_id;
   persistActiveSession();
   ensureNativeSessionRegistered(activeSessionId, userPreview);
-  persistNativeChatMessages();
 }
 
 function appendAssistantMessage(text) {
@@ -660,8 +661,16 @@ function setupSessionSwitcher() {
   }
 }
 
+function displayTextForMessage(msg) {
+  const raw = CcMessages.sanitizeDisplayText(msg.message || "");
+  if (msg.sender === "ma" && typeof CcMessages.displayMessageText === "function") {
+    return CcMessages.displayMessageText(raw, { showDebugInjection });
+  }
+  return raw;
+}
+
 function renderMessageBodyHtml(msg) {
-  const body = CcMessages.sanitizeDisplayText(msg.message || "");
+  const body = displayTextForMessage(msg);
   if (typeof ChatMarkdown !== "undefined") {
     return ChatMarkdown.toSafeHtml(body);
   }
@@ -676,8 +685,44 @@ function setMessageBodyContent(bodyEl, msg) {
     bodyEl.innerHTML = html;
   } else {
     bodyEl.classList.remove("message-body--md");
-    bodyEl.textContent = CcMessages.sanitizeDisplayText(msg.message || "");
+    bodyEl.textContent = displayTextForMessage(msg);
   }
+}
+
+function confirmNativeUserMessage(trimmed, timestamp) {
+  const userMsg = {
+    sender: "ma",
+    message: trimmed,
+    timestamp: timestamp || new Date().toISOString(),
+  };
+  chatMessages = [...chatMessages.filter((msg) => !msg._pending), userMsg];
+  const root = document.getElementById("chat-log");
+  const pendingEl = root?.querySelector(".message.ma.is-pending");
+  if (pendingEl) {
+    pendingEl.classList.remove("is-pending");
+    pendingEl.dataset.messageKey = messageKey(userMsg);
+    updateMessageElement(pendingEl, userMsg);
+  } else {
+    appendMessagesToDom([userMsg], { animate: false });
+  }
+  renderedMessageKeys = new Set(chatMessages.map(messageKey));
+  return userMsg;
+}
+
+function refreshChatDisplay() {
+  if (!chatMessages.length) return;
+  applyChatMessages(chatMessages, { fullRebuild: true, forceScroll: false });
+}
+
+function setupDebugInjectionToggle() {
+  const toggle = document.getElementById("debug-injection-toggle");
+  if (!toggle) return;
+  toggle.checked = showDebugInjection;
+  toggle.addEventListener("change", () => {
+    showDebugInjection = toggle.checked;
+    localStorage.setItem(SHOW_DEBUG_INJECTION_KEY, showDebugInjection ? "1" : "0");
+    refreshChatDisplay();
+  });
 }
 
 function messageKey(msg) {
@@ -990,7 +1035,6 @@ async function sendChatMessageNative(trimmed) {
   setChatThinking(true, "送ってる…");
   if (activeSessionId) {
     ensureNativeSessionRegistered(activeSessionId, trimmed);
-    persistNativeChatMessages();
   }
 
   sendStartedAt = Date.now();
@@ -1000,94 +1044,99 @@ async function sendChatMessageNative(trimmed) {
   }, CHAT_SEND_TIMEOUT_MS);
   setChatSendHint("返事を待ってる…");
 
-  const response = await postNativeChatRequest(
-    {
-      prompt: trimmed,
-      session_id: activeSessionId || undefined,
-    },
-    activeStreamController.signal,
-  );
+  try {
+    const response = await postNativeChatRequest(
+      {
+        prompt: trimmed,
+        session_id: activeSessionId || undefined,
+      },
+      activeStreamController.signal,
+    );
 
-  if (response.status === 401) {
-    throw new Error("native login に失敗した。?pw= でパスワードを確認してね");
-  }
-  if (!response.ok) {
-    throw new Error(`${uiConfig.native_chat_path || "/api/native/chat"} → ${response.status}`);
-  }
+    if (response.status === 401) {
+      throw new Error("native login に失敗した。?pw= でパスワードを確認してね");
+    }
+    if (!response.ok) {
+      throw new Error(`${uiConfig.native_chat_path || "/api/native/chat"} → ${response.status}`);
+    }
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  let assistantDraft = "";
-  let doneMeta = null;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    let assistantDraft = "";
+    let doneMeta = null;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const parts = buf.split("\n\n");
-    buf = parts.pop() || "";
-    for (const block of parts) {
-      const { evt, data } = parseNativeSseBlock(block);
-      if (evt === "session" && data) {
-        try {
-          applyNativeSessionEvent(JSON.parse(data), trimmed);
-        } catch {
-          // ignore malformed session event
-        }
-      }
-      if (evt === "text" && data) {
-        try {
-          const payload = JSON.parse(data);
-          const piece = payload.content || "";
-          if (piece) {
-            setChatThinking(false);
-            assistantDraft += piece;
-            updateStreamingBubble(assistantDraft);
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const parts = buf.split("\n\n");
+      buf = parts.pop() || "";
+      for (const block of parts) {
+        const { evt, data } = parseNativeSseBlock(block);
+        if (evt === "session" && data) {
+          try {
+            applyNativeSessionEvent(JSON.parse(data), trimmed);
+          } catch {
+            // ignore malformed session event
           }
-        } catch {
-          // ignore malformed text event
         }
-      }
-      if (evt === "error" && data) {
-        let message = data;
-        try {
-          const payload = JSON.parse(data);
-          message = payload.message || payload.error || data;
-        } catch {
-          // keep raw data
+        if (evt === "text" && data) {
+          try {
+            const payload = JSON.parse(data);
+            const piece = payload.content || "";
+            if (piece) {
+              setChatThinking(false);
+              assistantDraft += piece;
+              updateStreamingBubble(assistantDraft);
+            }
+          } catch {
+            // ignore malformed text event
+          }
         }
-        throw new Error(message);
-      }
-      if (evt === "done" && data) {
-        try {
-          doneMeta = JSON.parse(data);
-        } catch {
-          doneMeta = {};
+        if (evt === "error" && data) {
+          let message = data;
+          try {
+            const payload = JSON.parse(data);
+            message = payload.message || payload.error || data;
+          } catch {
+            // keep raw data
+          }
+          throw new Error(message);
+        }
+        if (evt === "done" && data) {
+          try {
+            doneMeta = JSON.parse(data);
+          } catch {
+            doneMeta = {};
+          }
         }
       }
     }
-  }
 
-  clearStreamingBubble();
-  setChatThinking(false);
+    clearStreamingBubble();
+    setChatThinking(false);
 
-  if (doneMeta?.silent && !assistantDraft.trim()) {
-    assistantDraft = "（いまは静かにしている）";
-  }
+    if (doneMeta?.silent && !assistantDraft.trim()) {
+      assistantDraft = "（いまは静かにしている）";
+    }
 
-  chatMessages = chatMessages.filter((msg) => !msg._pending);
-  const root = document.getElementById("chat-log");
-  root?.querySelector(".message.is-pending")?.remove();
-  renderedMessageKeys = new Set(chatMessages.map(messageKey));
+    confirmNativeUserMessage(trimmed, optimistic.timestamp);
 
-  if (assistantDraft.trim()) {
-    appendAssistantMessage(assistantDraft);
-  } else {
+    if (assistantDraft.trim()) {
+      appendAssistantMessage(assistantDraft);
+    } else {
+      persistNativeChatMessages();
+    }
+
+    await refreshStatus();
+  } catch (err) {
+    clearStreamingBubble();
+    setChatThinking(false);
+    confirmNativeUserMessage(trimmed, optimistic.timestamp);
     persistNativeChatMessages();
+    throw err;
   }
-
-  await refreshStatus();
 }
 
 async function sendChatMessage(text) {
@@ -1410,6 +1459,7 @@ async function refreshAll() {
 
 setupChatScroll();
 setupChatCompose();
+setupDebugInjectionToggle();
 releaseComposeState();
 document.addEventListener("visibilitychange", forceResetComposeIfStuck);
 setInterval(forceResetComposeIfStuck, 15_000);

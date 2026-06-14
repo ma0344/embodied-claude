@@ -8,6 +8,9 @@ const SKIPPED_BLOCK_TYPES = new Set(["thinking", "tool_use", "tool_result"]);
 
 const SYSTEM_BLOCK_RES = [
   /^\[Social context\]\s*$/i,
+  /^\[gateway_turn_context\b/i,
+  /^\[vision_prefetch\]\s*$/i,
+  /^\[Gateway directive\b/i,
   /^\[interaction_context\]\s*$/i,
   /^\[response_contract\]\s*$/i,
   /^\[recent_room_context\b/i,
@@ -60,6 +63,48 @@ function blockIndices(lines, headerIndex, nextHeader) {
 
   if (/^\[recent_room_context\b/i.test(header.trim())) {
     while (start < end && isRoomContextBody(lines[start])) start += 1;
+    return Array.from({ length: start - headerIndex }, (_, offset) => headerIndex + offset);
+  }
+
+  if (/^\[vision_prefetch\]\s*$/i.test(header.trim())) {
+    while (start < end) {
+      const line = lines[start].trim();
+      if (/^\[Gateway directive\b/i.test(line)) {
+        while (start < end) {
+          const directiveLine = lines[start].trim();
+          if (!directiveLine) {
+            start += 1;
+            break;
+          }
+          if (start > headerIndex + 1 && isSystemBlockHeader(lines[start]) && !/^\[Gateway directive\b/i.test(directiveLine)) {
+            break;
+          }
+          start += 1;
+        }
+        break;
+      }
+      if (start > headerIndex && isSystemBlockHeader(lines[start])) break;
+      start += 1;
+    }
+    return Array.from({ length: start - headerIndex }, (_, offset) => headerIndex + offset);
+  }
+
+  if (/^\[gateway_turn_context\b/i.test(header.trim())) {
+    while (start < end) {
+      if (start > headerIndex && isSystemBlockHeader(lines[start])) break;
+      const line = lines[start].trim();
+      if (start > headerIndex && !line) {
+        start += 1;
+        while (start < end && !lines[start].trim()) start += 1;
+        break;
+      }
+      start += 1;
+    }
+    return Array.from({ length: start - headerIndex }, (_, offset) => headerIndex + offset);
+  }
+
+  if (/^\[Gateway directive\b/i.test(header.trim())) {
+    while (start < end && lines[start].trim()) start += 1;
     return Array.from({ length: start - headerIndex }, (_, offset) => headerIndex + offset);
   }
 
@@ -175,10 +220,25 @@ function sanitizeDisplayText(text) {
   return String(text ?? "").trim();
 }
 
+function displayMessageText(text, { showDebugInjection = false } = {}) {
+  const raw = sanitizeDisplayText(text);
+  if (!raw) return "";
+  if (showDebugInjection) return raw;
+  if (msgLooksInjected(raw)) return stripEnrichedUserPrompt(raw);
+  return raw;
+}
+
+function msgLooksInjected(text) {
+  const lines = String(text ?? "").split("\n");
+  return lines.some((line) => isSystemBlockHeader(line));
+}
+
 window.CcMessages = {
   flattenHistoryMessages,
   extractStreamText,
   extractStreamSessionId,
   sanitizeDisplayText,
+  displayMessageText,
+  stripEnrichedUserPrompt,
   extractTextBlocks,
 };

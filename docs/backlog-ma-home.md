@@ -188,7 +188,7 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 - [x] **C5** キャンセル UI（「止める」ボタン + AbortController）
 - [x] **C6** Markdown 表示（marked + DOMPurify、`static/vendor/` 同梱）
 - [ ] **C7** 画面構成・レイアウト
-- [ ] **C8** デバッグ注入の非表示
+- [x] **C8** デバッグ注入の非表示（既定 OFF・会話ヘッダ右下「注入」トグルで表示切替）
 - [ ] **C9** 8080 依存の緩和（運用・smoke）
 
 **実装順**: C0 → C3 → C4 → C5 → C6/C7/C8 → C9

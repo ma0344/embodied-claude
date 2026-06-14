@@ -3,7 +3,8 @@
 # Default: background — terminal returns immediately (hidden process + log file).
 # Debug:     .\scripts\run-presence-ui.ps1 -Foreground
 #
-# Requires claude-code-webui on :8080 (brain). This script is the window (:8090).
+# Native chat (PRESENCE_NATIVE_CHAT=1): Claude CLI via claude-code-server — :8080 not required.
+# Legacy proxy mode: start claude-code-webui on :8080 first.
 #
 #   cd C:\Users\ma\src\embodied-claude
 #   .\scripts\run-presence-ui.ps1
@@ -37,12 +38,18 @@ $LogFile = Get-PresenceUiLogFile
 
 Write-Host "==> presence-ui (window)  $PresenceUrl"
 
-if (-not (Test-PortListen $BackendPort)) {
+Initialize-PresenceUiEnv -Repo $Repo -Port $Port -BackendPort $BackendPort
+$nativeChat = Test-PresenceNativeChatEnabled
+
+if (-not $nativeChat -and -not (Test-PortListen $BackendPort)) {
     Write-Warning @"
 Claude Code backend (:$BackendPort) is not listening.
-Start it first:
+Start it first (legacy proxy mode):
   .\scripts\run-webui-ma-home.ps1
+Or enable Native chat: PRESENCE_NATIVE_CHAT=1 in presence-ui.local.env
 "@
+} elseif ($nativeChat) {
+    Write-Host "Native chat enabled — :8080 webui not required." -ForegroundColor DarkGray
 }
 
 $Listeners = Get-PresenceUiPortListeners -Port $Port

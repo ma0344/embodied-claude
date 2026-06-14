@@ -21,7 +21,11 @@ cd C:\Users\ma\src\embodied-claude
 
 ログ: `%USERPROFILE%\.config\embodied-claude\logs\presence-ui.log`
 
-ブラウザ: http://localhost:8090/（Claude Code WebUI `:8080` が先に必要）
+ブラウザ: http://localhost:8090/
+
+**Native chat**（`PRESENCE_NATIVE_CHAT=1`、install-presence-ui-task 初回作成）では **`:8080` webui 不要**。  
+レガシー proxy モードのみ `claude-code-webui` `:8080` が先に必要。
+
 環境変数:
 
 | 変数 | 既定 | 説明 |

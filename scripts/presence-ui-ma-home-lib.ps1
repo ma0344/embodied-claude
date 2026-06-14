@@ -83,6 +83,44 @@ function Stop-PresenceUiMaHome {
     ,$Stopped
 }
 
+function Import-PresenceUiLocalEnv {
+    $LocalEnvFile = Join-Path $env:USERPROFILE ".config\embodied-claude\presence-ui.local.env"
+    if (-not (Test-Path $LocalEnvFile)) { return }
+    foreach ($line in Get-Content $LocalEnvFile -Encoding UTF8) {
+        $t = $line.Trim()
+        if (-not $t -or $t.StartsWith("#")) { continue }
+        if ($t -match '^([A-Za-z_][A-Za-z0-9_]*)=(.*)$') {
+            $key = $Matches[1]
+            $val = $Matches[2].Trim().Trim('"').Trim("'")
+            if (-not [string]::IsNullOrWhiteSpace($val)) {
+                Set-Item -Path "Env:$key" -Value $val
+            }
+        }
+    }
+}
+
+function Test-PresenceNativeChatEnabled {
+    param(
+        [switch]$QueryUiConfig,
+        [string]$Port = $(if ($env:PRESENCE_UI_PORT) { $env:PRESENCE_UI_PORT } else { "8090" })
+    )
+
+    if ($env:PRESENCE_NATIVE_CHAT -match '^(1|true|yes)$') { return $true }
+    if (-not $QueryUiConfig) { return $false }
+
+    try {
+        $cfg = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v1/ui-config" -TimeoutSec 5
+        return [bool]$cfg.native_chat -or ($cfg.chat_backend -eq "native")
+    } catch {
+        return $false
+    }
+}
+
+function Get-PresenceNativeLoginPassword {
+    if ($env:PRESENCE_CCS_PASSWORD) { return $env:PRESENCE_CCS_PASSWORD.Trim() }
+    return "koyori-poc"
+}
+
 function Initialize-PresenceUiEnv {
     param(
         [string]$Repo,
@@ -90,20 +128,7 @@ function Initialize-PresenceUiEnv {
         [string]$BackendPort = $(if ($env:WEBUI_PORT) { $env:WEBUI_PORT } else { "8080" })
     )
 
-    $LocalEnvFile = Join-Path $env:USERPROFILE ".config\embodied-claude\presence-ui.local.env"
-    if (Test-Path $LocalEnvFile) {
-        foreach ($line in Get-Content $LocalEnvFile -Encoding UTF8) {
-            $t = $line.Trim()
-            if (-not $t -or $t.StartsWith("#")) { continue }
-            if ($t -match '^([A-Za-z_][A-Za-z0-9_]*)=(.*)$') {
-                $key = $Matches[1]
-                $val = $Matches[2].Trim().Trim('"').Trim("'")
-                if (-not [string]::IsNullOrWhiteSpace($val)) {
-                    Set-Item -Path "Env:$key" -Value $val
-                }
-            }
-        }
-    }
+    Import-PresenceUiLocalEnv
 
     if (-not $env:PRESENCE_UI_PORT) { $env:PRESENCE_UI_PORT = $Port }
     if (-not $env:CLAUDE_CODE_BACKEND_URL) {

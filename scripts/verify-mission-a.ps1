@@ -4,12 +4,14 @@
 #   .\scripts\verify-mission-a.ps1
 #   .\scripts\verify-mission-a.ps1 -SkipGatewayChat    # stack only (fast)
 #   .\scripts\verify-mission-a.ps1 -GatewayQuestion "青い傘のマーカー覚えてる？"
+#   .\scripts\verify-mission-a.ps1 -RequireWebUI       # force legacy /api/chat (+ :8080)
 #
 # Human leg (when automated passes):
 #   :8090/ or CLI — paraphrase a known memory; Koyori should mention it without hanging.
 
 param(
     [switch]$SkipGatewayChat,
+    [switch]$RequireWebUI,
     [string]$GatewayQuestion = "昨日の煎餅の話、覚えてる？",
     [string]$ProjectPath = "C:/Users/ma/src/embodied-claude",
     [string]$SessionId = "",
@@ -20,7 +22,17 @@ $ErrorActionPreference = "Stop"
 $Repo = Split-Path $PSScriptRoot -Parent
 Set-Location $Repo
 
+. (Join-Path $PSScriptRoot "presence-ui-ma-home-lib.ps1")
+Initialize-PresenceUiEnv -Repo $Repo
+$nativeChat = Test-PresenceNativeChatEnabled -QueryUiConfig
+if ($RequireWebUI) { $nativeChat = $false }
+
 Write-Host "== Mission A verify ==" -ForegroundColor Cyan
+if ($nativeChat) {
+    Write-Host "chat leg: Native SSE /api/native/chat (no :8080)" -ForegroundColor DarkGray
+} else {
+    Write-Host "chat leg: legacy POST /api/chat (needs :8080)" -ForegroundColor DarkGray
+}
 Write-Host ""
 
 Write-Host "Step 1/3: memory stack (HTTP + compose)" -ForegroundColor Yellow
@@ -61,9 +73,13 @@ if ($SkipGatewayChat) {
 }
 
 Write-Host ""
-Write-Host "Step 3/3: :8090 gateway chat (needs LM Studio + :8080)" -ForegroundColor Yellow
+if ($nativeChat) {
+    Write-Host "Step 3/3: :8090 Native chat (needs LM Studio, no :8080)" -ForegroundColor Yellow
+} else {
+    Write-Host "Step 3/3: :8090 gateway chat (needs LM Studio + :8080)" -ForegroundColor Yellow
+}
 
-if (-not $SessionId) {
+if (-not $nativeChat -and -not $SessionId) {
     $encoded = ($ProjectPath -replace ":", "-") -replace "\\", "-"
     $encoded = $encoded -replace "/", "-"
     try {
@@ -74,12 +90,92 @@ if (-not $SessionId) {
             $SessionId = $convs[0].sessionId
         }
     } catch {
-        Write-Host "  [WARN] could not list sessions: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "  [WARN] could not list sessions from :8080: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 }
 
 $verifyPy = Join-Path $env:TEMP "verify_mission_a_gateway.py"
-@'
+$kw = "煎餅,お煎餅,甘い"
+if ($nativeChat) {
+    $nativePassword = Get-PresenceNativeLoginPassword
+    @'
+import json, sys, urllib.request
+
+def parse_sse_block(block):
+    evt = "message"
+    data = ""
+    for line in block.split("\n"):
+        line = line.strip()
+        if line.startswith("event:"):
+            evt = line[6:].strip()
+        elif line.startswith("data:"):
+            data = line[5:].strip()
+    payload = {}
+    if data:
+        try:
+            payload = json.loads(data)
+        except json.JSONDecodeError:
+            payload = {"raw": data}
+    return evt, payload
+
+def native_chat(question, password, timeout):
+    login_req = urllib.request.Request(
+        "http://127.0.0.1:8090/api/native/login",
+        data=json.dumps({"password": password}).encode("utf-8"),
+        headers={"Content-Type": "application/json; charset=utf-8"},
+        method="POST",
+    )
+    with urllib.request.urlopen(login_req, timeout=30) as resp:
+        token = json.loads(resp.read().decode("utf-8")).get("token", "")
+    if not token:
+        print("GATEWAY_ERROR", "native login returned no token")
+        sys.exit(1)
+
+    payload = {"prompt": question}
+    req = urllib.request.Request(
+        "http://127.0.0.1:8090/api/native/chat",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json; charset=utf-8",
+            "Authorization": f"Bearer {token}",
+        },
+        method="POST",
+    )
+    text = ""
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        buf = ""
+        while True:
+            chunk = resp.read(4096)
+            if not chunk:
+                break
+            buf += chunk.decode("utf-8", errors="replace")
+            while "\n\n" in buf:
+                block, buf = buf.split("\n\n", 1)
+                if not block.strip():
+                    continue
+                evt, payload = parse_sse_block(block)
+                if evt == "text":
+                    text += str(payload.get("content") or "")
+                if evt == "error":
+                    print("GATEWAY_ERROR", payload.get("message") or payload.get("error") or payload)
+                    sys.exit(1)
+    return text
+
+question = sys.argv[1]
+password = sys.argv[2]
+timeout = int(sys.argv[3])
+keywords = sys.argv[4].split(",")
+
+text = native_chat(question, password, timeout)
+found = [k for k in keywords if k and k in text]
+print("ASSISTANT_SNIPPET:", text[:400].replace("\n", " "))
+print("KEYWORDS_FOUND:", ",".join(found) if found else "(none)")
+sys.exit(0 if found else 2)
+'@ | Set-Content -Path $verifyPy -Encoding utf8
+
+    python $verifyPy $GatewayQuestion $nativePassword $GatewayTimeoutSec $kw
+} else {
+    @'
 import json, sys, urllib.request
 
 def join_text(content):
@@ -142,8 +238,9 @@ print("KEYWORDS_FOUND:", ",".join(found) if found else "(none)")
 sys.exit(0 if found else 2)
 '@ | Set-Content -Path $verifyPy -Encoding utf8
 
-$kw = "煎餅,お煎餅,甘い"
-python $verifyPy $GatewayQuestion $SessionId $ProjectPath $GatewayTimeoutSec $kw
+    python $verifyPy $GatewayQuestion $SessionId $ProjectPath $GatewayTimeoutSec $kw
+}
+
 $gwCode = $LASTEXITCODE
 Remove-Item $verifyPy -Force -ErrorAction SilentlyContinue
 

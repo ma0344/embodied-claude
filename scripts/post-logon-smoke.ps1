@@ -3,14 +3,27 @@
 # Verifies logon Scheduled Tasks (memory / webui / presence / watchdog).
 # Does NOT require sociality :18901 — that starts when Claude Code spawns MCPs.
 #
+# Native chat (PRESENCE_NATIVE_CHAT=1): :8080 / EmbodiedClaude-WebUI are OPTIONAL.
+# Legacy proxy mode: use -RequireWebUI to enforce :8080.
+#
 # Run after Windows logon:
 #   .\scripts\post-logon-smoke.ps1
+#   .\scripts\post-logon-smoke.ps1 -RequireWebUI   # legacy stack
 #
 # Full stack (incl. compose): start Claude, then verify-mission-a.ps1
+
+param(
+    [switch]$RequireWebUI
+)
 
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path $PSScriptRoot -Parent
 Set-Location $Repo
+
+. (Join-Path $PSScriptRoot "presence-ui-ma-home-lib.ps1")
+Initialize-PresenceUiEnv -Repo $Repo
+$nativeChat = Test-PresenceNativeChatEnabled -QueryUiConfig
+$webuiOptional = $nativeChat -and -not $RequireWebUI
 
 $failures = @()
 
@@ -23,31 +36,51 @@ function Test-TaskRunning([string]$Name) {
 }
 
 Write-Host "== B1b post-logon smoke ==" -ForegroundColor Cyan
+if ($webuiOptional) {
+    Write-Host "mode: Native chat — :8080 webui optional (use -RequireWebUI to enforce)" -ForegroundColor DarkGray
+} elseif ($RequireWebUI) {
+    Write-Host "mode: legacy — :8080 webui required" -ForegroundColor DarkGray
+}
 
 Write-Host "`n-- Scheduled tasks --" -ForegroundColor Yellow
-foreach ($name in @(
-        "EmbodiedClaude-MemoryHTTP",
-        "EmbodiedClaude-WebUI",
-        "EmbodiedClaude-PresenceUI",
-        "EmbodiedClaude-Watchdog"
-    )) {
+$taskNames = @(
+    "EmbodiedClaude-MemoryHTTP",
+    "EmbodiedClaude-WebUI",
+    "EmbodiedClaude-PresenceUI",
+    "EmbodiedClaude-Watchdog"
+)
+foreach ($name in $taskNames) {
     $status = Test-TaskRunning $name
-    $ok = ($status -eq "running") -or ($name -eq "EmbodiedClaude-Watchdog" -and $status -match "^state=Ready")
+    $isWatchdog = ($name -eq "EmbodiedClaude-Watchdog")
+    $isWebui = ($name -eq "EmbodiedClaude-WebUI")
+    $ok = ($status -eq "running") -or ($isWatchdog -and $status -match "^state=Ready")
+    if ($isWebui -and $webuiOptional -and $status -ne "running") {
+        Write-Host "  $name : $status (optional — Native chat)" -ForegroundColor DarkGray
+        continue
+    }
     $color = if ($ok) { "Green" } else { "Yellow" }
     Write-Host "  $name : $status" -ForegroundColor $color
-    if ($status -eq "missing") { $failures += "task $name missing" }
-    elseif (-not $ok -and $name -ne "EmbodiedClaude-Watchdog") { $failures += "task $name not running ($status)" }
+    if ($status -eq "missing") {
+        if ($isWebui -and $webuiOptional) { continue }
+        $failures += "task $name missing"
+    } elseif (-not $ok -and -not $isWatchdog) {
+        if ($isWebui -and $webuiOptional) { continue }
+        $failures += "task $name not running ($status)"
+    }
 }
 
 Write-Host "`n-- Ports --" -ForegroundColor Yellow
-foreach ($entry in @(
-        @{ Port = 18900; Label = "memory HTTP" },
-        @{ Port = 8080; Label = "webui" },
-        @{ Port = 8090; Label = "presence-ui" }
-    )) {
+$portChecks = @(
+    @{ Port = 18900; Label = "memory HTTP"; Optional = $false },
+    @{ Port = 8080; Label = "webui"; Optional = $webuiOptional },
+    @{ Port = 8090; Label = "presence-ui"; Optional = $false }
+)
+foreach ($entry in $portChecks) {
     $listen = Get-NetTCPConnection -LocalPort $entry.Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($listen) {
         Write-Host "  $($entry.Label) :$($entry.Port) LISTEN pid=$($listen.OwningProcess)" -ForegroundColor Green
+    } elseif ($entry.Optional) {
+        Write-Host "  $($entry.Label) :$($entry.Port) not listening (optional — Native chat)" -ForegroundColor DarkGray
     } else {
         Write-Host "  $($entry.Label) :$($entry.Port) NOT listening" -ForegroundColor Red
         $failures += "$($entry.Label) port $($entry.Port) down"
@@ -69,7 +102,8 @@ try {
 Write-Host "`n-- presence health --" -ForegroundColor Yellow
 try {
     $h = Invoke-RestMethod http://localhost:8090/api/v1/health -TimeoutSec 5
-    Write-Host "  :8090 $($h.details.mode) ok" -ForegroundColor Green
+    $nativeFlag = if ($h.details.native_chat) { " native_chat=1" } else { "" }
+    Write-Host "  :8090 $($h.details.mode)$nativeFlag ok" -ForegroundColor Green
 } catch {
     Write-Host "  :8090 FAIL $($_.Exception.Message)" -ForegroundColor Red
     $failures += "8090 health fail"

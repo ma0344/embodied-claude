@@ -16,7 +16,7 @@
 | **D** | Backlog 最新化 | このファイルを現実に合わせる | **完了** |
 | **B** | 運用自動化 | ログオン常駐・手起動を減らす | **ほぼ完了**（B2 LM Studio 手動のみ） |
 | **A** | 記憶・魂・gateway 身体 | 本体 E2E + A3 直実行 | **様子見**（自動 PASS + 実戦 spot check 継続） |
-| **C** | **部屋 UI（Native 本線）** | `/` 殻 + `/api/native/chat`、8080 脱却 | **次の主作業** |
+| **C** | **部屋 UI（Native 本線）** | `/` 殻 + `/api/native/chat`、8080 脱却 | **C7 レイアウト** |
 
 **フェーズ判断（2026-06-14）**: 記憶 compose / vision prefetch / open loop dismiss / desire 注入は **8090 で実戦 OK**。大きな本体機能追加は止め、日常利用＋`verify-mission-a.ps1` で様子を見る。**TTS（`tts-mcp/.env`）は後回し**。
 
@@ -32,7 +32,7 @@
 | **Gateway `:8090`** | compose/plan + KV 安定注入。**身体は gateway 直実行済み**（see / observe / reflect / autonomous-tick）。vision prefetch + remember **実戦 OK**（窓・デスク・ダイニング） |
 | **関係性** | open loop dismiss + commitment cancel。「覚えてる？」recall 誤 loop 抑制 |
 | **表面 UI** | **Native 本線**（localStorage 会話・8080 取込 **完了 2026-06**） |
-| **運用** | Task×4（memory / webui / presence / watchdog）+ post-logon-smoke **OK** |
+| **運用** | Task×3〜4（memory / presence / watchdog。**webui 任意**）+ post-logon-smoke **Native 対応** |
 
 参照: [gateway-direct-actions.md](./gateway-direct-actions.md)、[mission-A_Investigation-Report.md](./mission-A_Investigation-Report.md)
 
@@ -63,10 +63,10 @@
 | サービス | ポート | Scheduled Task | スクリプト | ログ |
 |---------|--------|----------------|-----------|------|
 | memory HTTP daemon | 18900 | `EmbodiedClaude-MemoryHTTP` | `install-memory-daemon-task.ps1` | `%USERPROFILE%\.config\embodied-claude\logs\memory-daemon.log` |
-| Claude Code Web UI | 8080 | `EmbodiedClaude-WebUI` | `install-webui-task.ps1` | `...\webui.log` | **C9 まで任意**（Native 会話は不要） |
+| Claude Code Web UI | 8080 | `EmbodiedClaude-WebUI` | `install-webui-task.ps1` | `...\webui.log` | **任意**（Native 本線では不要） |
 | presence-ui | 8090 | `EmbodiedClaude-PresenceUI` | `install-presence-ui-task.ps1` | `...\presence-ui.log` |
 
-**推奨登録順**（memory → presence-ui。Native 本線では **8080 は任意**）:
+**推奨登録順**（memory → presence-ui。**8080 webui Task は任意**）:
 
 ```powershell
 cd C:\Users\ma\src\embodied-claude
@@ -74,11 +74,20 @@ cd C:\Users\ma\src\embodied-claude
 .\scripts\install-memory-daemon-task.ps1
 Start-ScheduledTask -TaskName EmbodiedClaude-MemoryHTTP
 
-.\scripts\install-webui-task.ps1
-Start-ScheduledTask -TaskName EmbodiedClaude-WebUI
+# 任意 — Native 会話だけなら省略可
+# .\scripts\install-webui-task.ps1
+# Start-ScheduledTask -TaskName EmbodiedClaude-WebUI
 
 .\scripts\install-presence-ui-task.ps1
 Start-ScheduledTask -TaskName EmbodiedClaude-PresenceUI
+```
+
+**8080 を外す**（Native 本線確定後）:
+
+```powershell
+.\scripts\stop-webui-ma-home.ps1
+.\scripts\install-webui-task.ps1 -Uninstall
+.\scripts\post-logon-smoke.ps1   # :8080 なしで PASS するはず
 ```
 
 **再起動後チェック**（`post-logon-smoke.ps1` 一発）:
@@ -87,7 +96,7 @@ Start-ScheduledTask -TaskName EmbodiedClaude-PresenceUI
 .\scripts\post-logon-smoke.ps1
 ```
 
-- [x] **B1b** 再起動後 `post-logon-smoke.ps1` — 2026-06-14 まー確認: Task×4 + 18900/8080/8090 OK（:18901 は Claude 起動まで未起動で正常）
+- [x] **B1b** 再起動後 `post-logon-smoke.ps1` — Native 時 :8080 optional（2026-06-10 C9）
 
 **Watchdog（A2b+）** — 2分ごと。stdio kill **5分**（Task 常設）:
 
@@ -178,7 +187,7 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 | 中 | **C6 Markdown 表示** | チャットログの読みやすさ |
 | 中 | **C7 画面構成・レイアウト** | 視界・ステータス・チャットの調整 |
 | 低 | **C8 デバッグ注入の非表示** | `gateway_turn_context` / `vision_prefetch` をユーザーに見せない |
-| 後回し | **C9 8080 Task optional 化** | `EmbodiedClaude-WebUI` を外せるように（smoke 更新） |
+| 後回し | **C9 8080 optional 化** | smoke / verify-mission-a を Native 対応。WebUI Task 外せる |
 
 - [x] **C1** Native PoC 試験 — [docs/c1-native-poc.md](./c1-native-poc.md)（部分採用）
 - [x] **C2** twicc 見送り — [docs/c2-twicc-decision.md](./c2-twicc-decision.md)
@@ -189,7 +198,7 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 - [x] **C6** Markdown 表示（marked + DOMPurify、`static/vendor/` 同梱）
 - [ ] **C7** 画面構成・レイアウト
 - [x] **C8** デバッグ注入の非表示（既定 OFF・会話ヘッダ右下「注入」トグルで表示切替）
-- [ ] **C9** 8080 依存の緩和（運用・smoke）
+- [x] **C9** 8080 optional 化（`post-logon-smoke` / `verify-mission-a` Native 経路、`install-webui-task` 任意明記）
 
 **実装順**: C0 → C3 → C4 → C5 → C6/C7/C8 → C9
 

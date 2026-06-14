@@ -1,5 +1,10 @@
 # Register or remove a logon Scheduled Task that keeps claude-code-webui running.
 #
+# OPTIONAL on ma-home when PRESENCE_NATIVE_CHAT=1 (Native chat on :8090).
+# To turn off:
+#   .\scripts\stop-webui-ma-home.ps1
+#   .\scripts\install-webui-task.ps1 -Uninstall
+#
 # Install (run once, elevated not required for per-user task):
 #   cd C:\Users\ma\src\embodied-claude
 #   .\scripts\install-webui-task.ps1

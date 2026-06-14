@@ -69,6 +69,21 @@ Write-Host "  starts: at logon ($env:USERNAME)"
 Write-Host "  repo:   $Repo"
 Write-Host "  log:    $env:USERPROFILE\.config\embodied-claude\logs\presence-ui.log"
 Write-Host ""
+
+# C0: ma-home default — Native chat on first install (no restart here).
+$LocalEnvFile = Join-Path $env:USERPROFILE ".config\embodied-claude\presence-ui.local.env"
+if (-not (Test-Path $LocalEnvFile)) {
+    $Dir = Split-Path $LocalEnvFile -Parent
+    New-Item -ItemType Directory -Force -Path $Dir | Out-Null
+    @(
+        "# presence-ui optional flags (loaded by run-presence-ui-worker.ps1)"
+        "PRESENCE_NATIVE_CHAT=1"
+        "# PRESENCE_CCS_PASSWORD=koyori-poc"
+    ) | Set-Content -Path $LocalEnvFile -Encoding UTF8
+    Write-Host "Created $LocalEnvFile (PRESENCE_NATIVE_CHAT=1)"
+}
+
+Write-Host ""
 Write-Host "Start now:"
 Write-Host "  .\scripts\run-presence-ui.ps1"
 Write-Host ""

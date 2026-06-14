@@ -11,7 +11,8 @@ from presence_ui.main import create_app
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    monkeypatch.delenv("PRESENCE_NATIVE_CHAT", raising=False)
     return TestClient(create_app())
 
 
@@ -20,6 +21,25 @@ def test_health_reports_gateway_mode(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["details"]["mode"] == "gateway"
+
+
+def test_ui_config_reports_proxy_backend(client: TestClient) -> None:
+    response = client.get("/api/v1/ui-config")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["chat_backend"] == "proxy8080"
+    assert body["native_chat"] is False
+
+
+def test_ui_config_reports_native_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PRESENCE_NATIVE_CHAT", "1")
+    client = TestClient(create_app())
+    response = client.get("/api/v1/ui-config")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["chat_backend"] == "native"
+    assert body["native_chat"] is True
+    assert body["native_chat_path"] == "/api/native/chat"
 
 
 def test_legacy_webui_project_path_redirects_to_root(client: TestClient) -> None:

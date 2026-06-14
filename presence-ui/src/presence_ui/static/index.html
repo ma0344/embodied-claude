@@ -38,6 +38,8 @@
             <label class="session-label" for="history-select">セッション</label>
             <select id="history-select" class="session-select" aria-label="Claude Code セッション"></select>
             <button type="button" id="session-reload" class="session-import" title="履歴を再読み込み">再読込</button>
+            <button type="button" id="session-new" class="session-import" hidden title="新しい会話を始める">新しい会話</button>
+            <button type="button" id="chat-cancel" class="session-import" hidden title="送信中の応答を止める">止める</button>
           </div>
         </div>
         <span class="chat-hint" id="chat-hint"></span>
@@ -71,6 +73,6 @@
 
   <script src="/static/cc-messages.js?v=20260612-sendfix"></script>
   <script src="/static/koyori-voice.js?v=20260612-sendfix"></script>
-  <script src="/static/app.js?v=20260610-progress"></script>
+  <script src="/static/app.js?v=20260610-native"></script>
 </body>
 </html>

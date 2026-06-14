@@ -1,7 +1,7 @@
 # ma-home / koyori バックログ
 
-**最終更新**: 2026-06-14（本体 → 様子見、UI ブラッシュアップへ）  
-**方針**: こより本体（記憶・MCP・compose）は **実戦確認フェーズ**。部屋（8090 UI）のブラッシュアップを次の主作業にする。
+**最終更新**: 2026-06-10（UI → Native 本線へ移行）  
+**方針**: こより本体（記憶・gateway 身体）は **様子見**。部屋 UI は **Native 会話エンジン + `/` の殻** を育てる（8080 プロキシ UI は投資しない）。
 
 **実行方針（合意 2026-06-14）**: 判断は compose/plan/stores のまま。**身体・自律の実行**は MCP に頼らず gateway 直実行へ（remember 直実行と同型）。詳細 → [gateway-direct-actions.md](./gateway-direct-actions.md)
 
@@ -16,7 +16,7 @@
 | **D** | Backlog 最新化 | このファイルを現実に合わせる | **完了** |
 | **B** | 運用自動化 | ログオン常駐・手起動を減らす | **ほぼ完了**（B2 LM Studio 手動のみ） |
 | **A** | 記憶・魂・gateway 身体 | 本体 E2E + A3 直実行 | **様子見**（自動 PASS + 実戦 spot check 継続） |
-| **C** | **部屋 UI ブラッシュアップ** | 8090 Surface・操作性 | **次の主作業** |
+| **C** | **部屋 UI（Native 本線）** | `/` 殻 + `/api/native/chat`、8080 脱却 | **次の主作業** |
 
 **フェーズ判断（2026-06-14）**: 記憶 compose / vision prefetch / open loop dismiss / desire 注入は **8090 で実戦 OK**。大きな本体機能追加は止め、日常利用＋`verify-mission-a.ps1` で様子を見る。**TTS（`tts-mcp/.env`）は後回し**。
 
@@ -31,7 +31,7 @@
 | **記憶インフラ** | HTTP daemon `:18900` 常駐。compose recall・gateway remember **OK** |
 | **Gateway `:8090`** | compose/plan + KV 安定注入。**身体は gateway 直実行済み**（see / observe / reflect / autonomous-tick）。vision prefetch + remember **実戦 OK**（窓・デスク・ダイニング） |
 | **関係性** | open loop dismiss + commitment cancel。「覚えてる？」recall 誤 loop 抑制 |
-| **表面 UI** | 本番は 8090 → 8080 プロキシ。**ブラッシュアップフェーズへ** |
+| **表面 UI** | **`/` 殻は維持**。会話エンジンを **Native**（`/api/native/chat`）へ移行中。8080 は段階的に外す |
 | **運用** | Task×4（memory / webui / presence / watchdog）+ post-logon-smoke **OK** |
 
 参照: [gateway-direct-actions.md](./gateway-direct-actions.md)、[mission-A_Investigation-Report.md](./mission-A_Investigation-Report.md)
@@ -63,10 +63,10 @@
 | サービス | ポート | Scheduled Task | スクリプト | ログ |
 |---------|--------|----------------|-----------|------|
 | memory HTTP daemon | 18900 | `EmbodiedClaude-MemoryHTTP` | `install-memory-daemon-task.ps1` | `%USERPROFILE%\.config\embodied-claude\logs\memory-daemon.log` |
-| Claude Code Web UI | 8080 | `EmbodiedClaude-WebUI` | `install-webui-task.ps1` | `...\webui.log` |
+| Claude Code Web UI | 8080 | `EmbodiedClaude-WebUI` | `install-webui-task.ps1` | `...\webui.log` | **C9 まで任意**（Native 会話は不要） |
 | presence-ui | 8090 | `EmbodiedClaude-PresenceUI` | `install-presence-ui-task.ps1` | `...\presence-ui.log` |
 
-**推奨登録順**（memory → webui → presence-ui。8090 は 8080 依存）:
+**推奨登録順**（memory → presence-ui。Native 本線では **8080 は任意**）:
 
 ```powershell
 cd C:\Users\ma\src\embodied-claude
@@ -154,37 +154,50 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 
 ---
 
-## C — 部屋 UI ブラッシュアップ（**次の主作業**）
+## C — 部屋 UI（**Native 本線** — 次の主作業）
 
-本体は様子見。8090 の見た目・操作性を上げる。8080 プロキシ脱却はまだ急がない。
+**方針変更（合意 2026-06-10）**
 
-| 優先 | 項目 | メモ |
-|------|------|------|
-| 高 | **セッション削除 UI** | API 済み。サイドバー + 確認ダイアログ（CSS のみ → JS 未配線） |
-| 高 | **プロンプトキャンセル** | `POST /api/abort/{id}` 転送済み → ボタン未配線 |
-| 中 | **Markdown 表示** | チャットログの読みやすさ |
-| 中 | **画面構成** | 視界フィード・ステータス・チャットのレイアウト |
-| 低 | **gateway_turn_context の本番非表示** | デバッグ用注入がユーザーに見えないように（要設定 or 折りたたみ） |
-| 保留 | Native PoC / 8080 バイパス | C1 試済み。本番切替は不要 |
+- **会話エンジン** = Native（`claude-code-server` → `/api/native/chat`）。8080 Node 層は段階的に外す
+- **本番 URL** = これまでどおり `http://localhost:8090/`（視界・ステータス・レイアウトはこの殻を維持）
+- **`poc-native.html`** = API 試験用のまま（本番見た目は `/` で作る）
+- **やらない** = 8080 前提の UI 投資（プロジェクト/履歴プロキシ、`/api/abort` 転送の配線、8080 セッション削除 UI）
 
 | 経路 | URL / 条件 | 用途 |
 |------|-----------|------|
-| こよりの部屋（本番） | `http://localhost:8090/` | compose + 8080 プロキシ |
-| Native PoC | `PRESENCE_NATIVE_CHAT=1` → `/poc/native` | 探索用（本番未採用） |
+| こよりの部屋（本番） | `http://localhost:8090/` | Native 会話 + gateway（視界・status は 8090 独自） |
+| Native 試験 | `PRESENCE_NATIVE_CHAT=1` → `/poc/native` | 最小 SSE テスタ（開発用） |
+| レガシー | `POST /api/chat` → 8080 | **メンテのみ**。新機能は載せない |
 
-- [x] **C1** Native PoC — [docs/c1-native-poc.md](./c1-native-poc.md)
+| 優先 | 項目 | メモ |
+|------|------|------|
+| 高 | **C0 Native 既定 ON** | ma-home は `PRESENCE_NATIVE_CHAT=1` を install 時に書く |
+| 高 | **C3 `/` チャット Native 化** | `app.js` → SSE `/api/native/chat`（8080 `/api/chat` を使わない） |
+| 高 | **C4 セッション UI 再設計** | 8080 project/history 廃止 → `session_id` + 「新しい会話」 |
+| 中 | **C5 キャンセル UI** | `AbortController`（poc-native パターンを `/` に） |
+| 中 | **C6 Markdown 表示** | チャットログの読みやすさ |
+| 中 | **C7 画面構成・レイアウト** | 視界・ステータス・チャットの調整 |
+| 低 | **C8 デバッグ注入の非表示** | `gateway_turn_context` / `vision_prefetch` をユーザーに見せない |
+| 後回し | **C9 8080 Task optional 化** | `EmbodiedClaude-WebUI` を外せるように（smoke 更新） |
+
+- [x] **C1** Native PoC 試験 — [docs/c1-native-poc.md](./c1-native-poc.md)（部分採用）
 - [x] **C2** twicc 見送り — [docs/c2-twicc-decision.md](./c2-twicc-decision.md)
-- [ ] **C3 セッション削除 UI**
-- [ ] **C4 プロンプトキャンセル UI**
-- [ ] **C5 Markdown 表示**
-- [ ] **C6 画面構成・レイアウト**
-- [ ] **C7 デバッグ注入の非表示**（`gateway_turn_context` / `vision_prefetch` がチャットに出ない）
+- [x] **C0** Native 既定 ON（`install-presence-ui-task.ps1` が初回 `presence-ui.local.env` を作成）
+- [x] **C3** `/` チャット層 Native 化（`ui-config` + `app.js` SSE `/api/native/chat`）
+- [ ] **C4** セッション UI 再設計（「新しい会話」ボタン済み。履歴表示・一覧は未）
+- [ ] **C5** キャンセル UI（「止める」ボタン済み。送信中のみ有効）
+- [ ] **C6** Markdown 表示
+- [ ] **C7** 画面構成・レイアウト
+- [ ] **C8** デバッグ注入の非表示
+- [ ] **C9** 8080 依存の緩和（運用・smoke）
+
+**実装順**: C0 → C3 → C4 → C5 → C6/C7/C8 → C9
 
 ---
 
-## Web UI / Surface（C3–C7 に統合）
+## Web UI / Surface（C3–C8 に統合）
 
-旧「低優先」項目は上記 **C — 部屋 UI ブラッシュアップ** へ移した。
+旧 8080 前提の「セッション削除 UI」等は **C4/C5（Native セッション）** へ置き換え。
 
 ---
 

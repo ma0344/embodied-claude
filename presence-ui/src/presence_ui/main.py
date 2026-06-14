@@ -76,6 +76,19 @@ def create_app() -> FastAPI:
             },
         )
 
+    @app.get("/api/v1/ui-config")
+    def ui_config() -> JSONResponse:
+        """Frontend routing: native SSE vs legacy 8080 proxy chat."""
+        return utf8_json(
+            {
+                "chat_backend": "native" if native_chat else "proxy8080",
+                "native_chat": native_chat,
+                "native_login_path": "/api/native/login" if native_chat else None,
+                "native_chat_path": "/api/native/chat" if native_chat else None,
+                "legacy_chat_path": "/api/chat",
+            },
+        )
+
     if native_chat:
         from presence_ui.gateway.ccs_integration import mount_claude_code_server_router
 

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>こよりの部屋</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260610-md-persist" />
+  <link rel="stylesheet" href="/static/style.css?v=20260610-c7-layout" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500&family=Cormorant+Garamond:wght@400;500&display=swap" rel="stylesheet" />
@@ -22,13 +22,14 @@
       </div>
     </header>
 
-    <section class="panel status-room" aria-label="こよりの状態">
-      <div id="status-content" class="status-grid">
-        <p class="placeholder">読み込み中…</p>
-      </div>
-    </section>
+    <div class="room-body">
+      <section class="panel status-room" aria-label="こよりの状態">
+        <div id="status-content" class="status-grid">
+          <p class="placeholder">読み込み中…</p>
+        </div>
+      </section>
 
-    <section class="panel chat-room" aria-label="会話">
+      <section class="panel chat-room" aria-label="会話">
       <div class="chat-header">
         <div class="chat-header-main">
           <h2>会話</h2>
@@ -76,6 +77,7 @@
         <p class="placeholder">カメラを読み込み中…</p>
       </div>
     </section>
+    </div>
   </div>
 
   <script src="/static/vendor/marked.min.js"></script>
@@ -83,6 +85,6 @@
   <script src="/static/chat-markdown.js?v=20260610-md-both"></script>
   <script src="/static/cc-messages.js?v=20260610-md-persist"></script>
   <script src="/static/koyori-voice.js?v=20260612-sendfix"></script>
-  <script src="/static/app.js?v=20260610-md-persist"></script>
+  <script src="/static/app.js?v=20260610-c7-layout"></script>
 </body>
 </html>

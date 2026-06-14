@@ -16,6 +16,7 @@
   --radius: 14px;
   --chat-height: clamp(220px, 38vh, 420px);
   --visual-height: clamp(160px, 22vh, 260px);
+  --aside-width: clamp(280px, 34vw, 420px);
   font-size: 16px;
 }
 
@@ -44,9 +45,39 @@ body {
   margin: 0 auto;
   padding: 0.85rem 1.1rem 1rem;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) var(--visual-height);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 0.7rem;
   overflow: hidden;
+}
+
+.room-body {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) var(--visual-height);
+  gap: 0.7rem;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.room--kiosk {
+  max-width: none;
+  padding: 0.55rem 0.65rem 0.65rem;
+  gap: 0.55rem;
+}
+
+.room--kiosk .room-body {
+  gap: 0.55rem;
+}
+
+.room--kiosk .subtitle {
+  display: none;
+}
+
+.room--kiosk .top-bar {
+  padding-bottom: 0.35rem;
+}
+
+.room--kiosk .brand h1 {
+  font-size: 1.55rem;
 }
 
 .top-bar {
@@ -806,6 +837,88 @@ body {
   animation: fadeIn 0.5s ease;
 }
 
+/* C7: wide / kiosk — chat primary left, vision + status right */
+@media (min-width: 900px) {
+  .room-body {
+    grid-template-columns: minmax(0, 1fr) var(--aside-width);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "chat visual"
+      "chat status";
+  }
+
+  .chat-room {
+    grid-area: chat;
+  }
+
+  .visual-room {
+    grid-area: visual;
+    min-height: 0;
+    --visual-height: auto;
+  }
+
+  .visual-room h2 {
+    flex-shrink: 0;
+  }
+
+  .visual-feed {
+    min-height: 0;
+  }
+
+  .visual-feed img {
+    max-height: none;
+    object-fit: contain;
+    background: #1a1814;
+  }
+
+  .status-room {
+    grid-area: status;
+  }
+
+  .status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .status-card {
+    min-height: 4.25rem;
+  }
+}
+
+.room--kiosk .debug-injection-toggle {
+  opacity: 0.45;
+  font-size: 0.58rem;
+}
+
+.room--kiosk .desire-lines,
+.room--kiosk .journey-list {
+  display: none;
+}
+
+.room--kiosk .status-card__body {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.room--kiosk .chat-input {
+  font-size: 1rem;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.85rem;
+}
+
+.room--kiosk .chat-send {
+  min-width: 4.5rem;
+  min-height: 2.75rem;
+  font-size: 0.92rem;
+}
+
+.room--kiosk .session-select,
+.room--kiosk .session-import {
+  min-height: 2.25rem;
+  font-size: 0.85rem;
+}
+
 .placeholder,
 .error {
   color: var(--text-muted);
@@ -851,7 +964,7 @@ body {
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 899px) {
   .status-grid {
     grid-template-columns: repeat(2, 1fr);
   }

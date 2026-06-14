@@ -26,6 +26,8 @@ cd C:\Users\ma\src\embodied-claude
 **Native chat**（`PRESENCE_NATIVE_CHAT=1`、install-presence-ui-task 初回作成）では **`:8080` webui 不要**。  
 レガシー proxy モードのみ `claude-code-webui` `:8080` が先に必要。
 
+**レイアウト（C7）**: 幅 900px 以上または `?kiosk=1` で会話｜視界+状態の2カラム。キオスクは `?kiosk=0` で旧縦積みに戻せる。
+
 環境変数:
 
 | 変数 | 既定 | 説明 |

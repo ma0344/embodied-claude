@@ -9,6 +9,7 @@ const NATIVE_SESSIONS_INDEX_KEY = "koyori-native-sessions-v1";
 const NATIVE_MESSAGES_KEY_PREFIX = "koyori-native-msgs-v1:";
 const NATIVE_MAX_SESSIONS = 40;
 const SHOW_DEBUG_INJECTION_KEY = "koyori-show-debug-injection";
+const KIOSK_LAYOUT_STORAGE_KEY = "koyori-kiosk-layout";
 
 let chatPinnedToBottom = true;
 let chatMessages = [];
@@ -1457,6 +1458,26 @@ async function refreshAll() {
   void refreshCamera();
 }
 
+function setupKioskLayout() {
+  const room = document.querySelector(".room");
+  if (!room) return;
+  const params = new URLSearchParams(location.search);
+  if (params.get("kiosk") === "1") {
+    room.classList.add("room--kiosk");
+    localStorage.setItem(KIOSK_LAYOUT_STORAGE_KEY, "1");
+    return;
+  }
+  if (params.get("kiosk") === "0") {
+    room.classList.remove("room--kiosk");
+    localStorage.removeItem(KIOSK_LAYOUT_STORAGE_KEY);
+    return;
+  }
+  if (localStorage.getItem(KIOSK_LAYOUT_STORAGE_KEY) === "1") {
+    room.classList.add("room--kiosk");
+  }
+}
+
+setupKioskLayout();
 setupChatScroll();
 setupChatCompose();
 setupDebugInjectionToggle();

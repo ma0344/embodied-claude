@@ -21,6 +21,8 @@ sudo ./install-koyori-kiosk.sh
 
 `http://ma-home.local:8090/`（`/projects/...` は 8080 用。8090 だと JSON 404 画面になる）
 
+キオスク起動時は `koyori-kiosk.sh` が自動で **`?kiosk=1`** を付与（C7: 会話左・視界右の2カラム、状態は右下コンパクト）。手動確認: `http://ma-home.local:8090/?kiosk=1`
+
 ## Input Leap — 見送り
 
 tar.gz インストール・接続がうまくいかず諦め。コードは残す（`koyori-input-leap-start.sh`）。

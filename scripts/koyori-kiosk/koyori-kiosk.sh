@@ -49,6 +49,15 @@ fi
 # presence-ui root (/) — NOT /projects/... (8080 SPA path; 8090 returns JSON 404 in Firefox)
 WEBUI_URL="${KOYORI_WEBUI_URL:-http://ma-home.local:8090/}"
 
+# C7: kiosk layout (?kiosk=1 → chat + vision side-by-side, compact status)
+if [[ "$WEBUI_URL" != *kiosk=* ]]; then
+  if [[ "$WEBUI_URL" == *\?* ]]; then
+    WEBUI_URL="${WEBUI_URL}&kiosk=1"
+  else
+    WEBUI_URL="${WEBUI_URL%/}?kiosk=1"
+  fi
+fi
+
 # Prefer IPv4 literal in /etc/default/koyori-kiosk if ma-home.local resolves to IPv6
 # but presence-ui listens on IPv4 only (typical: 0.0.0.0:8090).
 # Example: KOYORI_WEBUI_URL='http://192.168.10.50:8090/'

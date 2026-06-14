@@ -16,7 +16,7 @@
 | **D** | Backlog 最新化 | このファイルを現実に合わせる | **完了** |
 | **B** | 運用自動化 | ログオン常駐・手起動を減らす | **ほぼ完了**（B2 LM Studio 手動のみ） |
 | **A** | 記憶・魂・gateway 身体 | 本体 E2E + A3 直実行 | **様子見**（自動 PASS + 実戦 spot check 継続） |
-| **C** | **部屋 UI（Native 本線）** | `/` 殻 + `/api/native/chat`、8080 脱却 | **C7 レイアウト** |
+| **C** | **部屋 UI（Native 本線）** | `/` 殻 + `/api/native/chat`、8080 脱却 | **C7 完了 → キオスク実機確認** |
 
 **フェーズ判断（2026-06-14）**: 記憶 compose / vision prefetch / open loop dismiss / desire 注入は **8090 で実戦 OK**。大きな本体機能追加は止め、日常利用＋`verify-mission-a.ps1` で様子を見る。**TTS（`tts-mcp/.env`）は後回し**。
 
@@ -196,7 +196,7 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 - [x] **C4** セッション UI 再設計（localStorage 履歴・一覧・削除。8080 ワンショット取込 **完了** → UI 撤去）
 - [x] **C5** キャンセル UI（「止める」ボタン + AbortController）
 - [x] **C6** Markdown 表示（marked + DOMPurify、`static/vendor/` 同梱）
-- [ ] **C7** 画面構成・レイアウト
+- [x] **C7** 画面構成・レイアウト（900px+ 2カラム: 会話｜視界+状態、`?kiosk=1`、キオスク URL 自動付与）
 - [x] **C8** デバッグ注入の非表示（既定 OFF・会話ヘッダ右下「注入」トグルで表示切替）
 - [x] **C9** 8080 optional 化（`post-logon-smoke` / `verify-mission-a` Native 経路、`install-webui-task` 任意明記）
 

@@ -31,7 +31,7 @@
 | **記憶インフラ** | HTTP daemon `:18900` 常駐。compose recall・gateway remember **OK** |
 | **Gateway `:8090`** | compose/plan + KV 安定注入。**身体は gateway 直実行済み**（see / observe / reflect / autonomous-tick）。vision prefetch + remember **実戦 OK**（窓・デスク・ダイニング） |
 | **関係性** | open loop dismiss + commitment cancel。「覚えてる？」recall 誤 loop 抑制 |
-| **表面 UI** | **`/` 殻は維持**。会話エンジンを **Native**（`/api/native/chat`）へ移行中。8080 は段階的に外す |
+| **表面 UI** | **Native 本線**（localStorage 会話・8080 取込 **完了 2026-06**） |
 | **運用** | Task×4（memory / webui / presence / watchdog）+ post-logon-smoke **OK** |
 
 参照: [gateway-direct-actions.md](./gateway-direct-actions.md)、[mission-A_Investigation-Report.md](./mission-A_Investigation-Report.md)
@@ -184,8 +184,8 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 - [x] **C2** twicc 見送り — [docs/c2-twicc-decision.md](./c2-twicc-decision.md)
 - [x] **C0** Native 既定 ON（`install-presence-ui-task.ps1` が初回 `presence-ui.local.env` を作成）
 - [x] **C3** `/` チャット層 Native 化（`ui-config` + `app.js` SSE `/api/native/chat`）
-- [ ] **C4** セッション UI 再設計（「新しい会話」ボタン済み。履歴表示・一覧は未）
-- [ ] **C5** キャンセル UI（「止める」ボタン済み。送信中のみ有効）
+- [x] **C4** セッション UI 再設計（localStorage 履歴・一覧・削除。8080 ワンショット取込 **完了** → UI 撤去）
+- [x] **C5** キャンセル UI（「止める」ボタン + AbortController）
 - [ ] **C6** Markdown 表示
 - [ ] **C7** 画面構成・レイアウト
 - [ ] **C8** デバッグ注入の非表示

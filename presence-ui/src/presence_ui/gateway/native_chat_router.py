@@ -70,6 +70,8 @@ async def _stream_agent_chat(
     prompt = str(enriched.get("message") or req.prompt).strip()
     sid = req.session_id or str(uuid.uuid4())
     is_new = req.session_id is None or req.session_id not in _CLAUDE_SESSION_IDS
+    # Tell the browser the session id immediately (CLI init can arrive much later).
+    yield _sse("session", {"session_id": sid, "claude_session": True})
     agent = ClaudeAgent()
     try:
         async for event in agent.chat(

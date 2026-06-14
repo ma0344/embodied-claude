@@ -5,6 +5,9 @@ const CHAT_SEND_TIMEOUT_MS = 180_000;
 const PROJECT_STORAGE_KEY = "koyori-cc-encoded-project";
 const SESSION_STORAGE_KEY = "koyori-cc-session-id";
 const NATIVE_TOKEN_STORAGE_KEY = "koyori-native-token";
+const NATIVE_SESSIONS_INDEX_KEY = "koyori-native-sessions-v1";
+const NATIVE_MESSAGES_KEY_PREFIX = "koyori-native-msgs-v1:";
+const NATIVE_MAX_SESSIONS = 40;
 
 let chatPinnedToBottom = true;
 let chatMessages = [];
@@ -23,6 +26,7 @@ let sendStartedAt = 0;
 let sendTimeoutId = null;
 let uiConfig = { chat_backend: "proxy8080", native_chat: false };
 let nativeAuthToken = sessionStorage.getItem(NATIVE_TOKEN_STORAGE_KEY) || "";
+let nativeSessionList = [];
 
 function isNativeChat() {
   return uiConfig.chat_backend === "native" || uiConfig.native_chat === true;
@@ -50,7 +54,9 @@ async function ensureNativeLogin() {
     body: JSON.stringify({ password: nativePassword() }),
   });
   if (!res.ok) {
-    throw new Error(`native login → ${res.status}`);
+    throw new Error(
+      `native login → ${res.status}（パスワードが違うかも。?pw= で PRESENCE_CCS_PASSWORD を指定）`,
+    );
   }
   const data = await res.json();
   nativeAuthToken = data.token || "";
@@ -59,17 +65,220 @@ async function ensureNativeLogin() {
   }
 }
 
+function clearNativeAuthToken() {
+  nativeAuthToken = "";
+  sessionStorage.removeItem(NATIVE_TOKEN_STORAGE_KEY);
+}
+
+async function validateNativeAuthToken() {
+  if (!nativeAuthToken) return;
+  try {
+    const res = await fetch("/api/native/auth/check", {
+      headers: { Authorization: `Bearer ${nativeAuthToken}` },
+    });
+    if (!res.ok) clearNativeAuthToken();
+  } catch {
+    // presence-ui unreachable — keep token; send path will surface errors
+  }
+}
+
+async function postNativeChatRequest(payload, signal) {
+  const url = uiConfig.native_chat_path || "/api/native/chat";
+  const headers = () => ({
+    "Content-Type": "application/json; charset=utf-8",
+    Authorization: `Bearer ${nativeAuthToken}`,
+  });
+
+  await ensureNativeLogin();
+  let response = await fetch(url, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(payload),
+    signal,
+  });
+  if (response.status === 401) {
+    clearNativeAuthToken();
+    await ensureNativeLogin();
+    response = await fetch(url, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify(payload),
+      signal,
+    });
+  }
+  return response;
+}
+
 function applyNativeSessionUi() {
   const bar = document.querySelector(".session-bar");
   if (bar) {
-    bar.querySelectorAll("label, #project-select, #history-select, #session-reload").forEach((el) => {
+    bar.querySelectorAll("label[for='project-select'], #project-select, #session-reload").forEach((el) => {
       el.hidden = true;
     });
   }
+  const historyLabel = document.querySelector("label[for='history-select']");
+  if (historyLabel) {
+    historyLabel.hidden = false;
+    historyLabel.textContent = "会話";
+  }
+  const historySelect = document.getElementById("history-select");
+  if (historySelect) historySelect.hidden = false;
   const newBtn = document.getElementById("session-new");
+  const deleteBtn = document.getElementById("session-delete");
   const cancelBtn = document.getElementById("chat-cancel");
   if (newBtn) newBtn.hidden = false;
+  if (deleteBtn) deleteBtn.hidden = false;
   if (cancelBtn) cancelBtn.hidden = false;
+}
+
+function loadNativeSessionIndex() {
+  try {
+    const raw = localStorage.getItem(NATIVE_SESSIONS_INDEX_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveNativeSessionIndex() {
+  localStorage.setItem(NATIVE_SESSIONS_INDEX_KEY, JSON.stringify(nativeSessionList));
+}
+
+function loadNativeMessages(sessionId) {
+  if (!sessionId) return [];
+  try {
+    const raw = localStorage.getItem(`${NATIVE_MESSAGES_KEY_PREFIX}${sessionId}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function trimNativeSessionList() {
+  if (nativeSessionList.length <= NATIVE_MAX_SESSIONS) return;
+  const dropped = nativeSessionList.splice(NATIVE_MAX_SESSIONS);
+  for (const entry of dropped) {
+    localStorage.removeItem(`${NATIVE_MESSAGES_KEY_PREFIX}${entry.sessionId}`);
+  }
+}
+
+function touchNativeSessionMeta(sessionId) {
+  const entry = nativeSessionList.find((item) => item.sessionId === sessionId);
+  if (!entry) return;
+  entry.updatedAt = new Date().toISOString();
+  const last = [...chatMessages]
+    .reverse()
+    .find((msg) => !msg._pending && !msg._thinking && !msg._streaming && msg.message);
+  if (last?.message) {
+    entry.preview = String(last.message).slice(0, 48);
+    if (!entry.title || entry.title === entry.sessionId.slice(0, 8)) {
+      const firstUser = chatMessages.find((msg) => msg.sender === "ma" && msg.message);
+      if (firstUser?.message) {
+        entry.title = String(firstUser.message).slice(0, 24);
+      }
+    }
+  }
+  nativeSessionList.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  saveNativeSessionIndex();
+}
+
+function ensureNativeSessionRegistered(sessionId, userPreview) {
+  if (!sessionId) return;
+  const now = new Date().toISOString();
+  const preview = String(userPreview || "").trim().slice(0, 48);
+  let entry = nativeSessionList.find((item) => item.sessionId === sessionId);
+  if (!entry) {
+    entry = {
+      sessionId,
+      title: preview || sessionId.slice(0, 8),
+      preview,
+      updatedAt: now,
+      createdAt: now,
+    };
+    nativeSessionList.unshift(entry);
+  } else {
+    entry.updatedAt = now;
+    if (preview) {
+      entry.preview = preview;
+      if (!entry.title || entry.title === entry.sessionId.slice(0, 8)) {
+        entry.title = preview.slice(0, 24);
+      }
+    }
+  }
+  nativeSessionList.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  trimNativeSessionList();
+  saveNativeSessionIndex();
+  renderNativeSessionSwitcher();
+}
+
+function persistNativeChatMessages() {
+  if (!isNativeChat() || !activeSessionId) return;
+  const serializable = chatMessages
+    .filter((msg) => !msg._pending && !msg._thinking && !msg._streaming)
+    .map((msg) => ({
+      sender: msg.sender,
+      message: msg.message,
+      timestamp: msg.timestamp || new Date().toISOString(),
+    }));
+  try {
+    localStorage.setItem(
+      `${NATIVE_MESSAGES_KEY_PREFIX}${activeSessionId}`,
+      JSON.stringify(serializable),
+    );
+  } catch (err) {
+    console.warn("native session persist failed", err);
+  }
+  touchNativeSessionMeta(activeSessionId);
+  renderNativeSessionSwitcher();
+}
+
+function renderNativeSessionSwitcher() {
+  const select = document.getElementById("history-select");
+  if (!select) return;
+  if (!nativeSessionList.length) {
+    select.innerHTML = '<option value="">（まだ会話なし）</option>';
+    select.disabled = true;
+    return;
+  }
+  select.disabled = false;
+  select.innerHTML = nativeSessionList
+    .map((entry) => {
+      const when = formatTimestamp(entry.updatedAt || entry.createdAt);
+      const title = entry.title || entry.preview || entry.sessionId.slice(0, 8);
+      return `<option value="${escapeHtml(entry.sessionId)}"${
+        entry.sessionId === activeSessionId ? " selected" : ""
+      }>${escapeHtml(title)} · ${escapeHtml(when)}</option>`;
+    })
+    .join("");
+}
+
+async function selectNativeSession(sessionId, { force = false } = {}) {
+  if (!sessionId || (!force && sessionId === activeSessionId && !sendInProgress)) return;
+  activeSessionId = sessionId;
+  persistActiveSession();
+  renderNativeSessionSwitcher();
+  chatPinnedToBottom = true;
+  renderedMessageKeys = new Set();
+  applyChatMessages(loadNativeMessages(sessionId), { fullRebuild: true, forceScroll: true });
+}
+
+function deleteNativeSession() {
+  if (!activeSessionId) return;
+  if (!globalThis.confirm("この会話を端末から削除する？")) return;
+  const removedId = activeSessionId;
+  nativeSessionList = nativeSessionList.filter((item) => item.sessionId !== removedId);
+  saveNativeSessionIndex();
+  localStorage.removeItem(`${NATIVE_MESSAGES_KEY_PREFIX}${removedId}`);
+  if (nativeSessionList.length) {
+    void selectNativeSession(nativeSessionList[0].sessionId, { force: true });
+    return;
+  }
+  startNewNativeSession();
+  renderNativeSessionSwitcher();
 }
 
 function startNewNativeSession() {
@@ -79,19 +288,27 @@ function startNewNativeSession() {
   renderedMessageKeys = new Set();
   clearChatLog();
   showChatPlaceholder("新しい会話を始められる");
+  const select = document.getElementById("history-select");
+  if (select) select.value = "";
 }
 
 async function initNativeSessions() {
   applyNativeSessionUi();
+  await validateNativeAuthToken();
+  nativeSessionList = loadNativeSessionIndex();
+  rebuildNativeSessionIndexFromStorage();
   activeSessionId = localStorage.getItem(SESSION_STORAGE_KEY) || null;
   activeProjectEncoded = null;
   activeProjectPath = null;
-  chatMessages = [];
-  renderedMessageKeys = new Set();
-  clearChatLog();
-  if (activeSessionId) {
-    showChatPlaceholder("会話を続けられる（履歴はこの画面には出ない）");
+  renderNativeSessionSwitcher();
+  if (activeSessionId && nativeSessionList.some((item) => item.sessionId === activeSessionId)) {
+    await selectNativeSession(activeSessionId, { force: true });
+  } else if (nativeSessionList.length) {
+    await selectNativeSession(nativeSessionList[0].sessionId, { force: true });
   } else {
+    chatMessages = [];
+    renderedMessageKeys = new Set();
+    clearChatLog();
     showChatPlaceholder("まだ会話がありません");
   }
 }
@@ -101,10 +318,48 @@ function parseNativeSseBlock(block) {
   let evt = "message";
   let data = "";
   for (const line of lines) {
-    if (line.startsWith("event:")) evt = line.slice(6).trim();
-    if (line.startsWith("data:")) data = line.slice(5).trim();
+    const trimmed = line.trim();
+    if (trimmed.startsWith("event:")) evt = trimmed.slice(6).trim();
+    if (trimmed.startsWith("data:")) data = trimmed.slice(5).trim();
   }
   return { evt, data };
+}
+
+function rebuildNativeSessionIndexFromStorage() {
+  const known = new Set(nativeSessionList.map((item) => item.sessionId));
+  let added = false;
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (!key?.startsWith(NATIVE_MESSAGES_KEY_PREFIX)) continue;
+    const sessionId = key.slice(NATIVE_MESSAGES_KEY_PREFIX.length);
+    if (!sessionId || known.has(sessionId)) continue;
+    const msgs = loadNativeMessages(sessionId);
+    if (!msgs.length) continue;
+    const firstUser = msgs.find((msg) => msg.sender === "ma");
+    const last = msgs[msgs.length - 1];
+    nativeSessionList.push({
+      sessionId,
+      title: String(firstUser?.message || sessionId.slice(0, 8)).slice(0, 24),
+      preview: String(last?.message || "").slice(0, 48),
+      updatedAt: last?.timestamp || new Date().toISOString(),
+      createdAt: msgs[0]?.timestamp || new Date().toISOString(),
+    });
+    known.add(sessionId);
+    added = true;
+  }
+  if (added) {
+    nativeSessionList.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    trimNativeSessionList();
+    saveNativeSessionIndex();
+  }
+}
+
+function applyNativeSessionEvent(payload, userPreview) {
+  if (!payload?.session_id || payload.claude_session === false) return;
+  activeSessionId = payload.session_id;
+  persistActiveSession();
+  ensureNativeSessionRegistered(activeSessionId, userPreview);
+  persistNativeChatMessages();
 }
 
 function appendAssistantMessage(text) {
@@ -118,6 +373,7 @@ function appendAssistantMessage(text) {
   chatMessages = [...chatMessages, msg];
   appendMessagesToDom([msg], { animate: true });
   if (chatPinnedToBottom) scrollChatToBottom();
+  if (isNativeChat()) persistNativeChatMessages();
 }
 
 function formatTime(date) {
@@ -367,7 +623,11 @@ function setupSessionSwitcher() {
   }
   if (historySelect) {
     historySelect.addEventListener("change", () => {
-      void selectSession(historySelect.value, { force: true });
+      if (isNativeChat()) {
+        void selectNativeSession(historySelect.value, { force: true });
+      } else {
+        void selectSession(historySelect.value, { force: true });
+      }
     });
   }
   if (reloadButton) {
@@ -380,6 +640,13 @@ function setupSessionSwitcher() {
     newButton.addEventListener("click", () => {
       if (!isNativeChat()) return;
       startNewNativeSession();
+    });
+  }
+  const deleteButton = document.getElementById("session-delete");
+  if (deleteButton) {
+    deleteButton.addEventListener("click", () => {
+      if (!isNativeChat()) return;
+      deleteNativeSession();
     });
   }
   const cancelButton = document.getElementById("chat-cancel");
@@ -688,8 +955,6 @@ function forceResetComposeIfStuck() {
 }
 
 async function sendChatMessageNative(trimmed) {
-  await ensureNativeLogin();
-
   const optimistic = {
     sender: "ma",
     message: trimmed,
@@ -700,6 +965,10 @@ async function sendChatMessageNative(trimmed) {
   appendMessagesToDom([optimistic], { animate: true });
   if (chatPinnedToBottom) scrollChatToBottom();
   setChatThinking(true, "送ってる…");
+  if (activeSessionId) {
+    ensureNativeSessionRegistered(activeSessionId, trimmed);
+    persistNativeChatMessages();
+  }
 
   sendStartedAt = Date.now();
   activeStreamController = new AbortController();
@@ -708,23 +977,16 @@ async function sendChatMessageNative(trimmed) {
   }, CHAT_SEND_TIMEOUT_MS);
   setChatSendHint("返事を待ってる…");
 
-  const response = await fetch(uiConfig.native_chat_path || "/api/native/chat", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      Authorization: `Bearer ${nativeAuthToken}`,
-    },
-    body: JSON.stringify({
+  const response = await postNativeChatRequest(
+    {
       prompt: trimmed,
       session_id: activeSessionId || undefined,
-    }),
-    signal: activeStreamController.signal,
-  });
+    },
+    activeStreamController.signal,
+  );
 
   if (response.status === 401) {
-    nativeAuthToken = "";
-    sessionStorage.removeItem(NATIVE_TOKEN_STORAGE_KEY);
-    throw new Error("native login expired — reload and try again");
+    throw new Error("native login に失敗した。?pw= でパスワードを確認してね");
   }
   if (!response.ok) {
     throw new Error(`${uiConfig.native_chat_path || "/api/native/chat"} → ${response.status}`);
@@ -746,11 +1008,7 @@ async function sendChatMessageNative(trimmed) {
       const { evt, data } = parseNativeSseBlock(block);
       if (evt === "session" && data) {
         try {
-          const payload = JSON.parse(data);
-          if (payload.claude_session !== false && payload.session_id) {
-            activeSessionId = payload.session_id;
-            persistActiveSession();
-          }
+          applyNativeSessionEvent(JSON.parse(data), trimmed);
         } catch {
           // ignore malformed session event
         }
@@ -802,6 +1060,8 @@ async function sendChatMessageNative(trimmed) {
 
   if (assistantDraft.trim()) {
     appendAssistantMessage(assistantDraft);
+  } else {
+    persistNativeChatMessages();
   }
 
   await refreshStatus();

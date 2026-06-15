@@ -90,6 +90,50 @@ def test_fetch_native_session_messages(claude_workspace: tuple[Path, str]) -> No
     assert fetch_native_session_messages("missing-session-id") is None
 
 
+def test_list_native_sessions_strips_injected_title(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project_path = str(tmp_path / "embodied-claude")
+    claude_home = tmp_path / ".claude"
+    encoded = _encode_project_path(project_path)
+    project_dir = claude_home / "projects" / encoded
+    project_dir.mkdir(parents=True)
+    session_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    jsonl_path = project_dir / f"{session_id}.jsonl"
+    jsonl_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "user",
+                        "timestamp": "2026-06-15T08:38:00+00:00",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": (
+                                        "[gateway_turn_context — not for the user]\n"
+                                        "[Social context]\n\n"
+                                        "こんばんは"
+                                    ),
+                                }
+                            ],
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CLAUDE_HOME", str(claude_home))
+    monkeypatch.setenv("PRESENCE_PROJECT_PATH", project_path)
+
+    result = list_native_sessions(limit=10)
+    row = next(item for item in result.sessions if item.session_id == session_id)
+    assert row.title == "こんばんは"
+
+
 def test_native_history_http_routes(
     claude_workspace: tuple[Path, str],
     monkeypatch: pytest.MonkeyPatch,
@@ -102,6 +146,7 @@ def test_native_history_http_routes(
     assert listed.status_code == 200
     body = listed.json()
     assert body["sessions"][0]["session_id"] == SESSION_ID
+    assert body["sessions"][0]["title"] == "キオスクから見える？"
 
     messages = client.get(f"/api/v1/native/sessions/{SESSION_ID}/messages")
     assert messages.status_code == 200

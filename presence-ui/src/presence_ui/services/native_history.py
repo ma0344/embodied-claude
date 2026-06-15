@@ -14,6 +14,7 @@ from presence_ui.schemas import (
 from presence_ui.services.session_log import (
     _find_project_dir,
     _messages_from_jsonl,
+    _preview_for_messages,
     get_claude_home,
     get_project_path,
     list_project_jsonl_files,
@@ -60,7 +61,7 @@ def list_native_sessions(
         if path.is_file():
             messages = _messages_from_jsonl(path)
             if messages:
-                preview = messages[-1].message[:48]
+                preview = _preview_for_messages(messages)
         sessions.append(
             NativeSessionSummary(
                 session_id=session_id,

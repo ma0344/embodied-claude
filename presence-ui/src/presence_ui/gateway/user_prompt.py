@@ -14,6 +14,19 @@ _SYSTEM_BLOCK_RES = (
     re.compile(r"^\[Must include\]", re.I),
     re.compile(r"^\[Must avoid\]", re.I),
     re.compile(r"^\[Social move\b", re.I),
+    re.compile(r"^\[memory_saved_server\]", re.I),
+    re.compile(r"^\[memory_save_failed\]", re.I),
+    re.compile(r"^\[memory_list_prefetch\]", re.I),
+    re.compile(r"^\[vision_prefetch\]\s*$", re.I),
+    re.compile(r"^\[Gateway directive\b", re.I),
+)
+
+_DIRECTIVE_BLOCK_RES = (
+    re.compile(r"^\[memory_saved_server\]", re.I),
+    re.compile(r"^\[memory_save_failed\]", re.I),
+    re.compile(r"^\[memory_list_prefetch\]", re.I),
+    re.compile(r"^\[vision_prefetch\]\s*$", re.I),
+    re.compile(r"^\[Gateway directive\b", re.I),
 )
 
 _ROOM_CONTEXT_BODY_RES = (
@@ -40,6 +53,11 @@ _CONTEXT_HEADER_RES = (
 def _is_system_block_header(line: str) -> bool:
     stripped = line.strip()
     return any(pattern.match(stripped) for pattern in _SYSTEM_BLOCK_RES)
+
+
+def _is_directive_block_header(line: str) -> bool:
+    stripped = line.strip()
+    return any(pattern.match(stripped) for pattern in _DIRECTIVE_BLOCK_RES)
 
 
 def _is_context_header(header_line: str) -> bool:
@@ -86,6 +104,26 @@ def _block_indices(lines: list[str], header_index: int, next_header: int | None)
             start += 1
         return range(header_index, start)
 
+    if header.strip().startswith("[gateway_turn_context"):
+        while start < end:
+            if start > header_index and _is_system_block_header(lines[start]):
+                break
+            line = lines[start].strip()
+            if start > header_index and not line:
+                start += 1
+                while start < end and not lines[start].strip():
+                    start += 1
+                break
+            start += 1
+        return range(header_index, start)
+
+    if _is_directive_block_header(header):
+        while start < end and lines[start].strip():
+            start += 1
+        while start < end and not lines[start].strip():
+            start += 1
+        return range(header_index, start)
+
     return range(header_index, header_index + 1)
 
 
@@ -114,3 +152,46 @@ def strip_enriched_user_prompt(text: str) -> str:
     while kept and not kept[-1].strip():
         kept.pop()
     return "\n".join(kept).strip()
+
+
+def looks_like_injected_prompt(text: str) -> bool:
+    """True when stored user text contains gateway/sociality block headers."""
+    return any(_is_system_block_header(line) for line in (text or "").split("\n"))
+
+
+def plain_user_first_line(text: str, *, max_len: int = 48) -> str:
+    """First line of the user's utterance after stripping injected blocks."""
+    plain = strip_enriched_user_prompt(text)
+    if not plain:
+        return ""
+    line = plain.splitlines()[0].strip()
+    if not line:
+        return ""
+    if len(line) > max_len:
+        return f"{line[: max_len - 1]}…"
+    return line
+
+
+def session_title_from_context(
+    *,
+    history_title: str,
+    messages: list,
+    session_id: str,
+    max_len: int = 48,
+) -> str:
+    """Pick a human-readable session title (plain first user line preferred)."""
+    title = plain_user_first_line(history_title, max_len=max_len) if history_title else ""
+    if not title and history_title.strip() and not looks_like_injected_prompt(history_title):
+        raw = history_title.strip().splitlines()[0]
+        title = raw if len(raw) <= max_len else f"{raw[: max_len - 1]}…"
+
+    if not title:
+        for msg in messages:
+            sender = getattr(msg, "sender", None) or (msg.get("sender") if isinstance(msg, dict) else None)
+            body = getattr(msg, "message", None) or (msg.get("message") if isinstance(msg, dict) else "")
+            if sender == "ma" and str(body or "").strip():
+                title = plain_user_first_line(str(body), max_len=max_len)
+                if title:
+                    break
+
+    return title or session_id[:8]

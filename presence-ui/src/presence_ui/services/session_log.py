@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from presence_ui.schemas import ChatMessage
+from presence_ui.gateway.user_prompt import plain_user_first_line, session_title_from_context
 
 _KOYORI_SKIP_PREFIXES = (
     "[Request interrupted by user for tool use]",
@@ -249,12 +250,24 @@ def _title_for_jsonl(
 ) -> str:
     session_id = path.stem
     hist = history.get(session_id, {})
-    title = str(hist.get("last_display") or hist.get("first_display") or "").strip()
-    if not title and preview_messages:
-        title = preview_messages[0].message[:48]
-    if not title:
-        title = session_id[:8]
-    return title
+    history_title = str(hist.get("last_display") or hist.get("first_display") or "").strip()
+    return session_title_from_context(
+        history_title=history_title,
+        messages=preview_messages,
+        session_id=session_id,
+    )
+
+
+def _preview_for_messages(messages: list[ChatMessage], *, max_len: int = 48) -> str:
+    if not messages:
+        return ""
+    last = messages[-1]
+    if last.sender == "ma":
+        return plain_user_first_line(last.message, max_len=max_len)
+    line = last.message.strip().splitlines()[0] if last.message.strip() else ""
+    if len(line) > max_len:
+        return f"{line[: max_len - 1]}…"
+    return line
 
 
 def list_project_jsonl_files(

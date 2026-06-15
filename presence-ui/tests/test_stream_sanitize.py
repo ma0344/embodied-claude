@@ -8,7 +8,11 @@ from presence_ui.gateway.stream_sanitize import (
     passthrough_stream_line,
     sanitize_stream_line,
 )
-from presence_ui.gateway.user_prompt import strip_enriched_user_prompt
+from presence_ui.gateway.user_prompt import (
+    plain_user_first_line,
+    session_title_from_context,
+    strip_enriched_user_prompt,
+)
 
 
 def test_extract_assistant_speech_keeps_text_blocks_verbatim() -> None:
@@ -64,6 +68,40 @@ phase=chat
 
 こんばんは"""
     assert strip_enriched_user_prompt(raw) == "こんばんは"
+
+
+def test_plain_user_first_line() -> None:
+    raw = """[gateway_turn_context — not for the user]
+[Social context]
+
+おはよう"""
+    assert plain_user_first_line(raw) == "おはよう"
+    assert plain_user_first_line("PR review 明日やるの覚えといて") == "PR review 明日やるの覚えといて"
+
+
+def test_strip_enriched_user_prompt_memory_saved_server() -> None:
+    raw = """[memory_saved_server]
+FACT: Hook/Gateway already saved this via memory-mcp HTTP (id=abc).
+Content: PR review 明日やる
+You may briefly confirm — do NOT call mcp__memory__remember again.
+
+PR review 明日やるの覚えといて"""
+    assert strip_enriched_user_prompt(raw) == "PR review 明日やるの覚えといて"
+    assert plain_user_first_line(raw) == "PR review 明日やるの覚えといて"
+
+
+def test_session_title_from_context_skips_injection() -> None:
+    from presence_ui.schemas import ChatMessage
+
+    messages = [
+        ChatMessage(sender="ma", message="おはよう", timestamp="2026-06-14T10:00:00+00:00"),
+    ]
+    title = session_title_from_context(
+        history_title="[gateway_turn_context — not for the user] [Socia",
+        messages=messages,
+        session_id="abc12345-aaaa-bbbb-cccc-ddddeeeeffff",
+    )
+    assert title == "おはよう"
 
 
 def test_passthrough_stream_line_keeps_thinking_only_assistant() -> None:

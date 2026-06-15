@@ -17,6 +17,9 @@ const SYSTEM_BLOCK_RES = [
   /^\[Must include\]/i,
   /^\[Must avoid\]/i,
   /^\[Social move\b/i,
+  /^\[memory_saved_server\]/i,
+  /^\[memory_save_failed\]/i,
+  /^\[memory_list_prefetch\]/i,
 ];
 
 const ROOM_CONTEXT_BODY_RES = [
@@ -105,6 +108,16 @@ function blockIndices(lines, headerIndex, nextHeader) {
 
   if (/^\[Gateway directive\b/i.test(header.trim())) {
     while (start < end && lines[start].trim()) start += 1;
+    return Array.from({ length: start - headerIndex }, (_, offset) => headerIndex + offset);
+  }
+
+  if (
+    /^\[memory_saved_server\]/i.test(header.trim()) ||
+    /^\[memory_save_failed\]/i.test(header.trim()) ||
+    /^\[memory_list_prefetch\]/i.test(header.trim())
+  ) {
+    while (start < end && lines[start].trim()) start += 1;
+    while (start < end && !lines[start].trim()) start += 1;
     return Array.from({ length: start - headerIndex }, (_, offset) => headerIndex + offset);
   }
 

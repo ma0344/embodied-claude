@@ -222,6 +222,10 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 | 優先 | 項目 | メモ |
 |------|------|------|
 | 中 | **C12 Gateway + LLM ハイブリッド intent** | regex 即応 + ローカル LLM ルーター（曖昧な一文だけ分類） |
+| 低 | **体温センサー（ma-home）** | WSL ではない → **LibreHardwareMonitor** 常駐で WMI 経由読取。未導入時は「センサーなし」 |
+| 低 | **OpenLoops 再検証** | 2026-06-14 仕掛け分が動いていない報告。relationship DB / compose 注入 / dismiss 経路を確認 |
+
+- [x] **C11f** 部屋の空気 日本語化（`summary_for_prompt` + UI タグの availability/phase マップ）
 
 - [ ] **C12** intent router（送信前に LM Studio で `desk|left|see|window|chat` 等を JSON 分類。regex 未検出 or 低 confidence 時のみ。Gateway 即実行 → 足りなければ compose/plan）
 

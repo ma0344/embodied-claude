@@ -103,6 +103,27 @@ def test_absence_of_evidence_stays_unknown(store):
     assert state.activity == "unknown"
     assert state.energy == "unknown"
     assert state.affect_guess.label == "uncertain"
+    assert "今は" in state.summary_for_prompt
+    assert "The person seems" not in state.summary_for_prompt
+
+
+def test_summary_for_prompt_is_japanese(store):
+    _ingest(
+        store,
+        {
+            "ts": "2026-04-15T19:12:00+09:00",
+            "source": "human_mcp",
+            "kind": "human_utterance",
+            "person_id": "ma",
+            "confidence": 0.99,
+            "payload": {"text": "その PR どう見る？"},
+        },
+    )
+    state = store.get_social_state(window_seconds=900, person_id="ma")
+
+    assert state.summary_for_prompt.startswith("今は")
+    assert "話しかけ" in state.summary_for_prompt
+    assert "The person seems" not in state.summary_for_prompt
 
 
 def test_policy_timezone_applies_to_utc_timestamp(tmp_path):

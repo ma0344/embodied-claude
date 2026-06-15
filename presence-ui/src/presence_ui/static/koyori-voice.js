@@ -21,14 +21,43 @@ const KoyoriVoice = (() => {
     deep_talk: "少し深い話",
     reflection: "じっくり考えごと",
     autonomous: "ひとりで、何かをしている",
+    awaiting_reply: "返事を待っている",
+    quiet_focus: "静かに集中している",
+    ongoing: "会話の続き",
+    cooling_down: "少し間を置いている",
     unknown: "穏やかな空気",
   };
 
   const AVAILABILITY_VIBES = {
+    interruptible: "話しかけやすい",
+    maybe_interruptible: "タイミング次第",
+    do_not_interrupt: "静かにしていたい",
     available: "話しかけやすい感じ",
     busy: "少し集中している",
     do_not_disturb: "静かにしていたい",
     away: "そばにいないみたい",
+  };
+
+  const AFFECT_LABELS = {
+    tired: "疲れ気味",
+    stressed: "しんどそう",
+  };
+
+  const PRESENCE_VIBES = {
+    absent: "そばにいない",
+    possible: "いるかも",
+    present: "そばにいる",
+    speaking: "話している",
+  };
+
+  const ACTIVITY_VIBES = {
+    working: "作業中",
+    commuting: "移動中",
+    eating: "食事中",
+    resting: "休憩中",
+    sleeping: "休んでいる",
+    chatting: "おしゃべり中",
+    unknown: "様子不明",
   };
 
   const ENERGY_WORDS = {
@@ -166,11 +195,16 @@ const KoyoriVoice = (() => {
       body = `${phase}。${avail}。`;
     } else if (body.length > 120) {
       body = `${body.slice(0, 118)}…`;
+    } else if (/^The person seems /i.test(body)) {
+      const presence = PRESENCE_VIBES[social.presence] || "";
+      const activity = ACTIVITY_VIBES[social.activity] || "";
+      const parts = [presence, activity, avail].filter(Boolean);
+      body = parts.length ? `${parts.join("、")}。` : body;
     }
 
     const tags = [phase, avail, energy].filter(Boolean);
-    if (social.affect_label && social.affect_label !== "neutral") {
-      tags.push(social.affect_label);
+    if (social.affect_label && social.affect_label !== "uncertain") {
+      tags.push(AFFECT_LABELS[social.affect_label] || social.affect_label);
     }
 
     return {

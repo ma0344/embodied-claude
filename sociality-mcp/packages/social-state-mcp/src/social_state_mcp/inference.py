@@ -416,11 +416,33 @@ def _recommended_moves(
 def _build_summary(
     *, presence: str, activity: str, availability: str, energy: str, affect: str
 ) -> str:
-    affect_text = "with uncertain affect" if affect == "uncertain" else f"somewhat {affect}"
-    return (
-        f"The person seems {presence}, {activity}, {affect_text}, and "
-        f"{availability.replace('_', ' ')} right now."
-    )
+    presence_ja = {
+        "absent": "そばにいないみたい",
+        "possible": "そばにいるかもしれない",
+        "present": "そばにいる",
+        "speaking": "話している",
+    }.get(presence, presence)
+    activity_ja = {
+        "working": "作業している",
+        "commuting": "移動している",
+        "eating": "食べている",
+        "resting": "休んでいる",
+        "sleeping": "静かに休んでいる",
+        "chatting": "おしゃべり中",
+        "unknown": "何をしているかはまだわからない",
+    }.get(activity, activity)
+    availability_ja = {
+        "do_not_interrupt": "今は話しかけない方がよさそう",
+        "maybe_interruptible": "タイミングを見て話しかけた方がよさそう",
+        "interruptible": "話しかけやすい感じ",
+    }.get(availability, availability)
+    affect_ja = {
+        "uncertain": "気持ちのほうはまだ読みにくい",
+        "tired": "少し疲れ気味",
+        "stressed": "少ししんどそう",
+    }.get(affect, f"気持ちは{affect}")
+
+    return f"今は{presence_ja}。{activity_ja}。{affect_ja}。{availability_ja}。"
 
 
 def _payload_text(event: SocialEvent) -> str:

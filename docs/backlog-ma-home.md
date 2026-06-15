@@ -223,7 +223,11 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 |------|------|------|
 | 中 | **C12 Gateway + LLM ハイブリッド intent** | regex 即応 + ローカル LLM ルーター（曖昧な一文だけ分類） |
 | 低 | **体温センサー（ma-home）** | WSL ではない → **LibreHardwareMonitor** 常駐で WMI 経由読取。未導入時は「センサーなし」 |
-| 低 | **OpenLoops 再検証** | 2026-06-14 仕掛け分が動いていない報告。relationship DB / compose 注入 / dismiss 経路を確認 |
+| 中 | **OL1 Open Loops 日付解決** | ingest 時 `明日`→`resolved_date`（JST）、類似 topic マージ、期限過ぎ auto-close |
+| 中 | **OL2 リマインド配線** | 「○時にリマインド」→ `create_commitment(due_at)` + 定期 tick で say / UI 通知 |
+| 低 | **OL3 Open Loops 運用** | stale 掃除 `purge-stale-open-loops.py`、ノイズは `purge-noise-open-loops.py` |
+
+- [x] **OL0** stale open loop 掃除（`purge-stale-open-loops.py`、既定は resolved が今日より前、`--include-today` で当日分も）
 
 - [x] **C11f** 部屋の空気 日本語化（`summary_for_prompt` + UI タグの availability/phase マップ）
 
@@ -243,7 +247,8 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 
 | スクリプト | 用途 |
 |-----------|------|
-| `check-mcp-processes.ps1` | MCP / daemon / STALE 診断 |
+| `purge-noise-open-loops.py` | エージェント台詞ノイズ loop を close |
+| `purge-stale-open-loops.py` | 相対日付（明日等）が過去の open loop を close |
 | `test-memory-stack.ps1` | 記憶スタック自動スモーク |
 | `verify-mission-a.ps1` | ミッションA 一発確認（stack + 煎餅 + 任意 :8090 chat） |
 | `watch-embodied-health.ps1` | ハング検出・daemon 再起動（手動 / Task から） |

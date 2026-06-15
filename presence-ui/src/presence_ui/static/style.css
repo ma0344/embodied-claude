@@ -228,6 +228,73 @@ body {
   margin-bottom: 0.1rem;
 }
 
+.status-card--expandable {
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.status-card__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.status-card__toggle:focus-visible {
+  outline: 2px solid rgba(138, 154, 140, 0.45);
+  outline-offset: -2px;
+}
+
+.status-card--expandable .status-card__icon {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.status-card__toggle-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.status-card__chevron {
+  flex-shrink: 0;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-left: 0.25rem;
+  border-right: 2px solid var(--text-soft);
+  border-bottom: 2px solid var(--text-soft);
+  transform: rotate(-45deg);
+  transition: transform 0.2s ease;
+}
+
+.status-card--open .status-card__chevron {
+  transform: rotate(45deg);
+}
+
+.status-card__panel {
+  padding: 0 0.75rem 0.65rem;
+  border-top: 1px solid rgba(226, 221, 212, 0.75);
+}
+
+.status-card__panel > .status-card__body:first-child {
+  margin-top: 0.45rem;
+}
+
 .desire-lines {
   margin: 0.35rem 0 0;
   padding: 0;

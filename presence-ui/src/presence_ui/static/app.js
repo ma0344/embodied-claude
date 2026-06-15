@@ -11,6 +11,7 @@ const NATIVE_HIDDEN_API = "/api/v1/native/hidden";
 const SHOW_DEBUG_INJECTION_KEY = "koyori-show-debug-injection";
 const KIOSK_LAYOUT_STORAGE_KEY = "koyori-kiosk-layout";
 const CONTEXT_RAIL_PINS_KEY = "koyori-context-rail-pins";
+const STATUS_EXPAND_KEY = "koyori-status-expand";
 
 let chatPinnedToBottom = true;
 let chatMessages = [];
@@ -1533,11 +1534,82 @@ function setupChatCompose() {
   });
 }
 
-function buildStatusHtml(data) {
+function buildStatusCard({ id, label, icon, extraClass = "", innerHtml, open }) {
+  const openClass = open ? " status-card--open" : "";
+  const expanded = open ? "true" : "false";
+  const iconHtml = icon
+    ? `<span class="status-card__icon" aria-hidden="true">${escapeHtml(icon)}</span>`
+    : "";
+  return `
+    <article class="status-card status-card--expandable${extraClass}${openClass} is-updated" data-status-card="${escapeHtml(id)}">
+      <button type="button" class="status-card__toggle" aria-expanded="${expanded}">
+        ${iconHtml}
+        <span class="status-card__toggle-label">${escapeHtml(label)}</span>
+        <span class="status-card__chevron" aria-hidden="true"></span>
+      </button>
+      <div class="status-card__panel"${open ? "" : " hidden"}>
+        ${innerHtml}
+      </div>
+    </article>`;
+}
+
+function getStatusExpandPrefs() {
+  try {
+    const raw = localStorage.getItem(STATUS_EXPAND_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function setStatusExpandPref(id, open) {
+  const prefs = getStatusExpandPrefs();
+  prefs[id] = open;
+  localStorage.setItem(STATUS_EXPAND_KEY, JSON.stringify(prefs));
+}
+
+function isStatusCardOpen(id, compactDefault) {
+  const prefs = getStatusExpandPrefs();
+  if (Object.hasOwn(prefs, id)) return Boolean(prefs[id]);
+  return !compactDefault;
+}
+
+function syncStatusCardOpen(card, open) {
+  if (!card) return;
+  const btn = card.querySelector(".status-card__toggle");
+  const panel = card.querySelector(".status-card__panel");
+  card.classList.toggle("status-card--open", open);
+  if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+  if (panel) panel.hidden = !open;
+}
+
+function setupStatusCardExpand() {
+  if (document.body.dataset.statusExpandBound) return;
+  document.body.dataset.statusExpandBound = "1";
+  document.addEventListener("click", (event) => {
+    const btn = event.target.closest(".status-card__toggle");
+    if (!btn) return;
+    const card = btn.closest(".status-card--expandable");
+    if (!card) return;
+    const id = card.getAttribute("data-status-card");
+    const open = !card.classList.contains("status-card--open");
+    if (id) {
+      for (const peer of document.querySelectorAll(`[data-status-card="${id}"]`)) {
+        syncStatusCardOpen(peer, open);
+      }
+      setStatusExpandPref(id, open);
+    } else {
+      syncStatusCardOpen(card, open);
+    }
+  });
+}
+
+function buildStatusHtml(data, { compact = false } = {}) {
   const temp = KoyoriVoice.formatTemperature(data.temperature);
   const desires = KoyoriVoice.formatDesires(data.desires, data.dominant_desire);
   const social = KoyoriVoice.formatSocialVibe(data.social_state);
   const journey = KoyoriVoice.formatJourney(data.active_arcs);
+  const open = (id) => isStatusCardOpen(id, compact);
 
   const desireList = desires.lines
     .map(
@@ -1557,32 +1629,43 @@ function buildStatusHtml(data) {
     .map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`)
     .join("");
 
-  return `
-    <article class="status-card status-card--temp mood-${escapeHtml(temp.mood || "neutral")} is-updated">
-      <span class="status-card__icon" aria-hidden="true">${escapeHtml(temp.icon || "○")}</span>
-      <span class="status-card__label">${escapeHtml(temp.label)}</span>
-      <p class="status-card__body">${escapeHtml(temp.body)}</p>
-      ${temp.detail ? `<span class="status-card__detail">${escapeHtml(temp.detail)}</span>` : ""}
-    </article>
-
-    <article class="status-card is-updated">
-      <span class="status-card__label">いまの気持ち</span>
-      <p class="status-card__body">${escapeHtml(desires.headline)}</p>
-      <p class="status-card__sub">${escapeHtml(desires.subline || "")}</p>
-      ${desireList ? `<ul class="desire-lines">${desireList}</ul>` : ""}
-    </article>
-
-    <article class="status-card is-updated">
-      <span class="status-card__label">${escapeHtml(journey.headline)}</span>
-      <p class="status-card__body">${escapeHtml(journey.body)}</p>
-      ${journeyList ? `<ul class="journey-list">${journeyList}</ul>` : ""}
-    </article>
-
-    <article class="status-card is-updated">
-      <span class="status-card__label">${escapeHtml(social.headline)}</span>
-      <p class="status-card__body">${escapeHtml(social.body)}</p>
-      ${socialTags ? `<div class="tag-row">${socialTags}</div>` : ""}
-    </article>`;
+  return [
+    buildStatusCard({
+      id: "temp",
+      label: temp.label,
+      icon: temp.icon || "○",
+      extraClass: ` status-card--temp mood-${escapeHtml(temp.mood || "neutral")}`,
+      open: open("temp"),
+      innerHtml: `
+        <p class="status-card__body">${escapeHtml(temp.body)}</p>
+        ${temp.detail ? `<span class="status-card__detail">${escapeHtml(temp.detail)}</span>` : ""}`,
+    }),
+    buildStatusCard({
+      id: "desires",
+      label: "いまの気持ち",
+      open: open("desires"),
+      innerHtml: `
+        <p class="status-card__body">${escapeHtml(desires.headline)}</p>
+        <p class="status-card__sub">${escapeHtml(desires.subline || "")}</p>
+        ${desireList ? `<ul class="desire-lines">${desireList}</ul>` : ""}`,
+    }),
+    buildStatusCard({
+      id: "journey",
+      label: journey.headline,
+      open: open("journey"),
+      innerHtml: `
+        <p class="status-card__body">${escapeHtml(journey.body)}</p>
+        ${journeyList ? `<ul class="journey-list">${journeyList}</ul>` : ""}`,
+    }),
+    buildStatusCard({
+      id: "social",
+      label: social.headline,
+      open: open("social"),
+      innerHtml: `
+        <p class="status-card__body">${escapeHtml(social.body)}</p>
+        ${socialTags ? `<div class="tag-row">${socialTags}</div>` : ""}`,
+    }),
+  ].join("");
 }
 
 function renderStatus(data) {
@@ -1593,9 +1676,11 @@ function renderStatus(data) {
     tempEl.textContent = temp.detail ? `${temp.body} · ${temp.detail}` : temp.body;
   }
 
-  const html = buildStatusHtml(data);
   for (const root of statusTargets()) {
-    root.innerHTML = html;
+    const compact =
+      root.classList.contains("status-grid--rail") ||
+      root.classList.contains("status-grid--drawer");
+    root.innerHTML = buildStatusHtml(data, { compact });
     window.setTimeout(() => {
       root.querySelectorAll(".status-card.is-updated").forEach((card) => {
         card.classList.remove("is-updated");
@@ -1711,6 +1796,7 @@ function setupKioskLayout() {
 }
 
 setupKioskLayout();
+setupStatusCardExpand();
 setupChatScroll();
 setupChatCompose();
 setupDebugInjectionToggle();

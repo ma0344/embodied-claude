@@ -123,6 +123,7 @@ cat >"$KIOSK_ENV" <<EOF
 # while presence-ui listens on IPv4. Use ma-home's LAN IPv4 (or Tailscale IP):
 #   KOYORI_WEBUI_URL='http://192.168.x.x:8090/'
 # Do NOT use /projects/... here — that is claude-code-webui (:8080) only.
+# Do NOT append kiosk=0 — koyori-kiosk.sh forces ?kiosk=1 for touch layout (C11b).
 KOYORI_WEBUI_URL='$WEBUI_URL'
 KOYORI_CHROMIUM_NO_SANDBOX=1
 # firefox: IBus/Mozc works on minimal X. snap chromium often cannot use host IME.

@@ -23,9 +23,59 @@ _camera = None
 _camera_error: str | None = None
 _camera_last_failure: str | None = None
 _camera_lock = asyncio.Lock()
-_backoff_until: float = 0.0
+_capture_backoff_until: float = 0.0
+_last_preview_snapshot: CameraSnapshotResponse | None = None
 _BACKOFF_SECONDS = float(os.getenv("PRESENCE_CAMERA_BACKOFF_SECONDS", "45"))
 _PRESET_SETTLE_SECONDS = float(os.getenv("PRESENCE_CAMERA_PRESET_SETTLE_SECONDS", "1.5"))
+_CAPTURE_TIMEOUT_SECONDS = float(os.getenv("PRESENCE_CAMERA_TIMEOUT_SECONDS", "15"))
+_PREVIEW_SKIP_IF_BUSY = os.getenv("PRESENCE_CAMERA_PREVIEW_SKIP_IF_BUSY", "1").lower() not in {
+    "0",
+    "false",
+    "no",
+}
+
+
+def _set_capture_failure(msg: str) -> None:
+    global _capture_backoff_until, _camera_last_failure
+    _camera_last_failure = msg
+    _capture_backoff_until = time.monotonic() + _BACKOFF_SECONDS
+
+
+def _in_capture_backoff() -> bool:
+    return time.monotonic() < _capture_backoff_until
+
+
+async def camera_move(direction: str, degrees: int = 30) -> tuple[bool, str]:
+    """Pan/tilt via ONVIF (gateway direct — no MCP required)."""
+    async with _camera_lock:
+        try:
+            from wifi_cam_mcp.camera import Direction
+
+            dir_map = {
+                "left": Direction.LEFT,
+                "right": Direction.RIGHT,
+                "up": Direction.UP,
+                "down": Direction.DOWN,
+            }
+            move_dir = dir_map.get(direction)
+            if move_dir is None:
+                return False, f"unknown direction: {direction}"
+
+            camera = await _get_camera()
+            move = await asyncio.wait_for(camera.move(move_dir, degrees), timeout=15.0)
+            if move.success:
+                global _camera_last_failure
+                _camera_last_failure = None
+                return True, move.message
+            return False, move.message
+        except TimeoutError:
+            return False, "camera move timed out"
+        except Exception as exc:
+            msg = str(exc) or type(exc).__name__
+            _set_capture_failure(msg)
+            await _reset_camera()
+            logger.warning("camera_move(%s) failed: %s", direction, msg)
+            return False, msg
 
 
 @dataclass(slots=True)
@@ -39,7 +89,7 @@ class CaptureOutcome:
 
 def camera_failure_hint() -> str | None:
     """Human-readable reason for the most recent camera failure (if any)."""
-    if time.monotonic() < _backoff_until:
+    if _in_capture_backoff():
         return _camera_last_failure or "camera unavailable (cooldown after recent failure)"
     return _camera_last_failure
 
@@ -66,6 +116,10 @@ async def _get_camera():
     if _camera_error is not None:
         raise RuntimeError(_camera_error)
 
+    from presence_ui.repo_env import load_repo_env
+
+    load_repo_env()
+
     from wifi_cam_mcp.camera import TapoCamera
     from wifi_cam_mcp.config import CameraConfig, ServerConfig
 
@@ -76,20 +130,12 @@ async def _get_camera():
 
 
 def _in_backoff() -> bool:
-    return time.monotonic() < _backoff_until
-
-
-def _set_failure(msg: str) -> None:
-    global _backoff_until, _camera_last_failure
-    _camera_last_failure = msg
-    _backoff_until = time.monotonic() + _BACKOFF_SECONDS
+    """Deprecated alias — capture-only cooldown."""
+    return _in_capture_backoff()
 
 
 async def camera_go_to_preset(preset_id: str) -> tuple[bool, str]:
     """Move to an ONVIF preset before capture."""
-    if _in_backoff():
-        return False, camera_failure_hint() or "camera unavailable (cooldown)"
-
     async with _camera_lock:
         try:
             camera = await _get_camera()
@@ -101,7 +147,7 @@ async def camera_go_to_preset(preset_id: str) -> tuple[bool, str]:
             return True, move.message
         except Exception as exc:
             msg = str(exc) or type(exc).__name__
-            _set_failure(msg)
+            _set_capture_failure(msg)
             await _reset_camera()
             logger.warning("Camera go_to_preset failed: %s", msg)
             return False, msg
@@ -113,18 +159,12 @@ async def _capture_raw(*, save_to_file: bool = True):
     async def _run():
         return await camera.capture_image(save_to_file=save_to_file)
 
-    timeout_s = float(os.getenv("PRESENCE_CAMERA_TIMEOUT_SECONDS", "8"))
+    timeout_s = _CAPTURE_TIMEOUT_SECONDS
     return await asyncio.wait_for(_run(), timeout=timeout_s)
 
 
 async def capture_for_mode(mode: SeeMode, *, save_to_file: bool = True) -> CaptureOutcome:
     """Capture one frame (or look_around center) with optional window preset."""
-    if _in_backoff():
-        return CaptureOutcome(
-            ok=False,
-            error=camera_failure_hint() or "camera unavailable (cooldown)",
-        )
-
     preset_id: str | None = None
     view_label = "current"
     if is_preset_location(mode):
@@ -132,6 +172,12 @@ async def capture_for_mode(mode: SeeMode, *, save_to_file: bool = True) -> Captu
         view_label = CAMERA_LOCATIONS[mode].label_ja  # type: ignore[index]
         if not preset_id:
             logger.warning("%s preset not configured; capturing at current angle", mode)
+
+    if _in_capture_backoff() and not preset_id and mode != "look_around":
+        return CaptureOutcome(
+            ok=False,
+            error=camera_failure_hint() or "camera unavailable (cooldown)",
+        )
 
     async with _camera_lock:
         try:
@@ -141,6 +187,14 @@ async def capture_for_mode(mode: SeeMode, *, save_to_file: bool = True) -> Captu
                 if not move.success:
                     return CaptureOutcome(ok=False, error=move.message, preset_id=preset_id)
                 await asyncio.sleep(_PRESET_SETTLE_SECONDS)
+
+            if _in_capture_backoff() and mode != "look_around":
+                return CaptureOutcome(
+                    ok=False,
+                    error=camera_failure_hint() or "camera unavailable (cooldown)",
+                    preset_id=preset_id,
+                    view_label=view_label,
+                )
 
             if mode == "look_around":
                 camera = await _get_camera()
@@ -175,18 +229,35 @@ async def capture_for_mode(mode: SeeMode, *, save_to_file: bool = True) -> Captu
                 view_label=view_label,
                 preset_id=preset_id,
             )
+        except TimeoutError:
+            msg = "camera capture timed out"
+            if preset_id:
+                msg = f"preset {preset_id} reached but capture timed out"
+            _set_capture_failure(msg)
+            logger.warning("capture_for_mode(%s) failed: %s", mode, msg)
+            return CaptureOutcome(ok=False, error=msg, preset_id=preset_id, view_label=view_label)
         except Exception as exc:
             msg = str(exc) or type(exc).__name__
-            _set_failure(msg)
+            _set_capture_failure(msg)
             await _reset_camera()
             logger.warning("capture_for_mode(%s) failed: %s", mode, msg)
-            return CaptureOutcome(ok=False, error=msg, preset_id=preset_id)
+            return CaptureOutcome(ok=False, error=msg, preset_id=preset_id, view_label=view_label)
 
 
 async def fetch_camera_snapshot() -> CameraSnapshotResponse:
     """UI preview snapshot — base64 only, no disk write (avoids temp dir accumulation)."""
-    global _backoff_until
+    global _last_preview_snapshot
     preset = os.getenv("PRESENCE_CAMERA_PRESET_LABEL", "current")
+
+    if _PREVIEW_SKIP_IF_BUSY and _camera_lock.locked():
+        if _last_preview_snapshot is not None:
+            return _last_preview_snapshot
+        return CameraSnapshotResponse(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            camera_preset=preset,
+            error="camera busy",
+        )
+
     outcome = await capture_for_mode("current", save_to_file=False)
     if not outcome.ok or not outcome.capture:
         return CameraSnapshotResponse(
@@ -210,7 +281,7 @@ async def fetch_camera_snapshot() -> CameraSnapshotResponse:
             width, height = img.size
         except Exception:
             pass
-    return CameraSnapshotResponse(
+    response = CameraSnapshotResponse(
         timestamp=result.timestamp or datetime.now(timezone.utc).isoformat(),
         image_base64=result.image_base64,
         image_url=None,
@@ -218,6 +289,8 @@ async def fetch_camera_snapshot() -> CameraSnapshotResponse:
         height=height,
         camera_preset=preset,
     )
+    _last_preview_snapshot = response
+    return response
 
 
 async def fetch_window_snapshot() -> CameraSnapshotResponse:
@@ -241,9 +314,6 @@ async def fetch_window_snapshot() -> CameraSnapshotResponse:
 
 async def camera_look_around() -> list:
     """Pan/tilt capture sequence (wifi-cam look_around)."""
-    if _in_backoff():
-        return []
-
     async with _camera_lock:
         try:
             camera = await _get_camera()
@@ -261,9 +331,14 @@ async def camera_look_around() -> list:
             else:
                 _camera_last_failure = "look_around returned no captures"
             return captures
+        except TimeoutError:
+            msg = "camera look_around timed out"
+            _set_capture_failure(msg)
+            logger.warning("Camera look_around failed (backoff %.0fs): %s", _BACKOFF_SECONDS, msg)
+            return []
         except Exception as exc:
             msg = str(exc) or type(exc).__name__
-            _set_failure(msg)
+            _set_capture_failure(msg)
             await _reset_camera()
             logger.warning("Camera look_around failed (backoff %.0fs): %s", _BACKOFF_SECONDS, msg)
             return []

@@ -2,9 +2,9 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>こよりの部屋</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260610-c7-layout" />
+  <link rel="stylesheet" href="/static/style.css?v=20260615-c11-kiosk" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500&family=Cormorant+Garamond:wght@400;500&display=swap" rel="stylesheet" />
@@ -12,6 +12,11 @@
 <body>
   <div class="room">
     <header class="top-bar">
+      <button type="button" id="room-drawer-open" class="room-drawer-open" hidden aria-label="メニューを開く" aria-controls="room-drawer" aria-expanded="false">
+        <span class="room-drawer-open__bar" aria-hidden="true"></span>
+        <span class="room-drawer-open__bar" aria-hidden="true"></span>
+        <span class="room-drawer-open__bar" aria-hidden="true"></span>
+      </button>
       <div class="brand">
         <h1>こよりの部屋</h1>
         <p class="subtitle">Koyori's Room</p>
@@ -30,61 +35,98 @@
       </section>
 
       <section class="panel chat-room" aria-label="会話">
-      <div class="chat-header">
-        <div class="chat-header-main">
-          <h2>会話</h2>
-          <div class="session-bar">
-            <label class="session-label" for="project-select">プロジェクト</label>
-            <select id="project-select" class="session-select" aria-label="Claude Code プロジェクト"></select>
-            <label class="session-label" for="history-select">セッション</label>
-            <select id="history-select" class="session-select" aria-label="Claude Code セッション"></select>
-            <button type="button" id="session-reload" class="session-import" title="履歴を再読み込み">再読込</button>
-            <button type="button" id="session-new" class="session-import" hidden title="新しい会話を始める">新しい会話</button>
-            <button type="button" id="session-delete" class="session-import" hidden title="選択中の会話を削除">削除</button>
-            <button type="button" id="chat-cancel" class="session-import" hidden title="送信中の応答を止める">止める</button>
+        <div class="chat-header">
+          <div class="chat-header-main">
+            <h2>会話</h2>
+            <div id="session-controls-home" class="session-controls-home"></div>
+          </div>
+          <div class="chat-header-aside">
+            <span class="chat-hint" id="chat-hint"></span>
           </div>
         </div>
-        <div class="chat-header-aside">
-          <span class="chat-hint" id="chat-hint"></span>
-          <label class="debug-injection-toggle" title="gateway_turn_context 等の注入ブロックを表示">
-            <input type="checkbox" id="debug-injection-toggle" />
-            <span>注入</span>
-          </label>
+        <div class="chat-scroll" id="chat-log" tabindex="0">
+          <p class="placeholder">読み込み中…</p>
         </div>
-      </div>
-      <div class="chat-scroll" id="chat-log" tabindex="0">
-        <p class="placeholder">読み込み中…</p>
-      </div>
-      <form class="chat-compose" id="chat-form" autocomplete="off">
-        <label class="sr-only" for="chat-input">こよりに話しかける</label>
-        <textarea
-          id="chat-input"
-          class="chat-input"
-          rows="1"
-          maxlength="4000"
-          placeholder="こよりに話しかける..."
-          aria-label="こよりに話しかける"
-        ></textarea>
-        <button type="submit" class="chat-send" id="chat-send" aria-label="送信">
-          送る
-        </button>
-      </form>
-    </section>
+        <form class="chat-compose" id="chat-form" autocomplete="off">
+          <label class="sr-only" for="chat-input">こよりに話しかける</label>
+          <textarea
+            id="chat-input"
+            class="chat-input"
+            rows="1"
+            maxlength="4000"
+            placeholder="こよりに話しかける..."
+            aria-label="こよりに話しかける"
+          ></textarea>
+          <button type="submit" class="chat-send" id="chat-send" aria-label="送信">
+            送る
+          </button>
+        </form>
+      </section>
 
-    <section class="panel visual-room" aria-label="視界">
-      <h2>視界</h2>
-      <div class="visual-feed" id="visual-feed">
-        <p class="placeholder">カメラを読み込み中…</p>
-      </div>
-    </section>
+      <section class="panel visual-room" aria-label="視界">
+        <h2>視界</h2>
+        <div class="visual-feed" id="visual-feed">
+          <p class="placeholder">カメラを読み込み中…</p>
+        </div>
+      </section>
     </div>
+  </div>
+
+  <div id="room-drawer" class="room-drawer" aria-hidden="true">
+    <button type="button" class="room-drawer__backdrop" id="room-drawer-backdrop" aria-label="メニューを閉じる" tabindex="-1"></button>
+    <aside class="room-drawer__panel" id="room-drawer-panel" role="dialog" aria-modal="true" aria-label="部屋メニュー">
+      <header class="room-drawer__header">
+        <h2 class="room-drawer__title">部屋</h2>
+        <button type="button" id="room-drawer-close" class="room-drawer__close" aria-label="閉じる">×</button>
+      </header>
+
+      <section class="room-drawer__section" aria-label="会話の切り替え">
+        <h3 class="room-drawer__section-title">会話</h3>
+        <div id="drawer-session-slot" class="drawer-session-slot"></div>
+      </section>
+
+      <section class="room-drawer__section" aria-label="視界">
+        <h3 class="room-drawer__section-title">視界</h3>
+        <div class="visual-feed visual-feed--drawer" id="visual-feed-drawer">
+          <p class="placeholder">カメラを読み込み中…</p>
+        </div>
+      </section>
+
+      <section class="room-drawer__section" aria-label="こよりの状態">
+        <h3 class="room-drawer__section-title">状態</h3>
+        <div id="status-content-drawer" class="status-grid status-grid--drawer">
+          <p class="placeholder">読み込み中…</p>
+        </div>
+      </section>
+
+      <div class="room-drawer__footer">
+        <button type="button" id="page-reload" class="drawer-action drawer-action--primary">画面を更新</button>
+      </div>
+    </aside>
+  </div>
+
+  <div id="session-controls" class="session-controls" hidden>
+    <div class="session-bar">
+      <label class="session-label" for="project-select">プロジェクト</label>
+      <select id="project-select" class="session-select" aria-label="Claude Code プロジェクト"></select>
+      <label class="session-label" for="history-select">セッション</label>
+      <select id="history-select" class="session-select" aria-label="Claude Code セッション"></select>
+      <button type="button" id="session-reload" class="session-import" title="履歴を再読み込み">再読込</button>
+      <button type="button" id="session-new" class="session-import" hidden title="新しい会話を始める">新しい会話</button>
+      <button type="button" id="session-delete" class="session-import" hidden title="選択中の会話を一覧から外す">一覧から外す</button>
+      <button type="button" id="chat-cancel" class="session-import" hidden title="送信中の応答を止める">止める</button>
+    </div>
+    <label class="debug-injection-toggle" id="debug-injection-wrap" title="gateway_turn_context 等の注入ブロックを表示">
+      <input type="checkbox" id="debug-injection-toggle" />
+      <span>注入</span>
+    </label>
   </div>
 
   <script src="/static/vendor/marked.min.js"></script>
   <script src="/static/vendor/purify.min.js"></script>
   <script src="/static/chat-markdown.js?v=20260610-md-both"></script>
-  <script src="/static/cc-messages.js?v=20260610-md-persist"></script>
+  <script src="/static/cc-messages.js?v=20260615-memory-inject"></script>
   <script src="/static/koyori-voice.js?v=20260612-sendfix"></script>
-  <script src="/static/app.js?v=20260610-c7-layout"></script>
+  <script src="/static/app.js?v=20260615-c11-kiosk"></script>
 </body>
 </html>

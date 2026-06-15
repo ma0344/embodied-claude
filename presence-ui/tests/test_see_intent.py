@@ -1,6 +1,6 @@
 """Tests for see-intent detection (gateway vision prefetch A)."""
 
-from presence_ui.gateway.see_intent import detect_see_intent
+from presence_ui.gateway.see_intent import detect_ptz_intent, detect_see_intent
 
 
 def test_detect_see_current() -> None:
@@ -17,6 +17,12 @@ def test_detect_see_window() -> None:
 
 def test_detect_see_desk() -> None:
     intent = detect_see_intent("まーのデスク見て")
+    assert intent is not None
+    assert intent.mode == "desk"
+
+
+def test_detect_see_desk_try_phrasing() -> None:
+    intent = detect_see_intent("まーのデスクを見るの試してみて")
     assert intent is not None
     assert intent.mode == "desk"
 
@@ -45,3 +51,15 @@ def test_detect_see_english() -> None:
     intent = detect_see_intent("what do you see?")
     assert intent is not None
     assert intent.mode == "current"
+
+
+def test_detect_ptz_left() -> None:
+    intent = detect_ptz_intent("左を向いて")
+    assert intent is not None
+    assert intent.direction == "left"
+
+
+def test_detect_ptz_right_english() -> None:
+    intent = detect_ptz_intent("look right a bit")
+    assert intent is not None
+    assert intent.direction == "right"

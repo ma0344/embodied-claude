@@ -30,6 +30,120 @@ let uiConfig = { chat_backend: "proxy8080", native_chat: false, display_timezone
 let nativeAuthToken = sessionStorage.getItem(NATIVE_TOKEN_STORAGE_KEY) || "";
 let nativeSessionList = [];
 let showDebugInjection = localStorage.getItem(SHOW_DEBUG_INJECTION_KEY) === "1";
+let roomDrawerOpen = false;
+
+function isKioskLayout() {
+  return Boolean(document.querySelector(".room")?.classList.contains("room--kiosk"));
+}
+
+function isDebugMode() {
+  return new URLSearchParams(location.search).get("debug") === "1";
+}
+
+function relocateSessionControls() {
+  const block = document.getElementById("session-controls");
+  const home = document.getElementById("session-controls-home");
+  const drawer = document.getElementById("drawer-session-slot");
+  if (!block || !home || !drawer) return;
+  const target = isKioskLayout() ? drawer : home;
+  if (block.parentElement !== target) {
+    target.appendChild(block);
+  }
+}
+
+function applyDebugInjectionVisibility() {
+  const wrap = document.getElementById("debug-injection-wrap");
+  if (!wrap) return;
+  wrap.hidden = isKioskLayout() && !isDebugMode();
+}
+
+function ensureSessionControlsMounted() {
+  const block = document.getElementById("session-controls");
+  if (!block || block.dataset.mounted === "1") return;
+  block.dataset.mounted = "1";
+  block.hidden = false;
+  relocateSessionControls();
+  applyDebugInjectionVisibility();
+}
+
+function setRoomDrawerOpen(open) {
+  const drawer = document.getElementById("room-drawer");
+  const openBtn = document.getElementById("room-drawer-open");
+  if (!drawer) return;
+  roomDrawerOpen = open;
+  drawer.classList.toggle("room-drawer--open", open);
+  drawer.setAttribute("aria-hidden", open ? "false" : "true");
+  if (openBtn) {
+    openBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  document.body.classList.toggle("room-drawer-body-lock", open && isKioskLayout());
+  if (open) {
+    document.getElementById("room-drawer-close")?.focus();
+  } else if (openBtn && isKioskLayout()) {
+    openBtn.focus();
+  }
+}
+
+function setupRoomDrawer() {
+  const openBtn = document.getElementById("room-drawer-open");
+  const closeBtn = document.getElementById("room-drawer-close");
+  const backdrop = document.getElementById("room-drawer-backdrop");
+  const reloadBtn = document.getElementById("page-reload");
+
+  if (openBtn && !openBtn.dataset.bound) {
+    openBtn.dataset.bound = "1";
+    openBtn.addEventListener("click", () => setRoomDrawerOpen(true));
+  }
+  if (closeBtn && !closeBtn.dataset.bound) {
+    closeBtn.dataset.bound = "1";
+    closeBtn.addEventListener("click", () => setRoomDrawerOpen(false));
+  }
+  if (backdrop && !backdrop.dataset.bound) {
+    backdrop.dataset.bound = "1";
+    backdrop.addEventListener("click", () => setRoomDrawerOpen(false));
+  }
+  if (reloadBtn && !reloadBtn.dataset.bound) {
+    reloadBtn.dataset.bound = "1";
+    reloadBtn.addEventListener("click", () => {
+      setRoomDrawerOpen(false);
+      globalThis.location.reload();
+    });
+  }
+
+  if (openBtn) {
+    openBtn.hidden = !isKioskLayout();
+  }
+  if (!isKioskLayout()) {
+    setRoomDrawerOpen(false);
+  }
+
+  if (!document.body.dataset.roomDrawerKeyBound) {
+    document.body.dataset.roomDrawerKeyBound = "1";
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && roomDrawerOpen) {
+        setRoomDrawerOpen(false);
+      }
+    });
+  }
+}
+
+function visualFeedTargets() {
+  if (isKioskLayout()) {
+    const drawer = document.getElementById("visual-feed-drawer");
+    return drawer ? [drawer] : [];
+  }
+  const main = document.getElementById("visual-feed");
+  return main ? [main] : [];
+}
+
+function statusTargets() {
+  if (isKioskLayout()) {
+    const drawer = document.getElementById("status-content-drawer");
+    return drawer ? [drawer] : [];
+  }
+  const main = document.getElementById("status-content");
+  return main ? [main] : [];
+}
 
 function isNativeChat() {
   return uiConfig.chat_backend === "native" || uiConfig.native_chat === true;
@@ -612,6 +726,7 @@ function setupSessionSwitcher() {
   }
   if (historySelect) {
     historySelect.addEventListener("change", () => {
+      if (isKioskLayout()) setRoomDrawerOpen(false);
       if (isNativeChat()) {
         void selectNativeSession(historySelect.value, { force: true });
       } else {
@@ -1329,20 +1444,11 @@ function setupChatCompose() {
   });
 }
 
-function renderStatus(data) {
-  const root = document.getElementById("status-content");
-  const tempEl = document.getElementById("temperature");
-  if (!root) return;
-
+function buildStatusHtml(data) {
   const temp = KoyoriVoice.formatTemperature(data.temperature);
   const desires = KoyoriVoice.formatDesires(data.desires, data.dominant_desire);
   const social = KoyoriVoice.formatSocialVibe(data.social_state);
   const journey = KoyoriVoice.formatJourney(data.active_arcs);
-  const moments = KoyoriVoice.formatExperiences(data.recent_experiences);
-
-  if (tempEl) {
-    tempEl.textContent = temp.detail ? `${temp.body} · ${temp.detail}` : temp.body;
-  }
 
   const desireList = desires.lines
     .map(
@@ -1362,14 +1468,7 @@ function renderStatus(data) {
     .map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`)
     .join("");
 
-  const momentList = moments.items
-    .map(
-      (item) =>
-        `<li>${escapeHtml(item.kind)}: ${escapeHtml(item.summary || "")}</li>`,
-    )
-    .join("");
-
-  root.innerHTML = `
+  return `
     <article class="status-card status-card--temp mood-${escapeHtml(temp.mood || "neutral")} is-updated">
       <span class="status-card__icon" aria-hidden="true">${escapeHtml(temp.icon || "○")}</span>
       <span class="status-card__label">${escapeHtml(temp.label)}</span>
@@ -1395,16 +1494,28 @@ function renderStatus(data) {
       <p class="status-card__body">${escapeHtml(social.body)}</p>
       ${socialTags ? `<div class="tag-row">${socialTags}</div>` : ""}
     </article>`;
-
-  window.setTimeout(() => {
-    root.querySelectorAll(".status-card.is-updated").forEach((card) => {
-      card.classList.remove("is-updated");
-    });
-  }, 700);
 }
 
-function renderCamera(data) {
-  const root = document.getElementById("visual-feed");
+function renderStatus(data) {
+  const tempEl = document.getElementById("temperature");
+  const temp = KoyoriVoice.formatTemperature(data.temperature);
+
+  if (tempEl) {
+    tempEl.textContent = temp.detail ? `${temp.body} · ${temp.detail}` : temp.body;
+  }
+
+  const html = buildStatusHtml(data);
+  for (const root of statusTargets()) {
+    root.innerHTML = html;
+    window.setTimeout(() => {
+      root.querySelectorAll(".status-card.is-updated").forEach((card) => {
+        card.classList.remove("is-updated");
+      });
+    }, 700);
+  }
+}
+
+function renderCameraInto(root, data) {
   if (!root) return;
   if (data.error) {
     root.innerHTML = `<p class="error">視界はまだ届いていない… (${escapeHtml(data.error)})</p>`;
@@ -1415,7 +1526,23 @@ function renderCamera(data) {
     return;
   }
   const preset = data.camera_preset ? ` · ${escapeHtml(data.camera_preset)}` : "";
-  root.innerHTML = `<img src="data:image/jpeg;base64,${data.image_base64}" alt="こよりの視界${preset}" loading="lazy" />`;
+  const alt = `こよりの視界${preset}`;
+  const src = `data:image/jpeg;base64,${data.image_base64}`;
+  const img = root.querySelector("img");
+  if (img) {
+    if (img.getAttribute("src") !== src) {
+      img.setAttribute("src", src);
+    }
+    img.alt = alt;
+    return;
+  }
+  root.innerHTML = `<img src="${src}" alt="${alt}" loading="lazy" />`;
+}
+
+function renderCamera(data) {
+  for (const root of visualFeedTargets()) {
+    renderCameraInto(root, data);
+  }
 }
 
 async function refreshChat({ force = false } = {}) {
@@ -1449,8 +1576,10 @@ async function refreshStatus() {
     const data = await fetchJson("/api/v1/koyori/status");
     renderStatus(data);
   } catch (err) {
-    const root = document.getElementById("status-content");
-    if (root) root.innerHTML = `<p class="error">${escapeHtml(err.message)}</p>`;
+    const message = `<p class="error">${escapeHtml(err.message)}</p>`;
+    for (const root of statusTargets()) {
+      root.innerHTML = message;
+    }
   }
 }
 
@@ -1459,8 +1588,10 @@ async function refreshCamera() {
     const data = await fetchJson("/api/v1/camera/snapshot");
     renderCamera(data);
   } catch (err) {
-    const root = document.getElementById("visual-feed");
-    if (root) root.innerHTML = `<p class="error">${escapeHtml(err.message)}</p>`;
+    const message = `<p class="error">${escapeHtml(err.message)}</p>`;
+    for (const root of visualFeedTargets()) {
+      root.innerHTML = message;
+    }
   }
 }
 
@@ -1477,16 +1608,16 @@ function setupKioskLayout() {
   if (params.get("kiosk") === "1") {
     room.classList.add("room--kiosk");
     localStorage.setItem(KIOSK_LAYOUT_STORAGE_KEY, "1");
-    return;
-  }
-  if (params.get("kiosk") === "0") {
+  } else if (params.get("kiosk") === "0") {
     room.classList.remove("room--kiosk");
     localStorage.removeItem(KIOSK_LAYOUT_STORAGE_KEY);
-    return;
-  }
-  if (localStorage.getItem(KIOSK_LAYOUT_STORAGE_KEY) === "1") {
+  } else if (localStorage.getItem(KIOSK_LAYOUT_STORAGE_KEY) === "1") {
     room.classList.add("room--kiosk");
   }
+  ensureSessionControlsMounted();
+  relocateSessionControls();
+  applyDebugInjectionVisibility();
+  setupRoomDrawer();
 }
 
 setupKioskLayout();

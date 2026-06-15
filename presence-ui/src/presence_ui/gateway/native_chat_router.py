@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from collections.abc import AsyncIterator
 
@@ -16,6 +17,7 @@ from presence_ui.gateway.ccs_integration import (
     agent_config_from_intercept,
     default_agent_config,
 )
+from presence_ui.gateway.see_prefetch import prefetch_camera_for_message
 from presence_ui.gateway.deterministic_memory import (
     MemoryListRequest,
     detect_memory_list_request,
@@ -23,6 +25,8 @@ from presence_ui.gateway.deterministic_memory import (
     format_memory_list_reply,
 )
 from presence_ui.gateway.social_chat import ChatInterceptResult, intercept_chat_request
+
+logger = logging.getLogger(__name__)
 
 _TOKENS: set[str] = set()
 # Session IDs that Claude CLI actually created (direct-reply paths must not register here).
@@ -138,10 +142,20 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
             )
             return StreamingResponse(stream, media_type="text/event-stream")
 
+        vision_note: str | None = None
+        try:
+            vision_note, _prefetch_events = await prefetch_camera_for_message(req.prompt)
+            if vision_note:
+                logger.info("native chat camera prefetch ok (%d chars)", len(vision_note))
+        except Exception as exc:
+            logger.warning("native chat camera prefetch failed: %s", exc)
+            vision_note = None
+
         intercept = intercept_chat_request(
             payload={"message": req.prompt, "sessionId": req.session_id},
             person_id=person_id,
             lite=True,
+            vision_prefetch=vision_note,
         )
         if not intercept.forward:
             async def silent_stream() -> AsyncIterator[str]:

@@ -21,7 +21,9 @@ sudo ./install-koyori-kiosk.sh
 
 `http://ma-home.local:8090/`（`/projects/...` は 8080 用。8090 だと JSON 404 画面になる）
 
-キオスク起動時は `koyori-kiosk.sh` が自動で **`?kiosk=1`** を付与（C7: 会話左・視界右の2カラム、状態は右下コンパクト）。手動確認: `http://ma-home.local:8090/?kiosk=1`
+キオスク起動時は `koyori-kiosk.sh` が自動で **`?kiosk=1`** を付与（C11b: 全幅チャット + ドロワー）。`kiosk=0` が設定されていても **強制で 1 に差し替え**。手動確認: `http://ma-home.local:8090/?kiosk=1`
+
+repo 更新後は `sudo ./install-koyori-kiosk.sh` で `/usr/local/bin/koyori-kiosk` を再配置してから reboot。
 
 ## Input Leap — 見送り
 

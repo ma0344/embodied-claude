@@ -202,7 +202,26 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 - [x] **C9** 8080 optional 化（`post-logon-smoke` / `verify-mission-a` Native 経路、`install-webui-task` 任意明記）
 - [x] **C10** JSONL 正本の履歴同期（`GET /api/v1/native/sessions` + messages、`app.js` 7s ポール・PC/キオスク共有）
 
-**実装順**: C0 → C3 → C4 → C5 → C6/C7/C8 → C9 → **C10**
+| 優先 | 項目 | メモ |
+|------|------|------|
+| 高 | **C11 Surface タッチ / キオスク UX** | 実機 Surface 単体操作。Input Leap は自室用、持ち出しはタッチ必須 |
+| 高 | **C11a** 即効 | 視界ちらつき修正、`touch-action` / 選択抑制、タップ 44px |
+| 高 | **C11b** ドロワー | ハンバーガー + 全幅チャット、セッション・視界・状態を引き出し |
+| 中 | **C11c** 視界強化 | ドロワー内大プレビュー / タップ全画面、1行キャプション |
+| 中 | **C11d** 状態圧縮 | キオスク用サマリ2枚（話しかけていい？ / 気持ち1行） |
+
+- [x] **C11a** タッチ即効（視界 img 差し替え、チャット pan-y、キオスク 44px）
+- [x] **C11b** ドロワー UI（`?kiosk=1`、セッション操作・視界・状態・画面更新）
+- [ ] **C11c** 視界強化（任意）
+- [ ] **C11d** 状態圧縮（任意）
+
+| 優先 | 項目 | メモ |
+|------|------|------|
+| 中 | **C12 Gateway + LLM ハイブリッド intent** | regex 即応 + ローカル LLM ルーター（曖昧な一文だけ分類） |
+
+- [ ] **C12** intent router（送信前に LM Studio で `desk|left|see|window|chat` 等を JSON 分類。regex 未検出 or 低 confidence 時のみ。Gateway 即実行 → 足りなければ compose/plan）
+
+**実装順**: C0 → … → C10 → **C11a → C11b** → C11c/d → **C12**
 
 ---
 

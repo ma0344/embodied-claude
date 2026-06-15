@@ -49,7 +49,9 @@ fi
 # presence-ui root (/) — NOT /projects/... (8080 SPA path; 8090 returns JSON 404 in Firefox)
 WEBUI_URL="${KOYORI_WEBUI_URL:-http://ma-home.local:8090/}"
 
-# C7: kiosk layout (?kiosk=1 → chat + vision side-by-side, compact status)
+# C7/C11: dedicated kiosk session always uses touch layout (?kiosk=1).
+# Never honor kiosk=0 (PC layout breaks Surface touch UX / C11b drawer).
+WEBUI_URL="${WEBUI_URL//kiosk=0/kiosk=1}"
 if [[ "$WEBUI_URL" != *kiosk=* ]]; then
   if [[ "$WEBUI_URL" == *\?* ]]; then
     WEBUI_URL="${WEBUI_URL}&kiosk=1"

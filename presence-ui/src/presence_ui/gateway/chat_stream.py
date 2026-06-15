@@ -9,11 +9,8 @@ from typing import Any
 
 from presence_ui.gateway.room_events import activity_event, encode_event, progress_event
 from presence_ui.gateway.room_ingest import ingest_agent_turn
-from presence_ui.gateway.see_intent import (
-    SEE_ACTIVITY_LABELS,
-    SEE_PROGRESS_LABELS,
-    detect_see_intent,
-)
+from presence_ui.gateway.see_prefetch import prefetch_camera_for_message
+from presence_ui.gateway.see_intent import SEE_PROGRESS_LABELS, detect_see_intent
 from presence_ui.gateway.social_chat import (
     ChatInterceptResult,
     intercept_chat_request,
@@ -21,7 +18,7 @@ from presence_ui.gateway.social_chat import (
     stream_silent_response,
 )
 from presence_ui.gateway.stream_sanitize import extract_assistant_speech, stream_passthrough_chat
-from presence_ui.services.vision_capture import prefetch_vision_for_chat, vision_prefetch_enabled
+from presence_ui.services.vision_capture import vision_prefetch_enabled
 
 
 async def stream_gateway_chat(
@@ -35,28 +32,14 @@ async def stream_gateway_chat(
     vision_note: str | None = None
     gateway_events: list[dict[str, Any]] = []
 
-    see_intent = detect_see_intent(message) if message else None
-    if see_intent and vision_prefetch_enabled():
-        progress_label = SEE_PROGRESS_LABELS.get(see_intent.mode, "見てる…")
-        yield encode_event(progress_event(phase="see", label=progress_label))
+    if message and vision_prefetch_enabled():
+        see_intent = detect_see_intent(message)
+        if see_intent:
+            progress_label = SEE_PROGRESS_LABELS.get(see_intent.mode, "見てる…")
+            yield encode_event(progress_event(phase="see", label=progress_label))
         try:
-            _result, vision_note = await prefetch_vision_for_chat(
-                intent=see_intent,
-                user_text=message,
-                remember=True,
-            )
-            detail = _result.caption or _result.error or _result.label
-            activity_label = SEE_ACTIVITY_LABELS.get(see_intent.mode, "見た")
-            if not _result.ok:
-                activity_label = "見られなかった"
-            gateway_events.append(
-                activity_event(
-                    kind="see",
-                    label=activity_label,
-                    detail=(detail or "")[:200],
-                    ok=_result.ok,
-                )
-            )
+            vision_note, prefetch_events = await prefetch_camera_for_message(message)
+            gateway_events.extend(prefetch_events)
         except Exception as exc:  # noqa: BLE001
             vision_note = (
                 "[vision_prefetch]\n"

@@ -192,9 +192,9 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 
 | チャネル | 出力先 | 状態 |
 |----------|--------|------|
-| `chat_push` | 8090 Native セッション + UI bubble（SSE イベント） | 未実装 |
+| `chat_push` | 8090 bubble（**MVP: poll** → **目標: SSE**） | 未実装 |
 | `voice_local` | ma-home PC スピーカー（`services/tts.py` local） | 実装済み（TTS 設定要） |
-| `voice_surface` | **Surface キオスク端末のスピーカー**（ブラウザ Web Speech / 8090 経由 TTS 再生） | 未実装 |
+| `voice_surface` | Surface スピーカー（**MVP: Web Speech** → **目標: 8090 TTS URL**） | 未実装 |
 | `voice_camera` | Tapo / go2rtc カメラ側スピーカー | 設定時のみ |
 | `kiosk_banner` | Surface 部屋 UI ヘッダー／トースト（視覚のみ） | 未実装 |
 | `push_windows` | Windows トースト／Action Center（**受信側アプリ or ブリッジ要**） | 未実装 |
@@ -213,8 +213,8 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 | 優先 | 項目 | メモ |
 |------|------|------|
 | 高 | **A4a** Outbound モデル | `OutboundChannel` enum、`record_agent_experience` に `channel` + `delivered`、gateway 直実行の戻り値と一致 |
-| 高 | **A4b** `chat_push` | autonomous / nudge をアクティブ Native セッション JSONL + `app.js` SSE で bubble 表示 |
-| 中 | **A4c** `voice_surface` | キオスク `?kiosk=1` 時 TTS を **端末スピーカー**へ（Web Audio / 8090 音声 URL） |
+| 高 | **A4b** `chat_push` | **MVP**: room event + 3s poll。**目標**: SSE room stream |
+| 中 | **A4c** `voice_surface` | **MVP**: Web Speech。**目標**: 8090 TTS audio URL |
 | 中 | **A4d** チャネル選択 | Surface 接続中 → chat_push + voice_surface 優先、ma-home のみ → voice_local |
 | 中 | **A4e** nudge クールダウン | 同一 desire / 同一文面の連打防止（6/14 `まー、おる？` 4連発） |
 | 中 | **A4f** tick スケジューラ | desire-updater / Task と `autonomous-tick` 定期実行（OL2 リマインドと共用可） |
@@ -222,16 +222,26 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 | 低 | **A4h** `push_android` | ntfy / FCM 等 + 専用受信（部屋アプリ or 既存クライアント） |
 | 低 | **A4i** `kiosk_banner` | チャットを開いてなくても見える短い着信 UI |
 
-- [ ] **A4a** Outbound モデル + experience に channel/delivered
-- [ ] **A4b** chat_push（8090 UI）
-- [ ] **A4c** voice_surface（Surface スピーカー）
-- [ ] **A4d** チャネル選択ポリシー
-- [ ] **A4e** nudge クールダウン
-- [ ] **A4f** 自律 tick スケジューラ
-- [ ] **A4g/h** Windows / Android Push（外部 API + 専用アカウント、受信側別途）
-- [ ] **A4i** kiosk_banner（任意）
-
 **実装順（案）**: A4a → **A4b + A4c**（Surface 日常）→ A4d/e → OL2（リマインド）→ A4g/h（外出先）
+
+**段階（合意 2026-06-15）** — 目標は **SSE + Server TTS**。まず MVP で「届く」を証明する。
+
+| 段 | A4b chat_push | A4c voice_surface | 備考 |
+|----|---------------|-------------------|------|
+| **MVP** | room event 保存 + **3s poll** → 既存 bubble 描画 | ブラウザ **`speechSynthesis`**（Web Speech） | JSONL を汚さない。autoplay は初回タップで unlock |
+| **目標** | 常時 **`EventSource /api/v1/room/stream`** | ma-home 合成 → **`GET …/outbound/audio/{id}`** + `Audio.play()` | VOICEVOX/ElevenLabs 声。bubble と同一 SSE イベント |
+
+MVP チェックリスト:
+
+- [ ] **A4a** Outbound モデル + experience に `channel` / `delivered`
+- [ ] **A4e** nudge クールダウン（MVP 前に必須）
+- [ ] **A4b-mvp** `GET /api/v1/outbound/pending` + poll → bubble（`talk_to_companion` / tick から enqueue）
+- [ ] **A4c-mvp** 同上 payload の `speak` → Web Speech（`?kiosk=1`）
+- [ ] **A4b+** SSE room stream + 即時 bubble
+- [ ] **A4c+** Server TTS URL + Web Audio
+- [ ] **A4d** チャネル選択（MVP 後）
+- [ ] **A4f** tick スケジューラ（OL2 と共用）
+- [ ] **A4g/h** Win/Android Push（外出先）
 
 ---
 

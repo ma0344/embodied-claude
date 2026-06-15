@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 from presence_ui.schemas import (
@@ -11,6 +12,8 @@ from presence_ui.schemas import (
     NativeSessionMessagesResponse,
     NativeSessionSummary,
 )
+from presence_ui.services.display_time import normalize_iso_timestamp
+from presence_ui.services.native_session_prefs import load_hidden_session_ids
 from presence_ui.services.session_log import (
     _find_project_dir,
     _messages_from_jsonl,
@@ -44,30 +47,42 @@ def resolve_session_jsonl_path(
     return candidate if candidate.is_file() else None
 
 
+def _session_updated_at(*, messages: list[ChatMessage], path: Path) -> str:
+    for msg in reversed(messages):
+        ts = normalize_iso_timestamp(msg.timestamp)
+        if ts:
+            return ts
+    return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat()
+
+
 def list_native_sessions(
     *,
     project_path: str | None = None,
     limit: int = 40,
 ) -> NativeSessionListResponse:
     """List recent Native chat sessions from ~/.claude/projects JSONL files."""
+    hidden = load_hidden_session_ids()
     rows = list_project_jsonl_files(project_path=project_path, limit=limit)
     sessions = []
     for row in rows:
         session_id = str(row.get("session_file_id") or "")
-        if not session_id:
+        if not session_id or session_id in hidden:
             continue
         path = Path(str(row.get("path") or ""))
         preview = ""
+        messages: list[ChatMessage] = []
+        updated_at = str(row.get("modified_at") or "")
         if path.is_file():
             messages = _messages_from_jsonl(path)
             if messages:
                 preview = _preview_for_messages(messages)
+                updated_at = _session_updated_at(messages=messages, path=path)
         sessions.append(
             NativeSessionSummary(
                 session_id=session_id,
                 title=str(row.get("title") or session_id[:8]),
                 preview=preview,
-                updated_at=str(row.get("modified_at") or ""),
+                updated_at=updated_at,
                 message_count=int(row.get("message_count") or 0),
             )
         )

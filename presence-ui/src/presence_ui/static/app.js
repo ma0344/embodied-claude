@@ -7,6 +7,7 @@ const SESSION_STORAGE_KEY = "koyori-cc-session-id";
 const NATIVE_TOKEN_STORAGE_KEY = "koyori-native-token";
 const NATIVE_HIDDEN_SESSIONS_KEY = "koyori-native-hidden-v1";
 const NATIVE_SESSIONS_API = "/api/v1/native/sessions";
+const NATIVE_HIDDEN_API = "/api/v1/native/hidden";
 const SHOW_DEBUG_INJECTION_KEY = "koyori-show-debug-injection";
 const KIOSK_LAYOUT_STORAGE_KEY = "koyori-kiosk-layout";
 
@@ -25,7 +26,7 @@ let activeStreamController = null;
 let activeRequestId = null;
 let sendStartedAt = 0;
 let sendTimeoutId = null;
-let uiConfig = { chat_backend: "proxy8080", native_chat: false };
+let uiConfig = { chat_backend: "proxy8080", native_chat: false, display_timezone: "Asia/Tokyo" };
 let nativeAuthToken = sessionStorage.getItem(NATIVE_TOKEN_STORAGE_KEY) || "";
 let nativeSessionList = [];
 let showDebugInjection = localStorage.getItem(SHOW_DEBUG_INJECTION_KEY) === "1";
@@ -46,6 +47,7 @@ async function loadUiConfig() {
     native_login_path: data.native_login_path || "/api/native/login",
     native_chat_path: data.native_chat_path || "/api/native/chat",
     native_sessions_path: data.native_sessions_path || NATIVE_SESSIONS_API,
+    display_timezone: data.display_timezone || "Asia/Tokyo",
   };
 }
 
@@ -150,8 +152,33 @@ function loadNativeHiddenSessions() {
   }
 }
 
-function saveNativeHiddenSessions(hidden) {
-  localStorage.setItem(NATIVE_HIDDEN_SESSIONS_KEY, JSON.stringify([...hidden]));
+function displayTimeZone() {
+  return uiConfig.display_timezone || "Asia/Tokyo";
+}
+
+async function migrateNativeHiddenToServer() {
+  const hidden = loadNativeHiddenSessions();
+  if (!hidden.size) return;
+  try {
+    await fetch(NATIVE_HIDDEN_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify({ session_ids: [...hidden] }),
+    });
+    localStorage.removeItem(NATIVE_HIDDEN_SESSIONS_KEY);
+  } catch {
+    // keep local ids until next successful migrate
+  }
+}
+
+async function hideNativeSessionOnServer(sessionId) {
+  const res = await fetch(
+    `${nativeSessionsApiPath()}/${encodeURIComponent(sessionId)}/hide`,
+    { method: "POST" },
+  );
+  if (!res.ok) {
+    throw new Error(`hide session → ${res.status}`);
+  }
 }
 
 function nativeSessionsApiPath() {
@@ -171,9 +198,8 @@ function mapServerSession(row) {
 
 async function refreshNativeSessionList() {
   const data = await fetchJson(`${nativeSessionsApiPath()}?limit=40`);
-  const hidden = loadNativeHiddenSessions();
   nativeSessionList = (data.sessions || [])
-    .filter((row) => row.session_id && !hidden.has(row.session_id))
+    .filter((row) => row.session_id)
     .map(mapServerSession);
   renderNativeSessionSwitcher();
   return nativeSessionList;
@@ -232,23 +258,25 @@ async function selectNativeSession(sessionId, { force = false } = {}) {
   }
 }
 
-function deleteNativeSession() {
+async function deleteNativeSession() {
   if (!activeSessionId) return;
   if (
     !globalThis.confirm(
-      "この会話を一覧から外す？（Claude Code の JSONL ログは ma-home に残る）",
+      "この会話を一覧から外す？（全デバイスで非表示。JSONL ログは ma-home に残る）",
     )
   ) {
     return;
   }
-  const hidden = loadNativeHiddenSessions();
-  hidden.add(activeSessionId);
-  saveNativeHiddenSessions(hidden);
   const removedId = activeSessionId;
-  nativeSessionList = nativeSessionList.filter((item) => item.sessionId !== removedId);
-  renderNativeSessionSwitcher();
+  try {
+    await hideNativeSessionOnServer(removedId);
+  } catch (err) {
+    globalThis.alert(`一覧から外せなかった: ${err.message}`);
+    return;
+  }
+  await refreshNativeSessionList();
   if (nativeSessionList.length) {
-    void selectNativeSession(nativeSessionList[0].sessionId, { force: true });
+    await selectNativeSession(nativeSessionList[0].sessionId, { force: true });
     return;
   }
   startNewNativeSession();
@@ -268,6 +296,7 @@ function startNewNativeSession() {
 async function initNativeSessions() {
   applyNativeSessionUi();
   await validateNativeAuthToken();
+  await migrateNativeHiddenToServer();
   await refreshNativeSessionList();
   activeSessionId = localStorage.getItem(SESSION_STORAGE_KEY) || null;
   activeProjectEncoded = null;
@@ -332,7 +361,11 @@ function appendAssistantMessage(text) {
 }
 
 function formatTime(date) {
-  return date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleTimeString("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: displayTimeZone(),
+  });
 }
 
 function formatTimestamp(iso) {
@@ -344,6 +377,7 @@ function formatTimestamp(iso) {
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: displayTimeZone(),
     });
   } catch {
     return iso;

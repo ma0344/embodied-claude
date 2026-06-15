@@ -19,10 +19,13 @@ from presence_ui.gateway.proxy import proxy_get
 from presence_ui.schemas import (
     CameraSnapshotResponse,
     HealthResponse,
+    NativeHiddenSessionsRequest,
+    NativeHideSessionResponse,
     NativeSessionListResponse,
     NativeSessionMessagesResponse,
 )
 from presence_ui.services.camera import fetch_camera_snapshot
+from presence_ui.services.display_time import display_timezone
 from presence_ui.services.status import fetch_koyori_status
 from presence_ui.utf8 import utf8_json
 
@@ -91,6 +94,7 @@ def create_app() -> FastAPI:
                 "native_login_path": "/api/native/login" if native_chat else None,
                 "native_chat_path": "/api/native/chat" if native_chat else None,
                 "native_sessions_path": "/api/v1/native/sessions" if native_chat else None,
+                "display_timezone": display_timezone(),
                 "legacy_chat_path": "/api/chat",
             },
         )
@@ -101,6 +105,38 @@ def create_app() -> FastAPI:
         from presence_ui.services.native_history import list_native_sessions
 
         return list_native_sessions(limit=min(max(limit, 1), 100))
+
+    @app.post("/api/v1/native/sessions/{session_id}/hide", response_model=NativeHideSessionResponse)
+    def hide_native_session(session_id: str) -> NativeHideSessionResponse:
+        from presence_ui.services.native_session_prefs import hide_session
+
+        try:
+            hidden = hide_session(session_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return NativeHideSessionResponse(
+            session_id=session_id,
+            hidden_count=len(hidden),
+        )
+
+    @app.post("/api/v1/native/hidden", response_model=NativeHideSessionResponse)
+    def merge_native_hidden(body: NativeHiddenSessionsRequest) -> NativeHideSessionResponse:
+        """Merge session ids into the shared hidden set (legacy localStorage migration)."""
+        from presence_ui.services.native_session_prefs import hide_session_ids
+
+        if not body.session_ids:
+            from presence_ui.services.native_session_prefs import load_hidden_session_ids
+
+            hidden = load_hidden_session_ids()
+            return NativeHideSessionResponse(session_id="", hidden_count=len(hidden))
+        try:
+            hidden = hide_session_ids(body.session_ids)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return NativeHideSessionResponse(
+            session_id=body.session_ids[-1],
+            hidden_count=len(hidden),
+        )
 
     @app.get(
         "/api/v1/native/sessions/{session_id}/messages",

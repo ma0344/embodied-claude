@@ -161,3 +161,4 @@ def test_ui_config_exposes_native_sessions_path(monkeypatch: pytest.MonkeyPatch)
     client = TestClient(create_app())
     body = client.get("/api/v1/ui-config").json()
     assert body["native_sessions_path"] == "/api/v1/native/sessions"
+    assert body["display_timezone"] == "Asia/Tokyo"

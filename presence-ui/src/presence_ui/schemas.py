@@ -245,3 +245,13 @@ class NativeSessionListResponse(BaseModel):
 class NativeSessionMessagesResponse(BaseModel):
     session_id: str
     messages: list[ChatMessage]
+
+
+class NativeHiddenSessionsRequest(BaseModel):
+    session_ids: list[str] = Field(default_factory=list, max_length=100)
+
+
+class NativeHideSessionResponse(BaseModel):
+    ok: bool = True
+    session_id: str
+    hidden_count: int = 0

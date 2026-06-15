@@ -209,11 +209,14 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 | 高 | **C11b** ドロワー | ハンバーガー + 全幅チャット、セッション・視界・状態を引き出し |
 | 中 | **C11c** 視界強化 | ドロワー内大プレビュー / タップ全画面、1行キャプション |
 | 中 | **C11d** 状態圧縮 | キオスク用サマリ2枚（話しかけていい？ / 気持ち1行） |
+| 中 | **C11e** 右コンテキストレール | チャット左・常時/ピン留め右サイドバー。ドロワーで選んだ視界/状態カードを固定表示（Surface タッチ向け） |
 
 - [x] **C11a** タッチ即効（視界 img 差し替え、チャット pan-y、キオスク 44px）
 - [x] **C11b** ドロワー UI（`?kiosk=1`、セッション操作・視界・状態・画面更新）
+- [x] **C11b+** ドロワー scroll + 視界アスペクト追従（`room-drawer__body`、img `height:auto`）+ キオスク太スクロールバー（18px）
 - [ ] **C11c** 視界強化（任意）
 - [ ] **C11d** 状態圧縮（任意）
+- [ ] **C11e** 右コンテキストレール（ピン留めサイドバー）
 
 | 優先 | 項目 | メモ |
 |------|------|------|
@@ -221,7 +224,7 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 
 - [ ] **C12** intent router（送信前に LM Studio で `desk|left|see|window|chat` 等を JSON 分類。regex 未検出 or 低 confidence 時のみ。Gateway 即実行 → 足りなければ compose/plan）
 
-**実装順**: C0 → … → C10 → **C11a → C11b** → C11c/d → **C12**
+**実装順**: C0 → … → C10 → **C11a → C11b → C11b+** → C11c/d/e → **C12**
 
 ---
 

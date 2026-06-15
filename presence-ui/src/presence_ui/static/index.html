@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>こよりの部屋</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260615-c11-kiosk" />
+  <link rel="stylesheet" href="/static/style.css?v=20260615-c11e-rail" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500&family=Cormorant+Garamond:wght@400;500&display=swap" rel="stylesheet" />
@@ -80,24 +80,26 @@
         <button type="button" id="room-drawer-close" class="room-drawer__close" aria-label="閉じる">×</button>
       </header>
 
-      <section class="room-drawer__section" aria-label="会話の切り替え">
-        <h3 class="room-drawer__section-title">会話</h3>
-        <div id="drawer-session-slot" class="drawer-session-slot"></div>
-      </section>
+      <div class="room-drawer__body" id="room-drawer-body">
+        <section class="room-drawer__section room-drawer__section--session" aria-label="会話の切り替え">
+          <h3 class="room-drawer__section-title">会話</h3>
+          <div id="drawer-session-slot" class="drawer-session-slot"></div>
+        </section>
 
-      <section class="room-drawer__section" aria-label="視界">
-        <h3 class="room-drawer__section-title">視界</h3>
-        <div class="visual-feed visual-feed--drawer" id="visual-feed-drawer">
-          <p class="placeholder">カメラを読み込み中…</p>
-        </div>
-      </section>
+        <section class="room-drawer__section room-drawer__section--vision" aria-label="視界">
+          <h3 class="room-drawer__section-title">視界</h3>
+          <div class="visual-feed visual-feed--drawer" id="visual-feed-drawer">
+            <p class="placeholder">カメラを読み込み中…</p>
+          </div>
+        </section>
 
-      <section class="room-drawer__section" aria-label="こよりの状態">
-        <h3 class="room-drawer__section-title">状態</h3>
-        <div id="status-content-drawer" class="status-grid status-grid--drawer">
-          <p class="placeholder">読み込み中…</p>
-        </div>
-      </section>
+        <section class="room-drawer__section room-drawer__section--status" aria-label="こよりの状態">
+          <h3 class="room-drawer__section-title">状態</h3>
+          <div id="status-content-drawer" class="status-grid status-grid--drawer">
+            <p class="placeholder">読み込み中…</p>
+          </div>
+        </section>
+      </div>
 
       <div class="room-drawer__footer">
         <button type="button" id="page-reload" class="drawer-action drawer-action--primary">画面を更新</button>
@@ -127,6 +129,6 @@
   <script src="/static/chat-markdown.js?v=20260610-md-both"></script>
   <script src="/static/cc-messages.js?v=20260615-memory-inject"></script>
   <script src="/static/koyori-voice.js?v=20260612-sendfix"></script>
-  <script src="/static/app.js?v=20260615-c11-kiosk"></script>
+  <script src="/static/app.js?v=20260615-c11e-rail"></script>
 </body>
 </html>

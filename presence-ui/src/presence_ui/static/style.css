@@ -669,6 +669,33 @@ body {
   border-radius: 999px;
 }
 
+/* Kiosk / touch: wide scrollbars (Surface treats touch as mouse — thin bars are unusable) */
+.room--kiosk .chat-scroll,
+.room--kiosk .room-drawer__body {
+  scrollbar-width: auto;
+  scrollbar-color: rgba(122, 107, 88, 0.55) rgba(154, 148, 138, 0.14);
+}
+
+.room--kiosk .chat-scroll::-webkit-scrollbar,
+.room--kiosk .room-drawer__body::-webkit-scrollbar {
+  width: 22px;
+}
+
+.room--kiosk .chat-scroll::-webkit-scrollbar-track,
+.room--kiosk .room-drawer__body::-webkit-scrollbar-track {
+  background: rgba(154, 148, 138, 0.14);
+  border-radius: 10px;
+  margin: 4px 0;
+}
+
+.room--kiosk .chat-scroll::-webkit-scrollbar-thumb,
+.room--kiosk .room-drawer__body::-webkit-scrollbar-thumb {
+  background: rgba(122, 107, 88, 0.5);
+  border: 4px solid transparent;
+  border-radius: 10px;
+  background-clip: padding-box;
+}
+
 .message {
   max-width: 88%;
   padding: 0.6rem 0.8rem;
@@ -927,6 +954,11 @@ body {
 }
 
 /* C11a: touch — pan-y scroll, no accidental text selection on messages */
+.room--kiosk .chat-room {
+  max-width: min(100%, 52rem);
+  margin-inline: auto;
+}
+
 .room--kiosk .chat-scroll {
   touch-action: pan-y;
   -webkit-user-select: none;
@@ -1102,17 +1134,24 @@ body {
   cursor: pointer;
 }
 
+.room-drawer__body {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
 .room-drawer__section {
   padding: 0.65rem 1rem;
   border-bottom: 1px solid var(--border);
-  overflow-y: auto;
   flex-shrink: 0;
 }
 
-.room-drawer__section:nth-child(3) {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+.room-drawer__section--vision {
+  padding-bottom: 0.85rem;
 }
 
 .room-drawer__section-title {
@@ -1154,7 +1193,11 @@ body {
 }
 
 .visual-feed--drawer {
-  min-height: clamp(160px, 28vh, 280px);
+  flex: none;
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 0;
   border-radius: 10px;
   overflow: hidden;
   background: #1a1814;
@@ -1162,9 +1205,11 @@ body {
 
 .visual-feed--drawer img {
   width: 100%;
-  max-height: clamp(160px, 28vh, 280px);
+  height: auto;
+  max-height: none;
   object-fit: contain;
   display: block;
+  vertical-align: top;
 }
 
 .status-grid--drawer {

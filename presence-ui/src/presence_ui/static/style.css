@@ -17,6 +17,7 @@
   --chat-height: clamp(220px, 38vh, 420px);
   --visual-height: clamp(160px, 22vh, 260px);
   --aside-width: clamp(280px, 34vw, 420px);
+  --context-rail-width: clamp(240px, 28vw, 360px);
   font-size: 16px;
 }
 
@@ -671,25 +672,29 @@ body {
 
 /* Kiosk / touch: wide scrollbars (Surface treats touch as mouse — thin bars are unusable) */
 .room--kiosk .chat-scroll,
-.room--kiosk .room-drawer__body {
+.room--kiosk .room-drawer__body,
+.room--kiosk .context-rail {
   scrollbar-width: auto;
   scrollbar-color: rgba(122, 107, 88, 0.55) rgba(154, 148, 138, 0.14);
 }
 
 .room--kiosk .chat-scroll::-webkit-scrollbar,
-.room--kiosk .room-drawer__body::-webkit-scrollbar {
+.room--kiosk .room-drawer__body::-webkit-scrollbar,
+.room--kiosk .context-rail::-webkit-scrollbar {
   width: 22px;
 }
 
 .room--kiosk .chat-scroll::-webkit-scrollbar-track,
-.room--kiosk .room-drawer__body::-webkit-scrollbar-track {
+.room--kiosk .room-drawer__body::-webkit-scrollbar-track,
+.room--kiosk .context-rail::-webkit-scrollbar-track {
   background: rgba(154, 148, 138, 0.14);
   border-radius: 10px;
   margin: 4px 0;
 }
 
 .room--kiosk .chat-scroll::-webkit-scrollbar-thumb,
-.room--kiosk .room-drawer__body::-webkit-scrollbar-thumb {
+.room--kiosk .room-drawer__body::-webkit-scrollbar-thumb,
+.room--kiosk .context-rail::-webkit-scrollbar-thumb {
   background: rgba(122, 107, 88, 0.5);
   border: 4px solid transparent;
   border-radius: 10px;
@@ -954,11 +959,6 @@ body {
 }
 
 /* C11a: touch — pan-y scroll, no accidental text selection on messages */
-.room--kiosk .chat-room {
-  max-width: min(100%, 52rem);
-  margin-inline: auto;
-}
-
 .room--kiosk .chat-scroll {
   touch-action: pan-y;
   -webkit-user-select: none;
@@ -998,12 +998,17 @@ body {
   animation: none;
 }
 
-/* C11b: kiosk — chat full width; vision/status live in drawer */
+/* C11b: kiosk — chat + optional right context rail */
 @media (min-width: 900px) {
   .room--kiosk .room-body {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
     grid-template-areas: "chat";
+  }
+
+  .room--kiosk.room--has-context-rail .room-body {
+    grid-template-columns: minmax(0, 1fr) var(--context-rail-width);
+    grid-template-areas: "chat rail";
   }
 
   .room--kiosk .visual-room,
@@ -1013,6 +1018,24 @@ body {
 
   .room--kiosk .chat-room {
     grid-area: chat;
+  }
+
+  .room--kiosk .context-rail {
+    grid-area: rail;
+  }
+}
+
+@media (max-width: 899px) {
+  .room--kiosk.room--has-context-rail .room-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "chat"
+      "rail";
+  }
+
+  .room--kiosk.room--has-context-rail .context-rail {
+    max-height: min(42vh, 360px);
   }
 }
 
@@ -1219,6 +1242,118 @@ body {
 
 .status-grid--drawer .status-card {
   min-height: auto;
+}
+
+/* C11e: right context rail (kiosk) */
+.context-rail {
+  display: none;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.room--kiosk .context-rail {
+  display: flex;
+}
+
+.context-rail__block {
+  flex-shrink: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+.context-rail__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem 0.45rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.context-rail__title {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.context-rail__unpin,
+.context-rail-pin {
+  min-width: 44px;
+  min-height: 36px;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-room);
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-family: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  flex-shrink: 0;
+}
+
+.context-rail-pin[aria-pressed="true"] {
+  background: rgba(138, 154, 140, 0.18);
+  border-color: rgba(138, 154, 140, 0.45);
+  color: var(--text);
+}
+
+.room-drawer__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.room-drawer__section-head .room-drawer__section-title {
+  margin-bottom: 0;
+}
+
+.visual-feed--rail {
+  flex: none;
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  border-radius: 0 0 10px 10px;
+  overflow: hidden;
+  background: #1a1814;
+}
+
+.visual-feed--rail img {
+  width: 100%;
+  height: auto;
+  max-height: none;
+  object-fit: contain;
+  display: block;
+}
+
+.status-grid--rail {
+  grid-template-columns: 1fr;
+  gap: 0.45rem;
+  padding: 0.5rem 0.55rem 0.6rem;
+}
+
+.status-grid--rail .status-card {
+  min-height: auto;
+  padding: 0.55rem 0.65rem;
+}
+
+.status-grid--rail .status-card__body {
+  font-size: 0.85rem;
 }
 
 .room-drawer__footer {

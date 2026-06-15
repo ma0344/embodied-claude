@@ -10,6 +10,7 @@ const NATIVE_SESSIONS_API = "/api/v1/native/sessions";
 const NATIVE_HIDDEN_API = "/api/v1/native/hidden";
 const SHOW_DEBUG_INJECTION_KEY = "koyori-show-debug-injection";
 const KIOSK_LAYOUT_STORAGE_KEY = "koyori-kiosk-layout";
+const CONTEXT_RAIL_PINS_KEY = "koyori-context-rail-pins";
 
 let chatPinnedToBottom = true;
 let chatMessages = [];
@@ -31,6 +32,82 @@ let nativeAuthToken = sessionStorage.getItem(NATIVE_TOKEN_STORAGE_KEY) || "";
 let nativeSessionList = [];
 let showDebugInjection = localStorage.getItem(SHOW_DEBUG_INJECTION_KEY) === "1";
 let roomDrawerOpen = false;
+let contextRailPins = loadContextRailPins();
+
+function loadContextRailPins() {
+  const defaults = { vision: true, status: false };
+  try {
+    const raw = localStorage.getItem(CONTEXT_RAIL_PINS_KEY);
+    if (!raw) return { ...defaults };
+    const parsed = JSON.parse(raw);
+    return {
+      vision: parsed.vision !== false,
+      status: parsed.status === true,
+    };
+  } catch {
+    return { ...defaults };
+  }
+}
+
+function saveContextRailPins() {
+  localStorage.setItem(CONTEXT_RAIL_PINS_KEY, JSON.stringify(contextRailPins));
+}
+
+function isContextRailPinned(kind) {
+  return Boolean(contextRailPins[kind]);
+}
+
+function setContextRailPin(kind, pinned) {
+  if (!Object.hasOwn(contextRailPins, kind)) return;
+  contextRailPins[kind] = pinned;
+  saveContextRailPins();
+  applyContextRailLayout();
+  void refreshStatus();
+  void refreshCamera();
+}
+
+function applyContextRailLayout() {
+  const room = document.querySelector(".room");
+  const rail = document.getElementById("context-rail");
+  if (!room || !rail) return;
+
+  const hasRail = isKioskLayout() && (isContextRailPinned("vision") || isContextRailPinned("status"));
+  room.classList.toggle("room--has-context-rail", hasRail);
+  rail.hidden = !hasRail;
+
+  for (const kind of ["vision", "status"]) {
+    const block = document.getElementById(`context-rail-${kind}`);
+    const pinned = isKioskLayout() && isContextRailPinned(kind);
+    if (block) block.hidden = !pinned;
+
+    for (const btn of document.querySelectorAll(`[data-rail-pin="${kind}"]`)) {
+      btn.setAttribute("aria-pressed", pinned ? "true" : "false");
+      btn.textContent = pinned ? "固定中" : "固定";
+    }
+  }
+}
+
+function setupContextRail() {
+  if (!document.body.dataset.contextRailBound) {
+    document.body.dataset.contextRailBound = "1";
+    document.addEventListener("click", (event) => {
+      const pinBtn = event.target.closest("[data-rail-pin]");
+      if (pinBtn) {
+        const kind = pinBtn.getAttribute("data-rail-pin");
+        if (!kind) return;
+        setContextRailPin(kind, !isContextRailPinned(kind));
+        return;
+      }
+      const unpinBtn = event.target.closest("[data-rail-unpin]");
+      if (unpinBtn) {
+        const kind = unpinBtn.getAttribute("data-rail-unpin");
+        if (!kind) return;
+        setContextRailPin(kind, false);
+      }
+    });
+  }
+  applyContextRailLayout();
+}
 
 function isKioskLayout() {
   return Boolean(document.querySelector(".room")?.classList.contains("room--kiosk"));
@@ -129,8 +206,14 @@ function setupRoomDrawer() {
 
 function visualFeedTargets() {
   if (isKioskLayout()) {
+    const targets = [];
     const drawer = document.getElementById("visual-feed-drawer");
-    return drawer ? [drawer] : [];
+    if (drawer) targets.push(drawer);
+    if (isContextRailPinned("vision")) {
+      const rail = document.getElementById("visual-feed-rail");
+      if (rail) targets.push(rail);
+    }
+    return targets;
   }
   const main = document.getElementById("visual-feed");
   return main ? [main] : [];
@@ -138,8 +221,14 @@ function visualFeedTargets() {
 
 function statusTargets() {
   if (isKioskLayout()) {
+    const targets = [];
     const drawer = document.getElementById("status-content-drawer");
-    return drawer ? [drawer] : [];
+    if (drawer) targets.push(drawer);
+    if (isContextRailPinned("status")) {
+      const rail = document.getElementById("status-content-rail");
+      if (rail) targets.push(rail);
+    }
+    return targets;
   }
   const main = document.getElementById("status-content");
   return main ? [main] : [];
@@ -1618,6 +1707,7 @@ function setupKioskLayout() {
   relocateSessionControls();
   applyDebugInjectionVisibility();
   setupRoomDrawer();
+  setupContextRail();
 }
 
 setupKioskLayout();

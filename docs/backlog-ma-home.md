@@ -213,10 +213,10 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 
 - [x] **C11a** タッチ即効（視界 img 差し替え、チャット pan-y、キオスク 44px）
 - [x] **C11b** ドロワー UI（`?kiosk=1`、セッション操作・視界・状態・画面更新）
-- [x] **C11b+** ドロワー scroll + 視界アスペクト追従（`room-drawer__body`、img `height:auto`）+ キオスク太スクロールバー（18px）
+- [x] **C11b+** ドロワー scroll + 視界アスペクト追従（`room-drawer__body`、img `height:auto`）+ キオスク太スクロールバー（22px）
 - [ ] **C11c** 視界強化（任意）
 - [ ] **C11d** 状態圧縮（任意）
-- [ ] **C11e** 右コンテキストレール（ピン留めサイドバー）
+- [x] **C11e** 右コンテキストレール（視界/状態のピン留め、localStorage 永続、チャット左・レール右）
 
 | 優先 | 項目 | メモ |
 |------|------|------|

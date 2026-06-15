@@ -69,6 +69,28 @@
           <p class="placeholder">カメラを読み込み中…</p>
         </div>
       </section>
+
+      <aside class="context-rail" id="context-rail" aria-label="固定表示" hidden>
+        <section class="context-rail__block" id="context-rail-vision" data-rail-block="vision" hidden>
+          <header class="context-rail__header">
+            <h2 class="context-rail__title">視界</h2>
+            <button type="button" class="context-rail__unpin" data-rail-unpin="vision" aria-label="視界の固定を外す">外す</button>
+          </header>
+          <div class="visual-feed visual-feed--rail" id="visual-feed-rail">
+            <p class="placeholder">カメラを読み込み中…</p>
+          </div>
+        </section>
+
+        <section class="context-rail__block" id="context-rail-status" data-rail-block="status" hidden>
+          <header class="context-rail__header">
+            <h2 class="context-rail__title">状態</h2>
+            <button type="button" class="context-rail__unpin" data-rail-unpin="status" aria-label="状態の固定を外す">外す</button>
+          </header>
+          <div id="status-content-rail" class="status-grid status-grid--rail">
+            <p class="placeholder">読み込み中…</p>
+          </div>
+        </section>
+      </aside>
     </div>
   </div>
 
@@ -87,14 +109,20 @@
         </section>
 
         <section class="room-drawer__section room-drawer__section--vision" aria-label="視界">
-          <h3 class="room-drawer__section-title">視界</h3>
+          <div class="room-drawer__section-head">
+            <h3 class="room-drawer__section-title">視界</h3>
+            <button type="button" class="context-rail-pin" data-rail-pin="vision" aria-pressed="false" aria-label="視界を右に固定">固定</button>
+          </div>
           <div class="visual-feed visual-feed--drawer" id="visual-feed-drawer">
             <p class="placeholder">カメラを読み込み中…</p>
           </div>
         </section>
 
         <section class="room-drawer__section room-drawer__section--status" aria-label="こよりの状態">
-          <h3 class="room-drawer__section-title">状態</h3>
+          <div class="room-drawer__section-head">
+            <h3 class="room-drawer__section-title">状態</h3>
+            <button type="button" class="context-rail-pin" data-rail-pin="status" aria-pressed="false" aria-label="状態を右に固定">固定</button>
+          </div>
           <div id="status-content-drawer" class="status-grid status-grid--drawer">
             <p class="placeholder">読み込み中…</p>
           </div>

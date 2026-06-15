@@ -31,7 +31,7 @@
 | **記憶インフラ** | HTTP daemon `:18900` 常駐。compose recall・gateway remember **OK** |
 | **Gateway `:8090`** | compose/plan + KV 安定注入。**身体は gateway 直実行済み**（see / observe / reflect / autonomous-tick）。vision prefetch + remember **実戦 OK**（窓・デスク・ダイニング） |
 | **関係性** | open loop dismiss + commitment cancel。「覚えてる？」recall 誤 loop 抑制 |
-| **表面 UI** | **Native 本線**（localStorage 会話・8080 取込 **完了 2026-06**） |
+| **表面 UI** | **Native 本線**（JSONL 正本・8090 API 同期 **C10** / 8080 取込 **完了 2026-06**） |
 | **運用** | Task×3〜4（memory / presence / watchdog。**webui 任意**）+ post-logon-smoke **Native 対応** |
 
 参照: [gateway-direct-actions.md](./gateway-direct-actions.md)、[mission-A_Investigation-Report.md](./mission-A_Investigation-Report.md)
@@ -185,6 +185,7 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 | 高 | **C4 セッション UI 再設計** | 8080 project/history 廃止 → `session_id` + 「新しい会話」 |
 | 中 | **C5 キャンセル UI** | `AbortController`（poc-native パターンを `/` に） |
 | 中 | **C6 Markdown 表示** | チャットログの読みやすさ |
+| 高 | **C10 JSONL 履歴同期** | localStorage 廃止 → `~/.claude/projects/*.jsonl` を 8090 API 経由で全端末共有 |
 | 中 | **C7 画面構成・レイアウト** | 視界・ステータス・チャットの調整 |
 | 低 | **C8 デバッグ注入の非表示** | `gateway_turn_context` / `vision_prefetch` をユーザーに見せない |
 | 後回し | **C9 8080 optional 化** | smoke / verify-mission-a を Native 対応。WebUI Task 外せる |
@@ -199,8 +200,9 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 - [x] **C7** 画面構成・レイアウト（900px+ 2カラム: 会話｜視界+状態、`?kiosk=1`、キオスク URL 自動付与）
 - [x] **C8** デバッグ注入の非表示（既定 OFF・会話ヘッダ右下「注入」トグルで表示切替）
 - [x] **C9** 8080 optional 化（`post-logon-smoke` / `verify-mission-a` Native 経路、`install-webui-task` 任意明記）
+- [x] **C10** JSONL 正本の履歴同期（`GET /api/v1/native/sessions` + messages、`app.js` 7s ポール・PC/キオスク共有）
 
-**実装順**: C0 → C3 → C4 → C5 → C6/C7/C8 → C9
+**実装順**: C0 → C3 → C4 → C5 → C6/C7/C8 → C9 → **C10**
 
 ---
 

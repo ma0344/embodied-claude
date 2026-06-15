@@ -16,7 +16,12 @@ from presence_ui import __version__
 from presence_ui.gateway.backend import backend_base_url
 from presence_ui.gateway.chat_stream import stream_gateway_chat
 from presence_ui.gateway.proxy import proxy_get
-from presence_ui.schemas import CameraSnapshotResponse, HealthResponse
+from presence_ui.schemas import (
+    CameraSnapshotResponse,
+    HealthResponse,
+    NativeSessionListResponse,
+    NativeSessionMessagesResponse,
+)
 from presence_ui.services.camera import fetch_camera_snapshot
 from presence_ui.services.status import fetch_koyori_status
 from presence_ui.utf8 import utf8_json
@@ -85,9 +90,29 @@ def create_app() -> FastAPI:
                 "native_chat": native_chat,
                 "native_login_path": "/api/native/login" if native_chat else None,
                 "native_chat_path": "/api/native/chat" if native_chat else None,
+                "native_sessions_path": "/api/v1/native/sessions" if native_chat else None,
                 "legacy_chat_path": "/api/chat",
             },
         )
+
+    @app.get("/api/v1/native/sessions", response_model=NativeSessionListResponse)
+    def get_native_sessions(limit: int = 40) -> NativeSessionListResponse:
+        """List chat sessions from Claude Code JSONL (shared across all browsers on ma-home)."""
+        from presence_ui.services.native_history import list_native_sessions
+
+        return list_native_sessions(limit=min(max(limit, 1), 100))
+
+    @app.get(
+        "/api/v1/native/sessions/{session_id}/messages",
+        response_model=NativeSessionMessagesResponse,
+    )
+    def get_native_session_messages(session_id: str) -> NativeSessionMessagesResponse:
+        from presence_ui.services.native_history import fetch_native_session_messages
+
+        result = fetch_native_session_messages(session_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return result
 
     if native_chat:
         from presence_ui.gateway.ccs_integration import mount_claude_code_server_router

@@ -228,3 +228,20 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     details: dict[str, Any] = Field(default_factory=dict)
+
+
+class NativeSessionSummary(BaseModel):
+    session_id: str
+    title: str
+    preview: str = ""
+    updated_at: str
+    message_count: int = 0
+
+
+class NativeSessionListResponse(BaseModel):
+    sessions: list[NativeSessionSummary]
+
+
+class NativeSessionMessagesResponse(BaseModel):
+    session_id: str
+    messages: list[ChatMessage]

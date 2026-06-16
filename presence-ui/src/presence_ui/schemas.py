@@ -204,6 +204,36 @@ class TemperatureView(BaseModel):
     source: str | None = None
 
 
+class ReminderCardItem(BaseModel):
+    commitment_id: str
+    due_at: str | None = None
+    title: str | None = None
+    speak_line: str | None = None
+    delivery: Literal["say", "nudge_only"] = "say"
+
+
+class CancelReminderRequest(BaseModel):
+    commitment_id: str
+    source_text: str = ""
+
+
+class PatchReminderSpeakLineRequest(BaseModel):
+    commitment_id: str
+    speak_line: str = Field(min_length=1, max_length=240)
+    source_text: str = ""
+
+
+class CancelReminderResponse(BaseModel):
+    ok: bool = True
+    commitment_id: str
+
+
+class PatchReminderSpeakLineResponse(BaseModel):
+    ok: bool = True
+    commitment_id: str
+    speak_line: str
+
+
 class KoyoriStatusResponse(BaseModel):
     updated_at: str
     desires: list[DesireItem]
@@ -212,6 +242,7 @@ class KoyoriStatusResponse(BaseModel):
     recent_experiences: list[RecentExperience]
     social_state: SocialStateView | None = None
     temperature: TemperatureView
+    reminders: list[ReminderCardItem] = Field(default_factory=list)
 
 
 class CameraSnapshotResponse(BaseModel):

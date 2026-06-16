@@ -18,6 +18,8 @@ from presence_ui.gateway.chat_stream import stream_gateway_chat
 from presence_ui.gateway.proxy import proxy_get
 from presence_ui.schemas import (
     CameraSnapshotResponse,
+    CancelReminderRequest,
+    CancelReminderResponse,
     HealthResponse,
     NativeHiddenSessionsRequest,
     NativeHideSessionResponse,
@@ -26,13 +28,15 @@ from presence_ui.schemas import (
     OutboundAckRequest,
     OutboundAckResponse,
     OutboundPendingResponse,
-    TtsSurfaceRequest,
-    TtsSurfaceResponse,
-    RoomSayResponse,
-    RoomSayPendingResponse,
-    RoomSayPendingItem,
+    PatchReminderSpeakLineRequest,
+    PatchReminderSpeakLineResponse,
     RoomSayAckRequest,
     RoomSayAckResponse,
+    RoomSayPendingItem,
+    RoomSayPendingResponse,
+    RoomSayResponse,
+    TtsSurfaceRequest,
+    TtsSurfaceResponse,
 )
 from presence_ui.services.camera import fetch_camera_snapshot
 from presence_ui.services.display_time import display_timezone
@@ -179,6 +183,43 @@ def create_app() -> FastAPI:
             },
         )
 
+    @app.post("/api/v1/reminders/cancel", response_model=CancelReminderResponse)
+    def post_reminders_cancel(body: CancelReminderRequest) -> CancelReminderResponse:
+        """Cancel active reminder (A: hide/cancel)."""
+        from presence_ui.deps import get_stores
+
+        stores = get_stores()
+        try:
+            stores.relationship.cancel_commitment(
+                body.commitment_id,
+                source_text=body.source_text,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return CancelReminderResponse(ok=True, commitment_id=body.commitment_id)
+
+    @app.post(
+        "/api/v1/reminders/speak-line", response_model=PatchReminderSpeakLineResponse
+    )
+    def post_reminders_patch_speak_line(
+        body: PatchReminderSpeakLineRequest,
+    ) -> PatchReminderSpeakLineResponse:
+        """Patch speak_line for active reminder (B: edit spoken phrase)."""
+        from presence_ui.deps import get_stores
+
+        stores = get_stores()
+        try:
+            stores.relationship.patch_commitment_speak_line(
+                body.commitment_id, speak_line=body.speak_line
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return PatchReminderSpeakLineResponse(
+            ok=True,
+            commitment_id=body.commitment_id,
+            speak_line=body.speak_line,
+        )
+
     @app.get("/api/v1/outbound/pending", response_model=OutboundPendingResponse)
     def get_outbound_pending(
         person_id: str = DEFAULT_PERSON_ID,
@@ -256,8 +297,6 @@ def create_app() -> FastAPI:
         from presence_ui.services.outbound import list_pending_outbound
         from presence_ui.services.outbound_kiosk import (
             is_kiosk_client,
-            kiosk_primary_active,
-            kiosk_primary_enabled,
             note_kiosk_seen,
             should_deliver_to_client,
         )
@@ -350,9 +389,13 @@ def create_app() -> FastAPI:
         note_kiosk_seen()
         delivered, say_id, audio_url = deliver_speak_to_kiosk(line, source="say")
         detail = (
-            f"routed to kiosk (listeners={delivered}, say_id={say_id}, audio={'yes' if audio_url else 'no'})"
+            f"routed to kiosk (listeners={delivered}, say_id={say_id}, audio="
+            f"{'yes' if audio_url else 'no'})"
             if delivered
-            else f"queued for kiosk poll (no SSE listeners, say_id={say_id}, audio={'yes' if audio_url else 'no'})"
+            else (
+                f"queued for kiosk poll (no SSE listeners, say_id={say_id}, audio="
+                f"{'yes' if audio_url else 'no'})"
+            )
         )
         return RoomSayResponse(
             ok=True,

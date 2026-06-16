@@ -16,10 +16,14 @@ async def test_stream_gateway_chat_emits_progress_and_forwards(
 ) -> None:
     enriched = {"message": "hi", "appendSystemPrompt": "[ctx]"}
 
+    from unittest.mock import AsyncMock
+
     monkeypatch.setattr(
         chat_stream,
-        "intercept_chat_request",
-        lambda **_: ChatInterceptResult(forward=True, payload=enriched, user_text="hi"),
+        "intercept_chat_request_async",
+        AsyncMock(
+            return_value=ChatInterceptResult(forward=True, payload=enriched, user_text="hi")
+        ),
     )
 
     async def fake_passthrough(**_kwargs):
@@ -41,13 +45,15 @@ async def test_stream_gateway_chat_emits_progress_and_forwards(
 async def test_stream_gateway_chat_silent_skips_backend(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        chat_stream,
-        "intercept_chat_request",
-        lambda **_: ChatInterceptResult(forward=False, plan_move="stay_silent"),
-    )
     from unittest.mock import AsyncMock
 
+    monkeypatch.setattr(
+        chat_stream,
+        "intercept_chat_request_async",
+        AsyncMock(
+            return_value=ChatInterceptResult(forward=False, plan_move="stay_silent")
+        ),
+    )
     passthrough = AsyncMock()
     monkeypatch.setattr(chat_stream, "stream_passthrough_chat", passthrough)
 

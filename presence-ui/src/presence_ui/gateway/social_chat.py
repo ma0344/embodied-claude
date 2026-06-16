@@ -54,11 +54,11 @@ class ChatInterceptResult:
     direct_action_summary: str | None = None
 
 
-def _ingest_human(*, person_id: str, session_id: str | None, text: str):
-    import asyncio
+def _ingest_human_sync(*, person_id: str, session_id: str | None, text: str):
+    from presence_ui.gateway.room_ingest import ingest_human_turn
 
-    _event_id, outcome = asyncio.run(
-        ingest_human_turn_async(person_id=person_id, session_id=session_id, text=text)
+    _event_id, outcome = ingest_human_turn(
+        person_id=person_id, session_id=session_id, text=text
     )
     return outcome
 
@@ -86,6 +86,46 @@ def intercept_chat_request(
     lite: bool = False,
     vision_prefetch: str | None = None,
 ) -> ChatInterceptResult:
+    """Sync wrapper (tests / thread offload). Native chat uses async variant."""
+    import asyncio
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(
+            intercept_chat_request_async(
+                payload=payload,
+                person_id=person_id,
+                lite=lite,
+                vision_prefetch=vision_prefetch,
+            )
+        )
+    message = str(payload.get("message") or "").strip()
+    if not message:
+        raise ValueError("message must not be empty")
+    session_id = payload.get("sessionId")
+    session_key = str(session_id) if session_id else None
+    dismiss_outcome = _ingest_human_sync(
+        person_id=person_id, session_id=session_key, text=message
+    )
+    return _finish_intercept_chat_request(
+        payload=payload,
+        person_id=person_id,
+        lite=lite,
+        vision_prefetch=vision_prefetch,
+        message=message,
+        session_key=session_key,
+        dismiss_outcome=dismiss_outcome,
+    )
+
+
+async def intercept_chat_request_async(
+    *,
+    payload: dict,
+    person_id: str = "ma",
+    lite: bool = False,
+    vision_prefetch: str | None = None,
+) -> ChatInterceptResult:
     """Run compose/plan; enrich message or block forward on silent moves."""
     message = str(payload.get("message") or "").strip()
     if not message:
@@ -93,13 +133,37 @@ def intercept_chat_request(
 
     session_id = payload.get("sessionId")
     session_key = str(session_id) if session_id else None
+    dismiss_outcome = (
+        await ingest_human_turn_async(
+            person_id=person_id, session_id=session_key, text=message
+        )
+    )[1]
+    return _finish_intercept_chat_request(
+        payload=payload,
+        person_id=person_id,
+        lite=lite,
+        vision_prefetch=vision_prefetch,
+        message=message,
+        session_key=session_key,
+        dismiss_outcome=dismiss_outcome,
+    )
+
+
+def _finish_intercept_chat_request(
+    *,
+    payload: dict,
+    person_id: str,
+    lite: bool,
+    vision_prefetch: str | None,
+    message: str,
+    session_key: str | None,
+    dismiss_outcome,
+) -> ChatInterceptResult:
     compose_max_chars = (
         int(os.getenv("PRESENCE_LITE_COMPOSE_MAX_CHARS", "1200"))
         if lite
         else 10000
     )
-
-    dismiss_outcome = _ingest_human(person_id=person_id, session_id=session_key, text=message)
 
     gateway_events: list[dict[str, Any]] = []
     memory_notes: list[str] = []

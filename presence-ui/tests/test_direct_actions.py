@@ -392,6 +392,48 @@ async def test_remind_commitment_direct_uses_speak_line_metadata() -> None:
 
 
 @pytest.mark.asyncio
+async def test_remind_commitment_direct_junk_title_fallback() -> None:
+    stores = MagicMock()
+    stores.relationship.complete_commitment.return_value = {"commitment_id": "c3"}
+    ctx = _ctx()
+    ctx.commitments_due = [
+        CommitmentSummary(
+            commitment_id="c3",
+            text="の打合せの10分前にして",
+            due_at="2026-06-16T21:08:00+09:00",
+            status="active",
+            speak_line=None,
+            delivery="say",
+        )
+    ]
+    plan = _plan(allowed=["remind_commitment"])
+
+    with (
+        patch(
+            "presence_ui.gateway.direct_actions.boundary_allows",
+            return_value=(True, []),
+        ),
+        patch(
+            "presence_ui.gateway.direct_actions.enqueue_outbound_nudge",
+            return_value=MagicMock(ok=True, nudge_id="n3", channels=["kiosk"]),
+        ) as enqueue_mock,
+        patch(
+            "presence_ui.gateway.direct_actions.voice_local_enabled",
+            return_value=False,
+        ),
+    ):
+        outcome = await direct_actions.remind_commitment_direct(
+            stores,
+            person_id="ma",
+            ctx=ctx,
+            plan=plan,
+        )
+
+    assert outcome.ok is True
+    assert enqueue_mock.call_args.kwargs["text"] == "まー、リマインドの時間やで"
+
+
+@pytest.mark.asyncio
 async def test_remind_commitment_direct_nudge_only_skips_say() -> None:
     stores = MagicMock()
     stores.relationship.complete_commitment.return_value = {"commitment_id": "c2"}

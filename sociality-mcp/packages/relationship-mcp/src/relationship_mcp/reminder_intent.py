@@ -24,6 +24,7 @@ _TIME_RE = re.compile(
 )
 
 _MINUTES_LATER_RE = re.compile(r"(?P<minutes>\d+|[０-９]+)\s*分\s*後", re.I)
+_MINUTES_BEFORE_RE = re.compile(r"(?P<minutes>\d+|[０-９]+)\s*分\s*前", re.I)
 _TEACH_RE = re.compile(r"教えて")
 _QUOTE_RE = re.compile(r"[「『](?P<q>[^」』]+)[」』]")
 
@@ -130,19 +131,104 @@ def _parse_minutes_later_due_at(compact: str, *, base: datetime) -> datetime | N
     return base_minute + timedelta(minutes=minutes)
 
 
+def _parse_event_minus_offset_due_at(compact: str, *, base: datetime) -> datetime | None:
+    """e.g. 「15分後の打合せの10分前に」→ remind 5 minutes from now."""
+    later = _MINUTES_LATER_RE.search(compact)
+    before = _MINUTES_BEFORE_RE.search(compact)
+    if later is None or before is None:
+        return None
+    event_minutes = int(_normalize_digits(later.group("minutes")))
+    before_minutes = int(_normalize_digits(before.group("minutes")))
+    if event_minutes <= 0 or before_minutes <= 0:
+        return None
+    if before_minutes >= event_minutes:
+        return None
+    base_minute = base.replace(second=0, microsecond=0)
+    remind_at = base_minute + timedelta(minutes=event_minutes - before_minutes)
+    if remind_at <= base_minute:
+        return None
+    return remind_at
+
+
+def _rule_parse_defer_to_llm(compact: str) -> bool:
+    """Ambiguous relative timing — let Phase B LLM resolve due_at."""
+    if _MINUTES_BEFORE_RE.search(compact) and _MINUTES_LATER_RE.search(compact) is None:
+        return True
+    if "前に" in compact and any(
+        word in compact for word in ("来週", "明日", "明後日", "あさって", "今日", "午後", "午前")
+    ):
+        return True
+    return False
+
+
+def _extract_event_label(compact: str) -> str | None:
+    """Label between 「N分後」 and 「M分前」 (e.g. 打合せ)."""
+    later = _MINUTES_LATER_RE.search(compact)
+    before = _MINUTES_BEFORE_RE.search(compact)
+    if later is None or before is None or before.start() <= later.end():
+        return None
+    middle = compact[later.end() : before.start()]
+    middle = re.sub(r"\s+", " ", middle).strip("、。.!?？ 「」『』")
+    middle = re.sub(r"^(に|が|は|を)", "", middle).strip()
+    middle = re.sub(r"(が始まる|が始まり|になる|が始まって).*$", "", middle).strip("、 ")
+    middle = re.sub(r"(から|ので|ので、).*$", "", middle).strip("、 ")
+    if len(middle) >= 2:
+        return middle[:120]
+    return None
+
+
+def _keyword_reminder_title(compact: str) -> str | None:
+    for keyword in ("打合せ", "打ち合わせ", "会議", "歯医者", "薬", "standup", "ミーティング"):
+        if keyword in compact:
+            return f"{keyword}リマインド"
+    return None
+
+
 def _build_title(compact: str, speak_line: str | None) -> str:
     if speak_line:
         return speak_line[:120]
+
+    event_label = _extract_event_label(compact)
+    if event_label:
+        return event_label
+
+    keyword_title = _keyword_reminder_title(compact)
+    if keyword_title:
+        return keyword_title
 
     label = compact
     for verb in (*REMINDER_VERBS, "教えて"):
         label = label.replace(verb, "")
     label = _MINUTES_LATER_RE.sub("", label)
+    label = _MINUTES_BEFORE_RE.sub("", label)
     label = _TIME_RE.sub("", label)
     label = re.sub(r"\s+", " ", label).strip("、。.!?？ 「」『』")
     if not label:
         label = "リマインド"
     return label[:120]
+
+
+def extract_speak_line_followup(text: str) -> str | None:
+    """Return quoted phrase when user confirms what Koyori should say at remind time."""
+    compact = re.sub(r"\s+", " ", text.strip())
+    if not compact:
+        return None
+    speak_line = extract_quoted_speak_line(compact)
+    if not speak_line:
+        return None
+    if any(verb in compact for verb in REMINDER_VERBS):
+        return None
+    if _MINUTES_LATER_RE.search(compact) or _MINUTES_BEFORE_RE.search(compact):
+        return None
+    if _TIME_RE.search(compact):
+        return None
+    if not re.search(
+        r"(でいい|で大丈夫|でオッケー|でOK|にして|それで|お願い|って言って|って喋って)",
+        compact,
+        re.I,
+    ):
+        return None
+    return speak_line
 
 
 def needs_llm_reminder_parse(text: str) -> bool:
@@ -181,8 +267,11 @@ def extract_reminder_request(
     tz = ZoneInfo(tz_name)
     base = parse_timestamp(ts).astimezone(tz)
 
-    due: datetime | None = None
-    if _MINUTES_LATER_RE.search(compact):
+    if _rule_parse_defer_to_llm(compact):
+        return None
+
+    due: datetime | None = _parse_event_minus_offset_due_at(compact, base=base)
+    if due is None and _MINUTES_LATER_RE.search(compact):
         due = _parse_minutes_later_due_at(compact, base=base)
     if due is None:
         due = _parse_clock_due_at(compact, base=base)

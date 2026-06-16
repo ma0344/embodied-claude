@@ -13,7 +13,7 @@ from presence_ui.gateway.see_prefetch import prefetch_camera_for_message
 from presence_ui.gateway.see_intent import SEE_PROGRESS_LABELS, detect_see_intent
 from presence_ui.gateway.social_chat import (
     ChatInterceptResult,
-    intercept_chat_request,
+    intercept_chat_request_async,
     stream_direct_action_response,
     stream_silent_response,
 )
@@ -54,8 +54,7 @@ async def stream_gateway_chat(
     yield encode_event(progress_event(phase="composing", label="文脈を集めてる…"))
 
     try:
-        result: ChatInterceptResult = await asyncio.to_thread(
-            intercept_chat_request,
+        result: ChatInterceptResult = await intercept_chat_request_async(
             payload=payload,
             person_id=person_id,
             vision_prefetch=vision_note,

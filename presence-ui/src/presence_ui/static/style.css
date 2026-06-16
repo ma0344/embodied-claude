@@ -372,6 +372,48 @@ body {
   line-height: 1.4;
 }
 
+.reminder-list {
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reminder-item {
+  font-size: 0.8rem;
+  color: var(--text-soft);
+  line-height: 1.35;
+  padding: 0.25rem 0;
+  border-top: 1px solid rgba(226, 221, 212, 0.6);
+}
+
+.reminder-item:first-child {
+  border-top: none;
+}
+
+.reminder-meta {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin-bottom: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.reminder-title {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.reminder-edit {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.reminder-input {
+  min-width: 220px;
+}
+
 .tag-row {
   display: flex;
   flex-wrap: wrap;

@@ -383,6 +383,30 @@ async def talk_to_companion_direct(
     )
 
 
+def _is_junk_reminder_title(label: str) -> bool:
+    cleaned = label.strip()
+    if len(cleaned) < 4:
+        return True
+    if cleaned.startswith(("の", "に", "を", "が", "は", "、")):
+        return True
+    if "にして" in cleaned and "打合せ" not in cleaned and "会議" not in cleaned:
+        return True
+    return False
+
+
+def _reminder_spoken_line(*, commitment, text: str) -> str:
+    line = (text or "").strip()
+    if line:
+        return line
+    speak_line = (commitment.speak_line or "").strip()
+    if speak_line:
+        return speak_line
+    label = commitment.text.strip()
+    if label and not _is_junk_reminder_title(label):
+        return f"まー、{label} の時間やで"
+    return "まー、リマインドの時間やで"
+
+
 async def remind_commitment_direct(
     stores: PresenceStores,
     *,
@@ -419,14 +443,7 @@ async def remind_commitment_direct(
             ],
         )
 
-    line = (text or "").strip()
-    if not line:
-        speak_line = (commitment.speak_line or "").strip()
-        if speak_line:
-            line = speak_line
-        else:
-            label = commitment.text.strip()
-            line = f"まー、{label} の時間やで" if label else "まー、リマインドの時間やで"
+    line = _reminder_spoken_line(commitment=commitment, text=text or "")
 
     use_say = commitment.delivery != "nudge_only"
     channels = default_surface_channels()

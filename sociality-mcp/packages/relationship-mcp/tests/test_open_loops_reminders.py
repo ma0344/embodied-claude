@@ -78,6 +78,60 @@ def test_needs_llm_reminder_parse_when_rule_misses():
     assert needs_llm_reminder_parse("おはよう") is False
 
 
+def test_extract_reminder_event_minus_offset():
+    parsed = extract_reminder_request(
+        "15分後の打合せの10分前にリマインドして",
+        ts="2026-06-16T20:53:00+09:00",
+        tz_name="Asia/Tokyo",
+    )
+    assert parsed is not None
+    assert "2026-06-16T20:58:00" in parsed.due_at
+    assert parsed.speak_line is None
+    assert "打合せ" in parsed.title
+
+
+def test_extract_reminder_long_form_event_minus_offset():
+    parsed = extract_reminder_request(
+        "15分後に打合せが始まるから、打ち合わせ開始の10分前にリマインドして",
+        ts="2026-06-16T20:59:00+09:00",
+        tz_name="Asia/Tokyo",
+    )
+    assert parsed is not None
+    assert "2026-06-16T21:04:00" in parsed.due_at
+    assert "打合せ" in parsed.title
+
+
+def test_extract_speak_line_followup():
+    from relationship_mcp.reminder_intent import extract_speak_line_followup
+
+    assert extract_speak_line_followup("「打合せの準備してな」でいいよ") == "打合せの準備してな"
+    assert extract_speak_line_followup("5分後に「まー」と say で教えて") is None
+
+
+def test_patch_reminder_speak_line_on_followup(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.note_human_utterance_for_loops(
+        person_id="ma",
+        text="15分後の打合せの10分前にリマインドして",
+        ts="2026-06-16T20:53:00+09:00",
+        source_event_id="evt_remind_1",
+    )
+    commitments = store.list_active_commitments(person_id="ma")
+    assert len(commitments) == 1
+    assert commitments[0].metadata.get("speak_line") is None
+    assert "2026-06-16T20:58:00" in commitments[0].due_at
+
+    store.note_human_utterance_for_loops(
+        person_id="ma",
+        text="「打合せの準備してな」でいいよ",
+        ts="2026-06-16T20:55:00+09:00",
+        source_event_id="evt_remind_2",
+    )
+    commitments = store.list_active_commitments(person_id="ma")
+    assert commitments[0].metadata.get("speak_line") == "打合せの準備してな"
+    assert commitments[0].text == "打合せの準備してな"
+
+
 def test_detect_delivery_mode_nudge_only():
     assert detect_delivery_mode("10時にテキストだけでリマインドして") == "nudge_only"
 

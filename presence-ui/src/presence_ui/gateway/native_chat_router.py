@@ -24,7 +24,7 @@ from presence_ui.gateway.deterministic_memory import (
     fetch_memory_list,
     format_memory_list_reply,
 )
-from presence_ui.gateway.social_chat import ChatInterceptResult, intercept_chat_request
+from presence_ui.gateway.social_chat import ChatInterceptResult, intercept_chat_request_async
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
         list_request = detect_memory_list_request(req.prompt)
         if list_request:
             # Ingest utterance + progress via intercept side effects without Claude.
-            intercept_chat_request(
+            await intercept_chat_request_async(
                 payload={"message": req.prompt, "sessionId": req.session_id},
                 person_id=person_id,
                 lite=True,
@@ -151,7 +151,7 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
             logger.warning("native chat camera prefetch failed: %s", exc)
             vision_note = None
 
-        intercept = intercept_chat_request(
+        intercept = await intercept_chat_request_async(
             payload={"message": req.prompt, "sessionId": req.session_id},
             person_id=person_id,
             lite=True,

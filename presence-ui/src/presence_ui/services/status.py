@@ -14,6 +14,7 @@ from presence_ui.schemas import (
     DesireItem,
     KoyoriStatusResponse,
     RecentExperience,
+    ReminderCardItem,
     SocialStateView,
     TemperatureView,
 )
@@ -59,6 +60,7 @@ def _pick_temperature() -> TemperatureView:
 def fetch_koyori_status(*, person_id: str = "ma") -> KoyoriStatusResponse:
     stores = get_stores()
     window = int(os.getenv("PRESENCE_SOCIAL_WINDOW_SECONDS", "900"))
+    reminders_limit = int(os.getenv("PRESENCE_REMINDERS_CARD_LIMIT", "10"))
 
     desire_items, dominant = _format_desires(load_desire_snapshot())
 
@@ -108,6 +110,24 @@ def fetch_koyori_status(*, person_id: str = "ma") -> KoyoriStatusResponse:
     except Exception:
         social_view = None
 
+    reminders: list[ReminderCardItem] = []
+    try:
+        commitments = stores.relationship.list_active_commitments(
+            person_id=person_id, limit=reminders_limit
+        )
+        reminders = [
+            ReminderCardItem(
+                commitment_id=c.id,
+                due_at=c.due_at,
+                title=c.text,
+                speak_line=(c.metadata or {}).get("speak_line"),
+                delivery=(c.metadata or {}).get("delivery") or "say",
+            )
+            for c in commitments
+        ]
+    except Exception:
+        reminders = []
+
     return KoyoriStatusResponse(
         updated_at=datetime.now(timezone.utc).isoformat(),
         desires=desire_items,
@@ -116,4 +136,5 @@ def fetch_koyori_status(*, person_id: str = "ma") -> KoyoriStatusResponse:
         recent_experiences=experiences,
         social_state=social_view,
         temperature=_pick_temperature(),
+        reminders=reminders,
     )

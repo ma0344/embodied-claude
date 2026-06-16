@@ -28,7 +28,11 @@ from .inference import (
     suggest_followup_text,
     summarize_relationship,
 )
-from .reminder_intent import ReminderSpec, extract_reminder_request
+from .reminder_intent import (
+    ReminderSpec,
+    extract_reminder_request,
+    extract_speak_line_followup,
+)
 from .schemas import (
     CommitmentRecord,
     DismissOutcome,
@@ -240,6 +244,11 @@ class RelationshipStore:
             direction="human_to_ai",
         )
         self.close_stale_open_loops(person_id=person_id, as_of=ts)
+        self._maybe_patch_reminder_speak_line(
+            person_id=person_id,
+            text=text,
+            ts=ts,
+        )
         self._maybe_create_reminder_commitment(
             person_id=person_id,
             text=text,
@@ -450,7 +459,7 @@ class RelationshipStore:
         catch_up_start = now - timedelta(hours=catch_up_hours)
         rows = self.db.fetchall(
             """
-            SELECT commitment_id, text, due_at, source, metadata_json
+            SELECT commitment_id, text, due_at, source, metadata_json, created_at
             FROM commitments
             WHERE person_id = ? AND status = 'active' AND due_at IS NOT NULL
             ORDER BY due_at
@@ -469,6 +478,17 @@ class RelationshipStore:
             if due_dt < catch_up_start:
                 continue
             metadata = json.loads(row["metadata_json"] or "{}")
+            if metadata.get("delivery", "say") == "say" and not metadata.get("speak_line"):
+                created_raw = row["created_at"]
+                if created_raw:
+                    try:
+                        created_dt = parse_timestamp(str(created_raw)).astimezone(
+                            ZoneInfo(timezone)
+                        )
+                        if (now - created_dt).total_seconds() < 300:
+                            continue
+                    except (TypeError, ValueError):
+                        pass
             last_reminded = metadata.get("last_reminded_at")
             if last_reminded:
                 reminded_at = parse_timestamp(str(last_reminded)).astimezone(ZoneInfo(timezone))
@@ -508,6 +528,22 @@ class RelationshipStore:
             source_text=source_text,
         )
         return {"commitment_id": commitment_id}
+
+    def patch_commitment_speak_line(
+        self, commitment_id: str, *, speak_line: str
+    ) -> dict[str, str]:
+        """Patch speak_line used by reminder delivery.
+
+        UI edit path: updates commitments.metadata_json["speak_line"] and keeps commitment.text intact.
+        """
+        speak_line_clean = (speak_line or "").strip()
+        if not speak_line_clean:
+            raise ValueError("speak_line must not be empty")
+        return self._patch_commitment_speak_line(
+            commitment_id=commitment_id,
+            speak_line=speak_line_clean,
+            title=None,
+        )
 
     def list_open_loops(self, *, person_id: str, limit: int = 10) -> list[OpenLoopRecord]:
         rows = self.db.fetchall(
@@ -826,6 +862,88 @@ class RelationshipStore:
                     json.dumps(detail, ensure_ascii=False),
                 ),
             )
+
+    def _maybe_patch_reminder_speak_line(
+        self,
+        *,
+        person_id: str,
+        text: str,
+        ts: str,
+    ) -> dict[str, str] | None:
+        """Fill speak_line on a recent active reminder when user confirms the phrase."""
+        speak_line = extract_speak_line_followup(text)
+        if not speak_line:
+            return None
+        try:
+            as_of = parse_timestamp(ts)
+        except (TypeError, ValueError):
+            return None
+        rows = self.db.fetchall(
+            """
+            SELECT commitment_id, text, due_at, metadata_json, created_at
+            FROM commitments
+            WHERE person_id = ? AND status = 'active'
+            ORDER BY created_at DESC
+            LIMIT 15
+            """,
+            (person_id,),
+        )
+        for row in rows:
+            metadata = json.loads(row["metadata_json"] or "{}")
+            if metadata.get("speak_line"):
+                continue
+            due_raw = row["due_at"]
+            if not due_raw:
+                continue
+            try:
+                due = parse_timestamp(str(due_raw))
+            except (TypeError, ValueError):
+                continue
+            if due <= as_of:
+                continue
+            return self._patch_commitment_speak_line(
+                commitment_id=row["commitment_id"],
+                speak_line=speak_line,
+                title=speak_line[:120],
+            )
+        return None
+
+    def _patch_commitment_speak_line(
+        self,
+        *,
+        commitment_id: str,
+        speak_line: str,
+        title: str | None = None,
+    ) -> dict[str, str]:
+        row = self.db.fetchone(
+            "SELECT metadata_json FROM commitments WHERE commitment_id = ?",
+            (commitment_id,),
+        )
+        if row is None:
+            raise ValueError(f"Unknown commitment_id: {commitment_id}")
+        metadata = json.loads(row["metadata_json"] or "{}")
+        metadata["speak_line"] = speak_line[:240]
+        metadata_json = json.dumps(metadata, ensure_ascii=False)
+        with self.db.transaction() as connection:
+            if title:
+                connection.execute(
+                    """
+                    UPDATE commitments
+                    SET metadata_json = ?, text = ?
+                    WHERE commitment_id = ?
+                    """,
+                    (metadata_json, title[:120], commitment_id),
+                )
+            else:
+                connection.execute(
+                    """
+                    UPDATE commitments
+                    SET metadata_json = ?
+                    WHERE commitment_id = ?
+                    """,
+                    (metadata_json, commitment_id),
+                )
+        return {"commitment_id": commitment_id, "speak_line": speak_line[:240]}
 
     def _maybe_create_reminder_commitment(
         self,

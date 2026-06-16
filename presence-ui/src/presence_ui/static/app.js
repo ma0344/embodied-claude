@@ -627,6 +627,10 @@ function escapeHtml(text) {
     .replaceAll(">", "&gt;");
 }
 
+function escapeAttr(text) {
+  return escapeHtml(text).replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+}
+
 /** randomUUID needs a secure context (HTTPS / localhost). Kiosk uses http://ma-home.local. */
 function newRequestId() {
   try {
@@ -1661,6 +1665,7 @@ function buildStatusHtml(data, { compact = false } = {}) {
   const social = KoyoriVoice.formatSocialVibe(data.social_state);
   const journey = KoyoriVoice.formatJourney(data.active_arcs);
   const open = (id) => isStatusCardOpen(id, compact);
+  const reminders = data.reminders || [];
 
   const desireList = desires.lines
     .map(
@@ -1679,6 +1684,41 @@ function buildStatusHtml(data, { compact = false } = {}) {
   const socialTags = social.tags
     .map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`)
     .join("");
+
+  const reminderItems = reminders.length
+    ? reminders
+        .map((r) => {
+          const speak = (r.speak_line || "").replaceAll("\n", " ").trim();
+          const due = r.due_at ? formatTimestamp(r.due_at) : "";
+          const title = speak || r.title || "";
+          return `
+            <li class="reminder-item" data-reminder-item data-reminder-id="${escapeHtml(
+              r.commitment_id
+            )}">
+              <div class="reminder-meta">
+                <strong>${escapeHtml(due || "—")}</strong>
+                <span class="reminder-title">${escapeHtml(title)}</span>
+              </div>
+              <div class="reminder-edit">
+                <input
+                  data-reminder-speak
+                  class="reminder-input"
+                  type="text"
+                  value="${escapeAttr(speak)}"
+                  placeholder="しゃべる文面（speak_line）"
+                />
+                <button type="button" data-reminder-save="${escapeHtml(
+                  r.commitment_id
+                )}">保存</button>
+                <button type="button" data-reminder-cancel="${escapeHtml(
+                  r.commitment_id
+                )}">キャンセル</button>
+              </div>
+            </li>
+          `;
+        })
+        .join("")
+    : "";
 
   return [
     buildStatusCard({
@@ -1715,6 +1755,18 @@ function buildStatusHtml(data, { compact = false } = {}) {
       innerHtml: `
         <p class="status-card__body">${escapeHtml(social.body)}</p>
         ${socialTags ? `<div class="tag-row">${socialTags}</div>` : ""}`,
+    }),
+    buildStatusCard({
+      id: "reminders",
+      label: "リマインド（編集）",
+      icon: "R",
+      open: open("reminders"),
+      innerHtml: reminders.length
+        ? `
+          <p class="status-card__body">active（キャンセル/文面変更のみ）</p>
+          <ul class="reminder-list">${reminderItems}</ul>
+        `
+        : `<p class="status-card__body">（いまはなし）</p>`,
     }),
   ].join("");
 }
@@ -1824,6 +1876,51 @@ async function refreshAll() {
   await refreshChat();
   void refreshStatus();
   void refreshCamera();
+}
+
+function setupReminderCardActions() {
+  if (document.body.dataset.reminderActionsBound) return;
+  document.body.dataset.reminderActionsBound = "1";
+
+  document.addEventListener("click", (event) => {
+    const cancelBtn = event.target.closest("[data-reminder-cancel]");
+    if (cancelBtn) {
+      const id = cancelBtn.getAttribute("data-reminder-cancel") || "";
+      if (!id) return;
+      void (async () => {
+        try {
+          await postJson("/api/v1/reminders/cancel", {
+            commitment_id: id,
+            source_text: "ui_cancel",
+          });
+        } finally {
+          void refreshStatus();
+        }
+      })();
+      return;
+    }
+
+    const saveBtn = event.target.closest("[data-reminder-save]");
+    if (saveBtn) {
+      const id = saveBtn.getAttribute("data-reminder-save") || "";
+      if (!id) return;
+      const item = saveBtn.closest("[data-reminder-item]");
+      const input = item ? item.querySelector('input[data-reminder-speak]') : null;
+      const speak_line = input ? input.value.trim() : "";
+      if (!speak_line) return;
+      void (async () => {
+        try {
+          await postJson("/api/v1/reminders/speak-line", {
+            commitment_id: id,
+            speak_line,
+            source_text: "ui_speak_line",
+          });
+        } finally {
+          void refreshStatus();
+        }
+      })();
+    }
+  });
 }
 
 function outboundClientId() {
@@ -2589,6 +2686,7 @@ function setupKioskLayout() {
 setupRoomInbound();
 setupKioskLayout();
 setupStatusCardExpand();
+setupReminderCardActions();
 setupChatScroll();
 setupChatCompose();
 setupDebugInjectionToggle();

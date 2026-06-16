@@ -105,3 +105,4 @@ references/
 SOUL.md
 .gitignore
 claude-code-webui-fork
+tts-mcp/tts-samples/*.wav

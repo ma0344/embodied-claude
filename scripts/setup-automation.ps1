@@ -9,27 +9,44 @@ $Repo = Split-Path $PSScriptRoot -Parent
 Write-Host "==> embodied-claude automation setup"
 Write-Host "    repo: $Repo"
 
-# desires.conf / desires.json
-$desiresConf = Join-Path $Repo "desires.conf"
-$desiresSample = Join-Path $Repo "desires.sample.conf"
-if (-not (Test-Path $desiresConf) -and (Test-Path $desiresSample)) {
-    Copy-Item $desiresSample $desiresConf
-    Write-Host "Created desires.conf from desires.sample.conf"
-}
-
+# desires.json (v2 homeostasis — desire-system)
 $claudeDir = Join-Path $env:USERPROFILE ".claude"
 New-Item -ItemType Directory -Force -Path $claudeDir | Out-Null
 $desiresJson = Join-Path $claudeDir "desires.json"
 if (-not (Test-Path $desiresJson)) {
-    @'
+    $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+    @"
 {
-  "lastTick": 0,
-  "desires": {},
-  "discomforts": {}
+  "updated_at": "$now",
+  "desires": {
+    "observe_room": 0.0,
+    "look_outside": 0.0,
+    "browse_curiosity": 0.0,
+    "miss_companion": 0.0,
+    "identity_coherence": 0.0,
+    "cognitive_load": 0.0
+  },
+  "discomforts": {
+    "observe_room": 0.0,
+    "look_outside": 0.0,
+    "browse_curiosity": 0.0,
+    "miss_companion": 0.0,
+    "identity_coherence": 0.0,
+    "cognitive_load": 0.0
+  },
+  "dominant": "observe_room"
 }
-'@ | Set-Content -Path $desiresJson -Encoding utf8
-    Write-Host "Created $desiresJson"
+"@ | Set-Content -Path $desiresJson -Encoding utf8
+    Write-Host "Created v2 $desiresJson"
 }
+
+$desireSystem = Join-Path $Repo "desire-system"
+if (Test-Path $desireSystem) {
+    Write-Host "Run initial desire-updater:"
+    Write-Host "  cd desire-system; uv run desire-updater"
+}
+
+# Legacy desires.conf is deprecated — do not copy desires.sample.conf
 
 # settings.local.json from example (merge hooks manually if you already have one)
 $settingsWindows = Join-Path $Repo ".claude\settings.windows.json.example"

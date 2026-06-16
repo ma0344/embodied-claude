@@ -31,11 +31,11 @@
 | **2** | ② | **OL1 + OL2** | **済（コード）** — 日付解決 + commitment → tick リマインド。実機確認・残リスクは上記 doc |
 | **3** | ③ | **A4g 運用** | **済** — ntfy / Pushover（外出時・8090 閉じてる PC 向け） |
 | **4** | ④ | **C11g** スリープ / 画面消灯 | **済** — wakeLock + ドロワー UI（2026-06-16） |
-| **5** | ⑤ | **Desire 自律ループ** | **次** — ⑤a→d（まー合意 2026-06-16） |
-| **5a** | ⑤-1 | **browse_curiosity** | plan `web_search` → gateway 直実行が未接続 |
-| **5b** | ⑤-2 | **cognitive_load** | plan `think_or_discuss_topic` → gateway 未実装 |
-| **5c** | ⑤-3 | **identity_coherence** | `recall_memories` がスタブ（自律 tick で実 recall 要） |
-| **5d** | ⑤-4 | **旧 `desires.conf`** | `desires.sample.conf` / `desire-tick.ts` と v2 `DESIRE_CONFIGS` の整理・廃止判断 |
+| **5** | ⑤ | **Desire 自律ループ** | **済** — ⑤a→d gateway 接続（2026-06-16） |
+| **5a** | ⑤-1 | **browse_curiosity** | **済** — `web_search_direct`（DDG instant + remember） |
+| **5b** | ⑤-2 | **cognitive_load** | **済** — `think_or_discuss_topic_direct` |
+| **5c** | ⑤-3 | **identity_coherence** | **済** — `:18900/recall` + private note |
+| **5d** | ⑤-4 | **旧 `desires.conf`** | **済** — v2 一本化・setup-automation 更新 |
 | **—** | ⑥ | **A4j+** / **C12** | 着信返信 UX・intent router（任意） |
 | **—** | — | C11c/d、体温 LHM、Irodori TTS | 任意の磨き |
 
@@ -202,10 +202,10 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 | 3 | **⑤c** | `identity_coherence` | `recall_memories` | スタブのみ | tick 内で `:18900/recall` + experience（再撮影なし想起） |
 | 4 | **⑤d** | — | — | 二重系統 | **本線** = `desire-system` v2 `DESIRE_CONFIGS` + `~/.claude/desires.json`。`desires.conf` / `desire-tick.ts` / sample の旧 growth_rate 欲求は整理・ドキュメント更新・廃止判断 |
 
-- [ ] **⑤a** `browse_curiosity` — gateway `web_search` 直実行
-- [ ] **⑤b** `cognitive_load` — gateway `think_or_discuss_topic`
-- [ ] **⑤c** `identity_coherence` — 自律 tick で実 recall
-- [ ] **⑤d** 旧 `desires.conf` 系の整理（v2 一本化）
+- [x] **⑤a** `browse_curiosity` — gateway `web_search` 直実行（DuckDuckGo instant + remember）
+- [x] **⑤b** `cognitive_load` — gateway `think_or_discuss_topic`（private reflection）
+- [x] **⑤c** `identity_coherence` — 自律 tick で `:18900/recall` + private note
+- [x] **⑤d** 旧 `desires.conf` 系の整理（v2 一本化・setup-automation 更新）
 
 **運用確認（随時）**: `EmbodiedClaude-AutonomousTick` / `autonomous-tick.log` / 状態カードの dominant desire。⑤a 前に 1〜2 日ログを見て tick が `act_autonomously` まで届いているか確認してよい。
 

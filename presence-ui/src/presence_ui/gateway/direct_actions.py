@@ -20,7 +20,9 @@ from interaction_orchestrator_mcp.schemas import (
 from social_core import utc_now
 
 from presence_ui.deps import PresenceStores
+from presence_ui.gateway.memory_http import http_recall, http_remember
 from presence_ui.gateway.room_events import activity_event, progress_event
+from presence_ui.gateway.web_search import ddg_instant_answer, pick_browse_query
 from presence_ui.services.camera_locations import CAMERA_LOCATIONS, PresetLocation
 from presence_ui.services.outbound import (
     default_surface_channels,
@@ -141,6 +143,174 @@ def write_private_reflection_direct(
         summary="Private reflection saved.",
         detail=stored.experience_id,
         events=events,
+    )
+
+
+async def web_search_direct(
+    stores: PresenceStores,
+    *,
+    person_id: str,
+    ctx: InteractionContext,
+    plan: ResponsePlan,
+) -> DirectActionOutcome:
+    """Bounded DuckDuckGo instant answer for browse_curiosity."""
+    query = pick_browse_query(ctx)
+    answer, used_query = await ddg_instant_answer(query)
+    if not answer:
+        return DirectActionOutcome(
+            ok=False,
+            action="web_search",
+            summary=f"No web result for: {used_query or query}",
+            detail="ddg_empty",
+            events=[
+                activity_event(
+                    kind="search",
+                    label="Web検索",
+                    detail=(used_query or query)[:120],
+                    ok=False,
+                )
+            ],
+        )
+
+    memory_line = f"WebSearchで調べた: 「{used_query}」 — {answer[:400]}"
+    remember_result = await asyncio.to_thread(
+        http_remember,
+        content=memory_line,
+        category="observation",
+        emotion="curious",
+        importance=3,
+    )
+    remember_ok = bool(remember_result.get("ok"))
+    summary = answer[:240]
+    stores.orchestrator.record_agent_experience(
+        RecordAgentExperienceInput(
+            ts=utc_now(),
+            person_id=person_id,
+            kind="agent_autonomous_action",
+            summary=summary,
+            public_summary=summary,
+            importance=3,
+            privacy_level="relationship",
+            related_event_ids=[],
+            artifacts=[{"query": used_query, "remember_ok": remember_ok}],
+        )
+    )
+    return DirectActionOutcome(
+        ok=True,
+        action="web_search",
+        summary=summary,
+        detail=used_query,
+        desire_satisfied="browse_curiosity",
+        events=[
+            progress_event(phase="search", label="Webで調べた"),
+            activity_event(
+                kind="search",
+                label="Web検索",
+                detail=f"{used_query}: {summary[:80]}",
+                ok=True,
+            ),
+        ],
+    )
+
+
+def think_or_discuss_topic_direct(
+    stores: PresenceStores,
+    *,
+    person_id: str,
+    ctx: InteractionContext,
+    plan: ResponsePlan,
+) -> DirectActionOutcome:
+    """Light cognitive note for cognitive_load (private reflection style)."""
+    parts: list[str] = ["（自律の思考メモ）", plan.why_this_move.strip()]
+    if ctx.open_loops:
+        topics = ", ".join(loop.topic for loop in ctx.open_loops[:3] if loop.topic)
+        if topics:
+            parts.append(f"Open loops: {topics}")
+    if ctx.compact_prompt_block:
+        parts.append(ctx.compact_prompt_block.strip())
+    elif ctx.prompt_summary:
+        parts.append(ctx.prompt_summary.strip())
+    body = "\n\n".join(part for part in parts if part)[:2000]
+
+    outcome = write_private_reflection_direct(
+        stores,
+        person_id=person_id,
+        ctx=ctx,
+        plan=plan,
+        body=body,
+    )
+    return DirectActionOutcome(
+        ok=outcome.ok,
+        action="think_or_discuss_topic",
+        summary=outcome.summary,
+        detail=outcome.detail,
+        events=outcome.events,
+        desire_satisfied="cognitive_load",
+    )
+
+
+def recall_memories_direct(
+    stores: PresenceStores,
+    *,
+    person_id: str,
+    ctx: InteractionContext,
+    plan: ResponsePlan,
+) -> DirectActionOutcome:
+    """Recall via :18900 and persist a private identity note."""
+    query = os.getenv("PRESENCE_RECALL_QUERY", "").strip()
+    if not query:
+        query = ctx.prompt_summary.strip() if ctx.prompt_summary else ""
+    if not query:
+        query = "こより 自分 アイデンティティ 関係"
+
+    items = http_recall(query=query, n=4)
+    if items:
+        lines = []
+        for item in items[:4]:
+            content = str(item.get("content") or "").strip()
+            if content:
+                lines.append(f"- {content[:180]}")
+        body = "（自律の記憶なぞり）\n" + "\n".join(lines)
+        summary = f"Recalled {len(lines)} memories."
+    else:
+        body = "（記憶なぞり — 関連する記憶が見つからなかった）"
+        summary = "No relevant memories recalled."
+
+    outcome = write_private_reflection_direct(
+        stores,
+        person_id=person_id,
+        ctx=ctx,
+        plan=plan,
+        body=body[:2000],
+    )
+    stores.orchestrator.record_agent_experience(
+        RecordAgentExperienceInput(
+            ts=utc_now(),
+            person_id=person_id,
+            kind="agent_autonomous_action",
+            summary=summary,
+            public_summary=summary,
+            importance=3,
+            privacy_level="private",
+            related_event_ids=[],
+            artifacts=[{"query": query, "hits": len(items)}],
+        )
+    )
+    return DirectActionOutcome(
+        ok=outcome.ok,
+        action="recall_memories",
+        summary=summary,
+        detail=query[:120],
+        events=[
+            progress_event(phase="recall", label="記憶をなぞった"),
+            activity_event(
+                kind="recall",
+                label="記憶なぞり",
+                detail=summary[:120],
+                ok=outcome.ok,
+            ),
+        ],
+        desire_satisfied="identity_coherence",
     )
 
 
@@ -605,6 +775,9 @@ SMOKE_ACTIONS = frozenset(
         "look_dining",
         "miss_companion",
         "write_private_reflection",
+        "web_search",
+        "think_or_discuss",
+        "recall_memories",
     }
 )
 
@@ -726,6 +899,18 @@ async def execute_smoke_action(
             text=speech_text,
             skip_cooldown=True,
         )
+    elif key == "web_search":
+        outcome = await web_search_direct(
+            stores, person_id=person_id, ctx=ctx, plan=plan
+        )
+    elif key == "think_or_discuss":
+        outcome = think_or_discuss_topic_direct(
+            stores, person_id=person_id, ctx=ctx, plan=plan
+        )
+    elif key == "recall_memories":
+        outcome = recall_memories_direct(
+            stores, person_id=person_id, ctx=ctx, plan=plan
+        )
     else:
         outcome = write_private_reflection_direct(
             stores, person_id=person_id, ctx=ctx, plan=plan
@@ -789,6 +974,8 @@ async def _finalize_autonomous_outcome(
             "stay_silent",
             "defer",
             "quietly_prepare",
+            "web_search",
+            "think_or_discuss_topic",
             "recall_memories",
         }
     ):
@@ -849,6 +1036,18 @@ async def execute_autonomous_plan(
             plan=plan,
             text=speech_text,
         )
+    elif "web_search" in allowed or dominant == "browse_curiosity":
+        outcome = await web_search_direct(
+            stores, person_id=person_id, ctx=ctx, plan=plan
+        )
+    elif "think_or_discuss_topic" in allowed or dominant == "cognitive_load":
+        outcome = think_or_discuss_topic_direct(
+            stores, person_id=person_id, ctx=ctx, plan=plan
+        )
+    elif "recall_memories" in allowed or dominant == "identity_coherence":
+        outcome = recall_memories_direct(
+            stores, person_id=person_id, ctx=ctx, plan=plan
+        )
     elif "camera_look_around" in allowed or dominant == "observe_room":
         outcome = await observe_room_direct(stores, person_id=person_id)
     elif "camera_look_outside" in allowed or dominant == "look_outside":
@@ -864,13 +1063,6 @@ async def execute_autonomous_plan(
     elif "write_private_reflection" in allowed:
         outcome = write_private_reflection_direct(
             stores, person_id=person_id, ctx=ctx, plan=plan
-        )
-    elif "recall_memories" in allowed or dominant == "identity_coherence":
-        outcome = DirectActionOutcome(
-            ok=True,
-            action="recall_memories",
-            summary="Recall handled via compose memory adapter on next turn.",
-            events=[progress_event(phase="recall", label="記憶をなぞった")],
         )
     else:
         outcome = DirectActionOutcome(

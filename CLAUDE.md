@@ -337,11 +337,11 @@ X（x-mcp）は使わない。USB ウェブカメラは任意（`usb-webcam-mcp`
 ### desire-system
 
 1. `.mcp.json` に `desire-system` を追加
-2. `cp desires.sample.conf desires.conf`（Windows: `setup-automation.ps1`）
-3. 定期: `cd desire-system && uv run desire-updater`（タスクスケジューラ / cron）
-4. 自律 tick 時: `get_desires` → 文脈に合う bounded action → `satisfy_desire`
+2. 初回: `scripts/setup-automation.ps1`（v2 `~/.claude/desires.json` を作成）→ `cd desire-system && uv run desire-updater`
+3. 定期: `cd desire-system && uv run desire-updater`（タスクスケジューラ / `install-autonomous-tick-task.ps1`）
+4. 自律 tick: `POST /api/v1/autonomous-tick` → gateway が bounded action → `satisfy_desire_direct`
 
-初期セットアップ（Windows）: `scripts/setup-automation.ps1`
+旧 `desires.conf` / `scripts/desire-tick.ts`（growth_rate モデル）は **非推奨**。本線は v2 のみ。
 
 ## 注意事項
 

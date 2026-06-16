@@ -1,3 +1,7 @@
+// DEPRECATED: legacy Bun desire tick (growth_rate + desires.conf).
+// ma-home uses desire-system v2: `cd desire-system && uv run desire-updater`
+// and ~/.claude/desires.json (updated_at, desires, discomforts, dominant).
+
 const THRESHOLD = 0.6;
 const DEFAULT_LEVEL = 0.0;
 

@@ -30,7 +30,9 @@ plan の `initiative.allowed_actions`（`plan.py`）を gateway が解釈し、*
 | `talk_to_companion` | tts `say`（boundary OK 時） | miss_companion |
 | `remind_commitment` | outbound + tts、then `complete_commitment` | OL2、due commitment 優先 |
 | `write_private_reflection` | orchestrator `append_private_reflection` | quiet hours |
-| `recall_memories` | `:18900/recall` | identity_coherence |
+| `web_search` | DuckDuckGo instant API + `:18900/remember` | browse_curiosity |
+| `think_or_discuss_topic` | private reflection（open loops / prompt からメモ） | cognitive_load |
+| `recall_memories` | `:18900/recall` + private note | identity_coherence |
 | （followup）`satisfy_desire` | desire_updater / memory marker | 1 action 1 satisfy |
 
 **触らない**: compose / plan のルール本体。MCP サーバー実装も `.mcp.json` からは削除しない（CLI `/talk` 用に残す）。

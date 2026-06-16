@@ -2,16 +2,20 @@
 #
 #   . (Join-Path $PSScriptRoot "lmstudio-env.ps1")
 
-$script:LmStudioModelEnvVars = @(
+$script:LmStudioChatModelEnvVars = @(
     "ANTHROPIC_MODEL",
     "CLAUDE_MODEL",
     "LMSTUDIO_MODEL",
     "ANTHROPIC_DEFAULT_SONNET_MODEL",
     "ANTHROPIC_DEFAULT_OPUS_MODEL",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-    "CLAUDE_CODE_SUBAGENT_MODEL",
-    "LM_STUDIO_VISION_MODEL"
+    "CLAUDE_CODE_SUBAGENT_MODEL"
 )
+
+$script:LmStudioVisionModelEnvVar = "LM_STUDIO_VISION_MODEL"
+
+# Chat + vision (legacy list; prefer ChatModelEnvVars for chat-only updates)
+$script:LmStudioModelEnvVars = $script:LmStudioChatModelEnvVars + @($script:LmStudioVisionModelEnvVar)
 
 function Get-LmStudioModelFromSettings {
     param(
@@ -46,11 +50,11 @@ function Set-LmStudioProcessEnv {
     }
 
     if ($ForceModel) {
-        foreach ($Name in $script:LmStudioModelEnvVars) {
+        foreach ($Name in $script:LmStudioChatModelEnvVars) {
             Set-Item -Path "env:$Name" -Value $Model
         }
     } else {
-        foreach ($Name in $script:LmStudioModelEnvVars) {
+        foreach ($Name in $script:LmStudioChatModelEnvVars) {
             if (-not (Get-Item "env:$Name" -ErrorAction SilentlyContinue)) {
                 Set-Item -Path "env:$Name" -Value $Model
             }
@@ -121,7 +125,7 @@ function Set-LmStudioModelInSettingsFile {
         $Settings.model = $Model
     }
 
-    foreach ($Name in $script:LmStudioModelEnvVars) {
+    foreach ($Name in $script:LmStudioChatModelEnvVars) {
         $Current = $Settings.env.$Name
         if ($Current -ne $Model) {
             $Changed += "$Name`: $Current -> $Model"
@@ -172,7 +176,7 @@ function Update-LmStudioMcpJson {
     $Config = Get-Content $McpJson -Raw | ConvertFrom-Json
     $Changed = @()
     $Targets = @(
-        @{ Server = "wifi-cam"; Keys = @("CLAUDE_MODEL", "LM_STUDIO_VISION_MODEL") }
+        @{ Server = "wifi-cam"; Keys = @("CLAUDE_MODEL") }
     )
 
     foreach ($Target in $Targets) {
@@ -201,6 +205,76 @@ function Update-LmStudioMcpJson {
     return [pscustomobject]@{ Changed = $Changed }
 }
 
+function Set-LmStudioVisionModelInSettingsFile {
+    param(
+        [string]$SettingsLocal,
+        [string]$VisionModel,
+        [switch]$WhatIf
+    )
+
+    if (-not (Test-Path $SettingsLocal)) {
+        throw "Missing $SettingsLocal"
+    }
+
+    $Settings = Get-Content $SettingsLocal -Raw | ConvertFrom-Json
+    if (-not $Settings.env) {
+        $Settings | Add-Member -NotePropertyName "env" -NotePropertyValue ([pscustomobject]@{})
+    }
+
+    $Key = $script:LmStudioVisionModelEnvVar
+    $Current = $Settings.env.$Key
+    $Changed = @()
+    if ($Current -ne $VisionModel) {
+        $Changed += "$Key`: $Current -> $VisionModel"
+        if (-not $WhatIf) {
+            $Settings.env | Add-Member -NotePropertyName $Key -NotePropertyValue $VisionModel -Force
+            Write-LmStudioJsonFile -Path $SettingsLocal -Data $Settings
+        }
+    }
+
+    return [pscustomobject]@{
+        VisionModel = $VisionModel
+        Changed = $Changed
+    }
+}
+
+function Update-LmStudioVisionMcpJson {
+    param(
+        [string]$McpJson,
+        [string]$VisionModel,
+        [switch]$WhatIf
+    )
+
+    if (-not (Test-Path $McpJson)) {
+        return [pscustomobject]@{ Changed = @(); Skipped = "file missing" }
+    }
+
+    $Config = Get-Content $McpJson -Raw | ConvertFrom-Json
+    $Changed = @()
+    $Server = "wifi-cam"
+    $Key = $script:LmStudioVisionModelEnvVar
+
+    if (-not $Config.mcpServers.$Server) {
+        return [pscustomobject]@{ Changed = @(); Skipped = "wifi-cam missing" }
+    }
+    if (-not $Config.mcpServers.$Server.env) {
+        if (-not $WhatIf) {
+            $Config.mcpServers.$Server | Add-Member -NotePropertyName "env" -NotePropertyValue ([pscustomobject]@{})
+        }
+    }
+
+    $Current = $Config.mcpServers.$Server.env.$Key
+    if ($Current -ne $VisionModel) {
+        $Changed += "mcpServers.$Server.env.$Key`: $Current -> $VisionModel"
+        if (-not $WhatIf) {
+            $Config.mcpServers.$Server.env | Add-Member -NotePropertyName $Key -NotePropertyValue $VisionModel -Force
+            Write-LmStudioJsonFile -Path $McpJson -Data $Config
+        }
+    }
+
+    return [pscustomobject]@{ Changed = $Changed }
+}
+
 function Test-LmStudioSettingsMismatch {
     param([string]$SettingsLocal)
 
@@ -213,7 +287,7 @@ function Test-LmStudioSettingsMismatch {
     $Mismatches = @()
 
     if ($Settings.env) {
-        foreach ($Name in $script:LmStudioModelEnvVars) {
+        foreach ($Name in $script:LmStudioChatModelEnvVars) {
             $Val = $Settings.env.$Name
             if ($Val -and $Val -ne $Model) {
                 $Mismatches += [pscustomobject]@{

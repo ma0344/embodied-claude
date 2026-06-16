@@ -105,6 +105,8 @@ def test_intercept_includes_vision_prefetch(
     msg = result.payload["message"] if result.payload else ""
     assert "[vision_prefetch]" in msg
     assert "何が見える？" in msg
+    assert msg.index("何が見える？") < msg.index("[vision_prefetch]")
+    assert msg.endswith("Do NOT call mcp__wifi-cam__see.")
 
 
 def test_intercept_injects_accept_edits_when_missing(

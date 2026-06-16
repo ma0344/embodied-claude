@@ -117,11 +117,13 @@ async def _describe_via_chat(
     headers: dict[str, str],
     prompt: str,
     image_b64: str,
+    *,
+    max_tokens: int,
 ) -> str | None:
     url = f"{base}/v1/chat/completions"
     payload = {
         "model": model,
-        "max_tokens": 600,
+        "max_tokens": max_tokens,
         "messages": [
             {
                 "role": "user",
@@ -147,11 +149,13 @@ async def _describe_via_messages(
     headers: dict[str, str],
     prompt: str,
     image_b64: str,
+    *,
+    max_tokens: int,
 ) -> str | None:
     url = f"{base}/v1/messages"
     payload = {
         "model": model,
-        "max_tokens": 600,
+        "max_tokens": max_tokens,
         "messages": [
             {
                 "role": "user",
@@ -178,6 +182,7 @@ async def describe_image_via_lm_studio(image_base64: str) -> str | None:
     """Send JPEG to LM Studio vision; return text-only caption."""
     base, model, token = lm_studio_settings()
     max_side = int(os.environ.get("WIFI_CAM_VISION_MAX_SIDE", "1024"))
+    max_tokens = int(os.environ.get("WIFI_CAM_VISION_MAX_TOKENS", "720"))
     prompt = os.environ.get(
         "WIFI_CAM_VISION_PROMPT",
         "この画像を説明して。実際に見えるものだけ。見えないことは書かない。",
@@ -197,12 +202,12 @@ async def describe_image_via_lm_studio(image_base64: str) -> str | None:
             try:
                 if kind == "chat":
                     caption = await _describe_via_chat(
-                        client, base, model, headers, prompt, image_b64
+                        client, base, model, headers, prompt, image_b64, max_tokens=max_tokens
                     )
                     label = "/v1/chat/completions"
                 else:
                     caption = await _describe_via_messages(
-                        client, base, model, headers, prompt, image_b64
+                        client, base, model, headers, prompt, image_b64, max_tokens=max_tokens
                     )
                     label = "/v1/messages"
                 if caption:

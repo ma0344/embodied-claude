@@ -18,8 +18,11 @@ Claude Code・claude-code-webui・wifi-cam ビジョンが LM Studio に送る *
 cd C:\Users\ma\src\embodied-claude
 git pull
 
-# 1) 設定ファイルを一括更新
+# 1) チャットモデル（Gemma 等）
 .\scripts\set-lmstudio-model.ps1 -Model google/gemma-4-12b-qat
+
+# 1b) vision スロット（Qwen2.5-VL-3B Q4_K_M ロード後、GET /v1/models の id を指定）
+.\scripts\set-lmstudio-model.ps1 -VisionModel qwen/qwen2.5-vl-3b-instruct
 
 # 2) LM Studio で同じ ID のモデルをロードし、Local Server を起動 (port 1234)
 
@@ -57,17 +60,79 @@ git pull
 - `CLAUDE_MODEL` / `LMSTUDIO_MODEL`
 - `ANTHROPIC_DEFAULT_SONNET_MODEL` / `OPUS` / `HAIKU`
 - `CLAUDE_CODE_SUBAGENT_MODEL`
-- `LM_STUDIO_VISION_MODEL`（wifi-cam の画像説明用）
+- `LM_STUDIO_VISION_MODEL`（wifi-cam / gateway の **画像説明専用**。チャットモデルと別 ID）
 
 **重要:** トップの `"model": "...-qat"` だけ更新して `env.CLAUDE_MODEL` が古いままだと、
 API リクエストだけ非 QAT モデルになることがある。`set-lmstudio-model.ps1` か
 `sync-lmstudio-settings.ps1` で揃えること。
 
+**二モデル構成（2026-06〜）:** チャット = `google/gemma-4-12b-qat`、vision = **Qwen2.5-VL-3B** など別ロード。KV キャッシュを分離する。
+
+## Vision スロット（こよりの目）
+
+チャット（Gemma）と **別モデルを LM Studio に同時ロード**し、`:1234` の `"model"` フィールドで振り分ける。
+
+### 推奨（ma-home・第一候補）
+
+| 項目 | 値 |
+|------|-----|
+| モデル | **Qwen2.5-VL-3B-Instruct** — `lmstudio-community/Qwen2.5-VL-3B-Instruct-GGUF` の **Q4_K_M** + **mmproj**（2 ファイル構成） |
+| 用途 | Tapo キャプション・自律 `observe_room`・会話の「見て」prefetch |
+| Context length | **8192**（vision だけ。262k は不要で VRAM を食う） |
+| Max Concurrent Predictions | **1** |
+| GPU offload | 最大（vision モデル側） |
+
+**LM Studio Discover（推奨）:** `qwen2.5-vl-3b` → `lmstudio-community/Qwen2.5-VL-3B-Instruct-GGUF` を選び **Q4_K_M** をダウンロードすると、本体 `Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf` と `mmproj-model-f16.gguf` が**同じフォルダにまとめて**入る（手動で mmproj を探す必要は通常ない）。Load 後、モデル名横に**黄色い目アイコン**が出れば vision 有効。
+
+**HF から手動する場合:** [同リポ](https://huggingface.co/lmstudio-community/Qwen2.5-VL-3B-Instruct-GGUF) から上記 2 ファイルを取得し、`%USERPROFILE%\.lmstudio\models\lmstudio-community\Qwen2.5-VL-3B-Instruct-GGUF\` など**同一ディレクトリ**に置く。mmproj だけ別フォルダだとテキスト専用になる。
+
+ロード後 **Developer ログ** または `GET http://127.0.0.1:1234/v1/models` の `id` をコピー（例: `qwen/qwen2.5-vl-3b-instruct` — **実機の文字列が正**）。
+
+### `presence-ui.local.env`（または wifi-cam / `.mcp.json` の env）
+
+`%USERPROFILE%\.config\embodied-claude\presence-ui.local.env` に追記（コミットしない）:
+
+```env
+# チャットは settings.local.json の Gemma のまま
+LM_STUDIO_VISION_MODEL=<上でコピーした ID>
+
+# 解像度・説明文（こよりの目 — 情報量と速度のバランス）
+WIFI_CAM_VISION_MAX_SIDE=1024
+WIFI_CAM_VISION_MAX_TOKENS=720
+WIFI_CAM_VISION_PROMPT=この部屋の写真。見えているものを具体的に日本語で書いてください。人物・姿勢・家具・明るさ・窓やモニタの有無。推測や見えないことは書かない。5〜8文程度。
+```
+
+```powershell
+.\scripts\restart-presence-ui.ps1
+```
+
+### 動作確認
+
+1. LM Studio ログで vision リクエストの `"model"` が Qwen2.5-VL になっていること
+2. `:8090` または自律 tick 後、キャプションが日本語で返ること
+3. チャット2ターン目の `f_keep` が、vision 前より改善していること（別ロードなので干渉しない）
+
+### 量子化を上げる場合
+
+部屋の細部が足りなければ **Q6_K / Q8_0**（3B リポに Q5 は無い）に差し替え。mmproj はそのまま。3090 + Gemma 12B QAT でも **vision ctx 8k** なら多くの場合載る。
+
+### 関連 env（コード側）
+
+| 変数 | 既定 | 説明 |
+|------|------|------|
+| `LM_STUDIO_VISION_MODEL` | `CLAUDE_MODEL` | vision API の model ID |
+| `WIFI_CAM_VISION_MAX_SIDE` | 1024 | JPEG 長辺リサイズ |
+| `WIFI_CAM_VISION_MAX_TOKENS` | 720 | キャプション最大トークン |
+| `WIFI_CAM_VISION_PROMPT` | 日本語・実見のみ | プロンプト全文 |
+| `WIFI_CAM_VISION_API` | auto | `chat` / `messages` 固定も可 |
+
+詳細: [lmstudio-kv-cache.md](./lmstudio-kv-cache.md)（チャット KV と vision 分離の背景）。
+
 ## スクリプト一覧
 
 | スクリプト | 用途 |
 |------------|------|
-| `set-lmstudio-model.ps1` | **モデル ID を変更**（settings + .mcp.json） |
+| `set-lmstudio-model.ps1` | **チャット** model ID を変更（`-VisionModel` で vision 別指定） |
 | `set-lmstudio-model.sh` | Linux 用（レガシー。ma-home では `set-lmstudio-model.ps1` を使う） |
 | `sync-lmstudio-settings.ps1` | `"model"` はそのまま、**env だけ** `"model"` に合わせる（ずれ修正） |
 | `check-lmstudio-model.ps1` | 現在の設定・User env・不一致の表示 |
@@ -80,7 +145,8 @@ API リクエストだけ非 QAT モデルになることがある。`set-lmstud
 2. `.claude/settings.local.json` を編集:
    - `"model"` を新 ID に
    - `env` 内の MODEL 系キーをすべて同じ ID に
-3. `.mcp.json` の `wifi-cam` → `env` → `CLAUDE_MODEL` / `LM_STUDIO_VISION_MODEL` を更新
+3. `.mcp.json` の `wifi-cam` → `env` → `CLAUDE_MODEL`（チャット用）を更新。  
+   **`LM_STUDIO_VISION_MODEL` は vision 専用モデル**（チャットと同じ ID にしない）→ [Vision スロット](#vision-スロットこよりの目) を参照
 4. （任意）Windows ユーザー環境変数に古い `CLAUDE_MODEL` がある場合は削除または更新  
    `set-lmstudio-model.ps1 -UpdateUserEnv` でも可
 5. LM Studio Local Server 再起動
@@ -128,8 +194,9 @@ claude-code-webui --host 0.0.0.0 --port 8080 `
 
 ### wifi-cam が画像を説明できない
 
-- LM Studio 側が **vision 対応**モデルか確認
-- `.mcp.json` の `LM_STUDIO_VISION_MODEL` がロード済み ID と一致しているか確認
+- LM Studio で **Qwen2.5-VL-3B + mmproj** がロード済みか確認（Gemma 単体では vision 専用スロットにならない）
+- `LM_STUDIO_VISION_MODEL` がロード済み ID と一致しているか（`presence-ui.local.env` / `.mcp.json`）
+- `GET /v1/models` で vision 用 `id` を再確認
 
 ### memory-mcp の embedding を変えた場合
 

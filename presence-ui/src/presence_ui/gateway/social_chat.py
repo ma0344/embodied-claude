@@ -231,10 +231,6 @@ def intercept_chat_request(
         )
 
     turn_delta = build_social_turn_delta(ctx=ctx, plan=plan)
-    if vision_prefetch:
-        turn_delta = (
-            f"{vision_prefetch.strip()}\n\n{turn_delta}" if turn_delta else vision_prefetch.strip()
-        )
     if memory_notes:
         note = "\n\n".join(memory_notes)
         turn_delta = f"{turn_delta}\n\n{note}" if turn_delta else note
@@ -253,6 +249,9 @@ def intercept_chat_request(
         turn_delta=turn_delta,
         extra_append=extra_append,
     )
+    if vision_prefetch:
+        # After user utterance — KV-friendly (variable caption at tail, like stable append).
+        enriched_message = f"{enriched_message.rstrip()}\n\n{vision_prefetch.strip()}"
     enriched = payload.copy()
     enriched["message"] = enriched_message
     if append_prompt:

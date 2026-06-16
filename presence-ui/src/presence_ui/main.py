@@ -91,6 +91,7 @@ def create_app() -> FastAPI:
     def ui_config() -> JSONResponse:
         """Frontend routing: native SSE vs legacy 8080 proxy chat."""
         from presence_ui.services.outbound import outbound_web_speech_suppress_on_localhost
+        from presence_ui.services.outbound_sse import sse_enabled
 
         return utf8_json(
             {
@@ -103,7 +104,12 @@ def create_app() -> FastAPI:
                 "legacy_chat_path": "/api/chat",
                 "outbound_pending_path": "/api/v1/outbound/pending",
                 "outbound_ack_path": "/api/v1/outbound/ack",
+                "outbound_stream_path": "/api/v1/outbound/stream",
+                "outbound_sse_enabled": sse_enabled(),
                 "outbound_poll_ms": int(os.getenv("PRESENCE_OUTBOUND_POLL_MS", "3000")),
+                "outbound_poll_fallback_ms": int(
+                    os.getenv("PRESENCE_OUTBOUND_POLL_FALLBACK_MS", "60000")
+                ),
                 "outbound_web_speech_suppress_on_localhost": (
                     outbound_web_speech_suppress_on_localhost()
                 ),
@@ -163,6 +169,46 @@ def create_app() -> FastAPI:
         if not ok:
             raise HTTPException(status_code=404, detail="nudge not found")
         return OutboundAckResponse(ok=True, nudge_id=body.nudge_id)
+
+    @app.get("/api/v1/outbound/stream")
+    async def get_outbound_stream(
+        person_id: str = DEFAULT_PERSON_ID,
+        client_id: str = "",
+        since: str | None = None,
+        limit: int = 20,
+    ) -> StreamingResponse:
+        from presence_ui.deps import get_stores
+        from presence_ui.services.outbound import list_pending_outbound
+        from presence_ui.services.outbound_sse import (
+            pending_item_payload,
+            sse_enabled,
+            stream_room_inbound,
+        )
+
+        if not sse_enabled():
+            raise HTTPException(status_code=404, detail="outbound SSE disabled")
+        if not client_id.strip():
+            raise HTTPException(status_code=400, detail="client_id is required")
+
+        stores = get_stores()
+        pending = list_pending_outbound(
+            stores,
+            person_id=person_id,
+            client_id=client_id.strip(),
+            since=since,
+            limit=limit,
+        )
+        catch_up = [pending_item_payload(item) for item in pending]
+
+        return StreamingResponse(
+            stream_room_inbound(catch_up=catch_up),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     @app.get("/api/v1/native/sessions", response_model=NativeSessionListResponse)
     def get_native_sessions(limit: int = 40) -> NativeSessionListResponse:

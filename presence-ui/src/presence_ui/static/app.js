@@ -39,6 +39,8 @@ let showDebugInjection = localStorage.getItem(SHOW_DEBUG_INJECTION_KEY) === "1";
 let roomDrawerOpen = false;
 let contextRailPins = loadContextRailPins();
 let outboundPollTimer = null;
+let outboundEventSource = null;
+let outboundSseConnected = false;
 let speechUnlocked = false;
 let roomInboundQueue = [];
 let roomInboundCurrent = null;
@@ -1808,9 +1810,37 @@ function outboundAckPath() {
   return uiConfig.outbound_ack_path || "/api/v1/outbound/ack";
 }
 
+function outboundStreamPath() {
+  return uiConfig.outbound_stream_path || "/api/v1/outbound/stream";
+}
+
+function outboundSseEnabled() {
+  return uiConfig.outbound_sse_enabled !== false;
+}
+
 function outboundPollMs() {
   const ms = Number(uiConfig.outbound_poll_ms);
   return Number.isFinite(ms) && ms >= 1000 ? ms : OUTBOUND_POLL_MS_DEFAULT;
+}
+
+function outboundPollFallbackMs() {
+  const ms = Number(uiConfig.outbound_poll_fallback_ms);
+  return Number.isFinite(ms) && ms >= 5000 ? ms : 60000;
+}
+
+function activeOutboundPollMs() {
+  if (outboundSseConnected && outboundSseEnabled()) {
+    return outboundPollFallbackMs();
+  }
+  return outboundPollMs();
+}
+
+function restartOutboundPollTimer() {
+  if (outboundPollTimer) {
+    clearInterval(outboundPollTimer);
+    outboundPollTimer = null;
+  }
+  outboundPollTimer = setInterval(() => void pollOutboundNudges(), activeOutboundPollMs());
 }
 
 function unlockSpeechOnce() {
@@ -2046,6 +2076,57 @@ async function showBrowserOutboundNotification(item) {
   }
 }
 
+function deliverOutboundItem(item) {
+  if (!item?.nudge_id || !item.text) return;
+  const kiosk = isKioskLayout();
+  if (kiosk) {
+    enqueueRoomInbound(item);
+    return;
+  }
+  if (browserNotificationsEnabled()) {
+    void showBrowserOutboundNotification(item);
+    return;
+  }
+  if (!document.hidden) {
+    enqueueRoomInbound(item);
+  }
+}
+
+function closeOutboundSse() {
+  outboundSseConnected = false;
+  if (outboundEventSource) {
+    outboundEventSource.close();
+    outboundEventSource = null;
+  }
+}
+
+function setupOutboundSse() {
+  if (!outboundSseEnabled() || typeof EventSource === "undefined") return;
+  closeOutboundSse();
+  const params = new URLSearchParams({ client_id: outboundClientId() });
+  const since = sessionStorage.getItem(OUTBOUND_SINCE_KEY) || "";
+  if (since) params.set("since", since);
+  const source = new EventSource(`${outboundStreamPath()}?${params.toString()}`);
+  outboundEventSource = source;
+  source.addEventListener("connected", () => {
+    outboundSseConnected = true;
+    restartOutboundPollTimer();
+  });
+  source.addEventListener("room_inbound", (event) => {
+    try {
+      deliverOutboundItem(JSON.parse(event.data));
+    } catch (err) {
+      console.warn("outbound SSE parse failed:", err.message);
+    }
+  });
+  source.onerror = () => {
+    if (source.readyState === EventSource.CLOSED) {
+      outboundSseConnected = false;
+      restartOutboundPollTimer();
+    }
+  };
+}
+
 async function pollOutboundNudges() {
   const kiosk = isKioskLayout();
   if (kiosk && document.hidden) return;
@@ -2056,13 +2137,7 @@ async function pollOutboundNudges() {
     const data = await fetchJson(`${outboundPendingPath()}?${params.toString()}`);
     const items = data.items || [];
     for (const item of items) {
-      if (kiosk) {
-        enqueueRoomInbound(item);
-      } else if (browserNotificationsEnabled()) {
-        void showBrowserOutboundNotification(item);
-      } else if (!document.hidden) {
-        enqueueRoomInbound(item);
-      }
+      deliverOutboundItem(item);
     }
   } catch (err) {
     console.warn("outbound poll failed:", err.message);
@@ -2092,10 +2167,16 @@ function setupOutboundPoll() {
       );
     }
   }
-  outboundPollTimer = setInterval(() => void pollOutboundNudges(), outboundPollMs());
+  setupOutboundSse();
+  restartOutboundPollTimer();
   void pollOutboundNudges();
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) void pollOutboundNudges();
+    if (!document.hidden) {
+      void pollOutboundNudges();
+      if (outboundSseEnabled() && outboundEventSource?.readyState === EventSource.CLOSED) {
+        setupOutboundSse();
+      }
+    }
   });
 }
 

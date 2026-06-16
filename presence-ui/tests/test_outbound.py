@@ -205,10 +205,85 @@ def test_ui_config_exposes_outbound_paths(monkeypatch: pytest.MonkeyPatch) -> No
     body = client.get("/api/v1/ui-config").json()
     assert body["outbound_pending_path"] == "/api/v1/outbound/pending"
     assert body["outbound_ack_path"] == "/api/v1/outbound/ack"
+    assert body["outbound_stream_path"] == "/api/v1/outbound/stream"
+    assert body["outbound_sse_enabled"] is True
     assert body["outbound_poll_ms"] >= 1000
+    assert body["outbound_poll_fallback_ms"] >= 5000
     assert "outbound_web_speech_suppress_on_localhost" in body
 
     monkeypatch.setenv("VOICEVOX_URL", "http://127.0.0.1:10101")
     monkeypatch.setenv("PRESENCE_OUTBOUND_VOICE_LOCAL", "1")
     body2 = TestClient(create_app()).get("/api/v1/ui-config").json()
     assert body2["outbound_web_speech_suppress_on_localhost"] is True
+
+
+def test_outbound_stream_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PRESENCE_OUTBOUND_SSE", "0")
+    client = TestClient(create_app())
+    response = client.get("/api/v1/outbound/stream?client_id=kiosk")
+    assert response.status_code == 404
+
+
+def test_outbound_stream_requires_client_id() -> None:
+    client = TestClient(create_app())
+    response = client.get("/api/v1/outbound/stream")
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_stream_room_inbound_catch_up() -> None:
+    from presence_ui.services.outbound_sse import stream_room_inbound
+
+    catch_up = [
+        {
+            "nudge_id": "nudge_test",
+            "ts": "2026-01-01T00:00:00+00:00",
+            "text": "SSE 即時着信",
+            "speak": True,
+            "channels": ["chat_push"],
+            "desire": None,
+        }
+    ]
+    chunks: list[str] = []
+    async for chunk in stream_room_inbound(catch_up=catch_up):
+        chunks.append(chunk)
+        if "room_inbound" in chunk:
+            break
+    body = "".join(chunks)
+    assert "event: connected" in body
+    assert "event: room_inbound" in body
+    assert "SSE 即時着信" in body
+
+
+@pytest.mark.asyncio
+async def test_publish_room_inbound_reaches_subscriber() -> None:
+    import asyncio
+
+    from presence_ui.services.outbound_sse import publish_room_inbound, stream_room_inbound
+
+    gen = stream_room_inbound(catch_up=[])
+    received: asyncio.Queue[str] = asyncio.Queue()
+
+    async def reader() -> None:
+        async for chunk in gen:
+            await received.put(chunk)
+            if "live push" in chunk:
+                return
+
+    task = asyncio.create_task(reader())
+    await asyncio.sleep(0.05)
+    publish_room_inbound(
+        {
+            "nudge_id": "nudge_live",
+            "ts": "2026-01-01T00:00:01+00:00",
+            "text": "live push",
+            "speak": True,
+            "channels": ["chat_push"],
+            "desire": None,
+        }
+    )
+    first = await asyncio.wait_for(received.get(), timeout=2.0)
+    assert "connected" in first
+    second = await asyncio.wait_for(received.get(), timeout=2.0)
+    assert "live push" in second
+    task.cancel()

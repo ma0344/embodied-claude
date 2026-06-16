@@ -16,7 +16,7 @@
 | **D** | Backlog 最新化 | このファイルを現実に合わせる | **随時** |
 | **B** | 運用自動化 | ログオン常駐・手起動を減らす | **ほぼ完了**（B2 LM Studio 手動のみ） |
 | **C** | **部屋 UI（Native + Surface）** | `/` 殻 + キオスク UX | **C11 実戦 OK** → 磨きは任意 |
-| **A4** | **能動届け（Outbound）** | A4f/g 実装済み → SSE/TTS 磨き | **A4b+ / OL2** |
+| **A4** | **能動届け（Outbound）** | A4b+/A4f/g 実装済み → A4c+ TTS | **A4c+ / OL2** |
 | **OL** | Open Loops / リマインド | 日付解決 + commitment + 発火 | A4b/f とセット |
 | **A** | 記憶・gateway 身体 | compose / see / dismiss | **様子見**（大きな追加は止める） |
 | **C12** | intent router | 曖昧な「見て」分類 | 会話快適化（後） |
@@ -30,10 +30,9 @@
 | **1** | ① | **A4f 運用** | `install-autonomous-tick-task.ps1` 登録（15m + desire-updater） |
 | **1** | ② | **A4g 運用** | `PRESENCE_OUTBOUND_NTFY_URL` を presence-ui.local.env に設定 |
 | **2** | ③ | **OL1 + OL2** | 日付解決 + commitment → tick でリマインド |
-| **2** | ④ | **A4b+** SSE `room_inbound` | poll 3s → 即時着信 |
-| **2** | ⑤ | **A4c+** Server TTS URL | キオスク Web Speech → 8090 合成音声 |
-| **3** | ⑥ | **A4j+** 着信返信 UX | 下書き編集可・ヒューリスティック拡充（任意） |
-| **3** | ⑦ | **C12** intent router | カメラ指示の取りこぼし減 |
+| **2** | ④ | **A4c+** Server TTS URL | 部屋でるなの声（Web Speech 置換） |
+| **3** | ⑤ | **A4j+** 着信返信 UX | 下書き編集可・ヒューリスティック拡充（任意） |
+| **3** | ⑥ | **C12** intent router | カメラ指示の取りこぼし減 |
 | **—** | — | C11c/d、体温 LHM、Irodori TTS | 任意の磨き |
 
 **やらない順**: C12 だけ先にやっても「自律で話しかけてこない」は **A4f** 待ち。
@@ -267,7 +266,7 @@ MVP チェックリスト:
 - [x] **A4i** 部屋着信バナー（キオスク中央ダイアログ。bubble / PC poll 廃止）
 - [x] **A4j** 着信から新規会話 + 送信（着信文を compose プロンプトに同梱）
 - [ ] **A4j+** 着信返信 UX — 下書き編集可（自動送信オプション）、`suggestInboundReplyText` 拡充
-- [ ] **A4b+** SSE `room_inbound` + 着信即時
+- [x] **A4b+** SSE `room_inbound` + 着信即時（poll はフォールバック 60s）
 - [ ] **A4c+** Server TTS URL + Web Audio
 - [ ] **A4d** チャネル選択（MVP 後）
 - [x] **A4f** tick スケジューラ（desire-updater + `POST /api/v1/autonomous-tick`、Task 15m）

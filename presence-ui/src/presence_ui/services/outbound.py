@@ -226,11 +226,45 @@ def enqueue_outbound_nudge(
             push_detail,
         )
 
+    publish_enqueued_nudge(
+        nudge_id=nudge_id,
+        ts=ts,
+        person_id=person_id,
+        text=line,
+        speak=bool(speak),
+        channels=channel_list,
+        desire=desire,
+    )
+
     return OutboundEnqueueResult(
         ok=True,
         nudge_id=nudge_id,
         channels=tuple(channel_list),
     )
+
+
+def publish_enqueued_nudge(
+    *,
+    nudge_id: str,
+    ts: str,
+    person_id: str,
+    text: str,
+    speak: bool,
+    channels: list[str],
+    desire: str | None,
+) -> None:
+    from presence_ui.services.outbound_sse import pending_item_payload, publish_room_inbound
+
+    item = OutboundPendingItem(
+        nudge_id=nudge_id,
+        ts=ts,
+        person_id=person_id,
+        text=text,
+        speak=speak,
+        channels=channels,
+        desire=desire,
+    )
+    publish_room_inbound(pending_item_payload(item))
 
 
 def list_pending_outbound(

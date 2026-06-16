@@ -31,7 +31,7 @@ from presence_ui.gateway.direct_actions import (
     write_private_reflection_direct,
 )
 from presence_ui.gateway.room_events import progress_event
-from presence_ui.gateway.room_ingest import ingest_human_turn
+from presence_ui.gateway.room_ingest import ingest_human_turn_async
 from presence_ui.gateway.open_loop_dismiss import dismiss_note, dismiss_progress_label
 from presence_ui.gateway.prompt_injection import apply_gateway_prompt_injection
 from presence_ui.services.llm import build_social_turn_delta
@@ -55,10 +55,10 @@ class ChatInterceptResult:
 
 
 def _ingest_human(*, person_id: str, session_id: str | None, text: str):
-    from relationship_mcp.schemas import DismissOutcome
+    import asyncio
 
-    _event_id, outcome = ingest_human_turn(
-        person_id=person_id, session_id=session_id, text=text
+    _event_id, outcome = asyncio.run(
+        ingest_human_turn_async(person_id=person_id, session_id=session_id, text=text)
     )
     return outcome
 

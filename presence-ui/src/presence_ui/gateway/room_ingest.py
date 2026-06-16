@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+
 from social_core import utc_now
 
 from relationship_mcp.schemas import DismissOutcome
 
 from presence_ui.deps import get_stores
 from presence_ui.services.room_events import ROOM_WRITE_SOURCE
+
+logger = logging.getLogger(__name__)
 
 
 def ingest_human_turn(
@@ -17,8 +22,43 @@ def ingest_human_turn(
     text: str,
     ts: str | None = None,
 ) -> tuple[str, DismissOutcome]:
-    """Record human speech; refresh or close/cancel relationship threads."""
+    """Record human speech (sync — rule-based reminders only)."""
+    return asyncio.run(
+        _ingest_human_core_async(
+            person_id=person_id,
+            session_id=session_id,
+            text=text,
+            ts=ts,
+            run_llm=False,
+        )
+    )
 
+
+async def ingest_human_turn_async(
+    *,
+    person_id: str,
+    session_id: str | None,
+    text: str,
+    ts: str | None = None,
+) -> tuple[str, DismissOutcome]:
+    """Record human speech; Phase B LLM reminder when rule parser misses."""
+    return await _ingest_human_core_async(
+        person_id=person_id,
+        session_id=session_id,
+        text=text,
+        ts=ts,
+        run_llm=True,
+    )
+
+
+async def _ingest_human_core_async(
+    *,
+    person_id: str,
+    session_id: str | None,
+    text: str,
+    ts: str | None,
+    run_llm: bool,
+) -> tuple[str, DismissOutcome]:
     stores = get_stores()
     when = ts or utc_now()
     result = stores.social_state.ingest_social_event(
@@ -42,7 +82,19 @@ def ingest_human_turn(
             source_event_id=event_id,
         )
     except Exception:
-        pass
+        logger.exception("note_human_utterance_for_loops failed")
+    if run_llm:
+        try:
+            from presence_ui.gateway.reminder_spec import try_create_llm_reminder_commitment
+
+            await try_create_llm_reminder_commitment(
+                stores,
+                person_id=person_id,
+                text=text,
+                ts=when,
+            )
+        except Exception:
+            logger.exception("LLM reminder spec failed")
     return event_id, outcome
 
 

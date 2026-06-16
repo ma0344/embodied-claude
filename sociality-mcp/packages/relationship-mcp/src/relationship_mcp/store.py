@@ -28,7 +28,7 @@ from .inference import (
     suggest_followup_text,
     summarize_relationship,
 )
-from .reminder_intent import extract_reminder_request
+from .reminder_intent import ReminderSpec, extract_reminder_request
 from .schemas import (
     CommitmentRecord,
     DismissOutcome,
@@ -838,19 +838,35 @@ class RelationshipStore:
         spec = extract_reminder_request(text, ts=ts, tz_name=timezone)
         if spec is None:
             return None
+        return self.create_reminder_from_spec(
+            person_id=person_id,
+            spec=spec,
+            source_utterance=text,
+        )
+
+    def create_reminder_from_spec(
+        self,
+        *,
+        person_id: str,
+        spec: ReminderSpec,
+        source_utterance: str,
+        source: str = "reminder_request",
+    ) -> dict[str, str] | None:
+        """Persist a parsed reminder spec if no active commitment shares due_at."""
         for commitment in self.list_active_commitments(person_id=person_id, limit=50):
             if commitment.due_at == spec.due_at:
                 return None
         metadata = {
             "speak_line": spec.speak_line,
             "delivery": spec.delivery,
-            "source_utterance": text[:240],
+            "source_utterance": source_utterance[:240],
+            "spec_source": source,
         }
         return self.create_commitment(
             person_id=person_id,
             text=spec.title,
             due_at=spec.due_at,
-            source="reminder_request",
+            source=source,
             metadata=metadata,
         )
 

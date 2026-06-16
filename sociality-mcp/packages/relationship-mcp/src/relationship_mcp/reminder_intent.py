@@ -145,6 +145,28 @@ def _build_title(compact: str, speak_line: str | None) -> str:
     return label[:120]
 
 
+def needs_llm_reminder_parse(text: str) -> bool:
+    """True when utterance looks like a timed reminder but rule parser failed."""
+    compact = re.sub(r"\s+", " ", text.strip())
+    if not compact:
+        return False
+    if extract_reminder_request(compact, ts="2026-06-16T12:00:00+09:00") is not None:
+        return False
+    if not _has_reminder_intent(compact):
+        return False
+    # Avoid LLM for dismiss-only or recall noise.
+    lowered = compact.lower()
+    if any(marker in compact for marker in ("忘れて", "いらない", "キャンセル", "やめて")):
+        return False
+    if "リマインド" in compact or _TEACH_RE.search(compact):
+        return True
+    if _TIME_RE.search(compact) or _MINUTES_LATER_RE.search(compact):
+        return True
+    if any(word in compact for word in ("来週", "今度", "あとで", "午後", "午前", "半")):
+        return True
+    return "say" in lowered or any(marker in compact for marker in _SAY_MARKERS)
+
+
 def extract_reminder_request(
     text: str,
     *,

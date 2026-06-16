@@ -70,6 +70,14 @@ def test_extract_quoted_speak_line():
     assert extract_quoted_speak_line("「お茶飲んで」って言って") == "お茶飲んで"
 
 
+def test_needs_llm_reminder_parse_when_rule_misses():
+    from relationship_mcp.reminder_intent import needs_llm_reminder_parse
+
+    assert needs_llm_reminder_parse("来週の打合せの15分前にリマインドして") is True
+    assert needs_llm_reminder_parse("3分後に「まー」と say で教えて") is False
+    assert needs_llm_reminder_parse("おはよう") is False
+
+
 def test_detect_delivery_mode_nudge_only():
     assert detect_delivery_mode("10時にテキストだけでリマインドして") == "nudge_only"
 

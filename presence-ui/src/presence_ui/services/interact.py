@@ -13,7 +13,7 @@ from social_core import utc_now
 
 from presence_ui.deps import get_stores
 from presence_ui.schemas import ChatMessage, ChatSendResponse
-from presence_ui.gateway.room_ingest import ingest_agent_turn, ingest_human_turn
+from presence_ui.gateway.room_ingest import ingest_agent_turn, ingest_human_turn_async
 from presence_ui.services.llm import generate_koyori_reply
 from presence_ui.services.sessions import get_session, touch_session
 
@@ -30,13 +30,14 @@ _SPEAKING_MOVES = frozenset(
 )
 
 
-def _ingest_human_message(*, person_id: str, session_id: str, text: str, ts: str) -> str:
-    return ingest_human_turn(
+async def _ingest_human_message(*, person_id: str, session_id: str, text: str, ts: str) -> str:
+    event_id, _outcome = await ingest_human_turn_async(
         person_id=person_id,
         session_id=session_id,
         text=text,
         ts=ts,
     )
+    return event_id
 
 
 def _ingest_koyori_message(*, person_id: str, session_id: str, text: str, ts: str) -> str:
@@ -117,7 +118,7 @@ async def handle_chat_send(
         raise ValueError(f"unknown session: {session_id}")
 
     ts = utc_now()
-    user_event_id = _ingest_human_message(
+    user_event_id = await _ingest_human_message(
         person_id=person_id, session_id=session_id, text=text, ts=ts
     )
     user_message = ChatMessage(

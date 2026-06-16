@@ -16,8 +16,9 @@
 ### OL2 — リマインド
 
 1. 部屋で「10時に〇〇をリマインドして」等 → `create_commitment(due_at)`（`reminder_intent.py`）
-2. compose が `list_due_commitments` で `[commitments_due]` を注入（旧 `person_model.commitments` バグ修正済み）
-3. 15m 自律 tick: `commitments_due` あり → plan が `remind_commitment` → `remind_commitment_direct`（outbound SSE + PC TTS）→ `complete_commitment`
+2. **Phase B**: ルールで `due_at` が取れないがリマインド意図がある発話 → Gateway が LM Studio で JSON spec を **登録時に1回だけ** 生成 → `create_reminder_from_spec(source=reminder_llm)`（`PRESENCE_LLM_REMINDER_SPEC=1` 既定、0 で無効）
+3. compose が `list_due_commitments` で `[commitments_due]` を注入（旧 `person_model.commitments` バグ修正済み）
+4. **reminder watchdog**（60s）または 15m 自律 tick: `remind_commitment_direct`（`speak_line` 固定、LLM なし）→ outbound + `room_say`
 
 ```powershell
 # 手動 tick
@@ -62,7 +63,7 @@ uv run python -c "from relationship_mcp.store import RelationshipStore; print(ha
 | 項目 | 内容 | 対策 |
 |------|------|------|
 | **relationship-mcp の reinstall 忘れ** | 古い venv だと `list_due_commitments` が無く、`commitments_due` が常に空 → リマインドが鳴らない | 上記デプロイ手順。コード変更のたびに `uv pip install --reinstall` + restart |
-| **リマインド文面** | 登録時に `「…」` から `speak_line` を抽出し `metadata_json` に保存。鳴るときは `speak_line` をそのまま使用（LLM 生成は Phase B） | `delivery: say \| nudge_only` で音声 on/off |
+| **リマインド文面** | Phase A: ルールで `「…」`→`speak_line`。Phase B: ルール失敗時のみ Gateway LLM が JSON spec を 1 回生成（`PRESENCE_LLM_REMINDER_SPEC=1`） | 鳴るときは常に保存 `speak_line`（LLM なし） |
 | **`N分後`** | `10分後に…教えて` / `say でしゃべって` をパース（全角数字対応） | 曖昧な相対表現は未対応 |
 | **時刻精度** | Windows タスクは **15分間隔**（18:26 → 次 18:41）。`3分後` は最大 ~15分遅れ | presence-ui **reminder watchdog**（既定60秒、`PRESENCE_REMINDER_POLL_SEC`） |
 | **音声（Surface）** | `room_inbound` のみだと SSE 切断時に無音。MCP `say` 経路と別 | `room_say` SSE + **poll フォールバック**（`/api/v1/tts/room-say/pending`） |
@@ -79,7 +80,8 @@ uv run python -c "from relationship_mcp.store import RelationshipStore; print(ha
 | `relationship_mcp/store.py` | ingest / `list_due_commitments` / `close_stale_open_loops` |
 | `interaction_orchestrator_mcp/compose.py` | `[commitments_due]` |
 | `interaction_orchestrator_mcp/plan.py` | 自律時 commitment 優先 |
-| `presence_ui/gateway/direct_actions.py` | `remind_commitment_direct` |
+| `presence_ui/gateway/reminder_spec.py` | Phase B — LLM `generate_reminder_spec`（ルール失敗時のみ） |
+| `presence_ui/gateway/reminder_watchdog.py` | 60s poll で due commitment を発火 |
 | `presence_ui/gateway/autonomous_tick.py` | tick 前 stale 掃除 |
 
 ---
@@ -93,4 +95,8 @@ uv run pytest tests/test_open_loops_reminders.py -v
 cd ../interaction-orchestrator-mcp
 uv sync --extra dev --reinstall-package relationship-mcp
 uv run pytest tests/test_orchestrator.py::TestPlan::test_due_commitments_prioritize_autonomous_reminder -v
+
+cd ../../../presence-ui
+uv sync --extra dev --reinstall-package relationship-mcp
+uv run python -m pytest tests/test_reminder_spec.py tests/test_room_ingest.py -v
 ```

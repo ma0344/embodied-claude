@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import MagicMock
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -12,7 +9,6 @@ from presence_ui.main import create_app
 from presence_ui.services.tts_surface import (
     _text_token,
     surface_audio_path,
-    surface_dir,
     surface_tts_enabled,
     synthesize_surface_audio,
 )
@@ -53,7 +49,9 @@ def test_synthesize_surface_audio_caches(tmp_path, monkeypatch: pytest.MonkeyPat
     assert surface_audio_path(token1) == tmp_path / f"{token1}.wav"
 
 
-def test_surface_audio_path_rejects_invalid_token(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_surface_audio_path_rejects_invalid_token(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("PRESENCE_TTS_SURFACE_DIR", str(tmp_path))
     assert surface_audio_path("../etc/passwd") is None
     assert surface_audio_path("not-a-token") is None

@@ -1209,6 +1209,27 @@ function setChatSendHint(text) {
   updateChatHint();
 }
 
+function resizeChatInput(input) {
+  if (!input) return;
+  input.style.height = "auto";
+  input.style.height = `${Math.min(input.scrollHeight, 96)}px`;
+}
+
+function restoreChatDraft(text) {
+  const input = document.getElementById("chat-input");
+  if (!input || !text) return;
+  input.value = text;
+  resizeChatInput(input);
+  input.focus();
+}
+
+function clearChatDraft() {
+  const input = document.getElementById("chat-input");
+  if (!input) return;
+  input.value = "";
+  input.style.height = "auto";
+}
+
 async function abortActiveChatRequest() {
   if (isNativeChat()) return;
   const requestId = activeRequestId;
@@ -1384,6 +1405,7 @@ async function sendChatMessage(text) {
 
   sendInProgress = true;
   setComposeEnabled(false);
+  clearChatDraft();
   chatPinnedToBottom = true;
 
   try {
@@ -1504,6 +1526,7 @@ async function sendChatMessage(text) {
     const root = document.getElementById("chat-log");
     root?.querySelector(".message.is-pending")?.remove();
     renderedMessageKeys = new Set(chatMessages.map(messageKey));
+    restoreChatDraft(trimmed);
     if (root) {
       const note = document.createElement("p");
       note.className = "error";
@@ -1540,12 +1563,7 @@ function setupChatCompose() {
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    const text = input.value;
-    input.value = "";
-    input.style.height = "auto";
-    void sendChatMessage(text).catch((err) => {
-      console.error("sendChatMessage failed", err);
-    });
+    void sendChatMessage(input.value);
   });
 
   input.addEventListener("keydown", (event) => {
@@ -1556,8 +1574,7 @@ function setupChatCompose() {
   });
 
   input.addEventListener("input", () => {
-    input.style.height = "auto";
-    input.style.height = `${Math.min(input.scrollHeight, 96)}px`;
+    resizeChatInput(input);
   });
 }
 

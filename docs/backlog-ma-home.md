@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ
 
-**最終更新**: 2026-06-10（A4j 文脈同梱 + A4f/g 実装）  
+**最終更新**: 2026-06-10（優先 1→3→2→C11g 合意 + V ビジョン追記）  
 **方針**: こより本体（記憶・gateway 身体）は **様子見**。部屋 UI は **Native 会話エンジン + `/` の殻** を育てる（8080 プロキシ UI は投資しない）。
 
 **実行方針（合意 2026-06-14）**: 判断は compose/plan/stores のまま。**身体・自律の実行**は MCP に頼らず gateway 直実行へ（remember 直実行と同型）。詳細 → [gateway-direct-actions.md](./gateway-direct-actions.md)
@@ -21,18 +21,18 @@
 | **A** | 記憶・gateway 身体 | compose / see / dismiss | **様子見**（大きな追加は止める） |
 | **C12** | intent router | 曖昧な「見て」分類 | 会話快適化（後） |
 
-### 次の一手 — 優先度案（2026-06-10 更新）
+### 次の一手 — 優先度案（2026-06-10 → **まー合意: 1→3→2→C11g**）
 
-**いまのボトルネック**: 自律 tick（A4f）と PC Push（A4g）の **Task 登録 + ntfy URL 設定** が運用面の残り。Open Loops は **OL1/OL2** で「鳴らす」配線が未完。
+**いまのボトルネック**: 自律 tick（A4f）と Open Loops（OL1/OL2）の配線。PC Push（A4g）はキオスク本線ができたあとでよい。
 
 | tier | 順 | 項目 | 理由 |
 |------|----|------|------|
-| **1** | ① | **A4f 運用** | `install-autonomous-tick-task.ps1` 登録（15m + desire-updater） |
-| **1** | ② | **A4g 運用** | `PRESENCE_OUTBOUND_NTFY_URL` を presence-ui.local.env に設定 |
-| **2** | ③ | **OL1 + OL2** | 日付解決 + commitment → tick でリマインド |
-| **3** | ④ | **A4j+** 着信返信 UX | 下書き編集可・ヒューリスティック拡充（任意） |
-| **3** | ⑤ | **C12** intent router | カメラ指示の取りこぼし減 |
-| **—** | — | C11c/d、**C11g スリープ**、体温 LHM、Irodori TTS | 任意の磨き |
+| **1** | ① | **A4f 運用** | `install-autonomous-tick-task.ps1` 登録（15m + desire-updater）— 自律の心臓 |
+| **2** | ② | **OL1 + OL2** | 日付解決 + commitment → tick でリマインド |
+| **3** | ③ | **A4g 運用** | `PRESENCE_OUTBOUND_NTFY_URL`（外出時・8090 閉じてる PC 向け） |
+| **4** | ④ | **C11g** スリープ / 画面消灯 | Surface 常時点灯・焼き付き対策 |
+| **—** | ⑤ | **A4j+** / **C12** | 着信返信 UX・intent router（任意） |
+| **—** | — | C11c/d、体温 LHM、Irodori TTS | 任意の磨き |
 
 **やらない順**: C12 だけ先にやっても「自律で話しかけてこない」は **A4f** 待ち。
 
@@ -349,7 +349,35 @@ MVP チェックリスト:
 
 - [ ] **C12** intent router（送信前に LM Studio で `desk|left|see|window|chat` 等を JSON 分類。regex 未検出 or 低 confidence 時のみ。Gateway 即実行 → 足りなければ compose/plan）
 
-**実装順**: C0 → … → C10 → **C11** → **C12** / **OL1–2** / **A4**（能動届け）
+**実装順**: C0 → … → C10 → **C11** → **A4f → OL → A4g → C11g**（まー合意）→ **C12** / ビジョン（V）
+
+---
+
+## V — ビジョン / 未実装（`docs/web_ui_design.md`・`exported-session.md` より）
+
+**注**: 8080 プロキシ本線・Native chat・キオスク着信・Tapo 視界・るな TTS 等は **実装済み**。以下は会話時点の**最終イメージ**でまだ残っているもの。
+
+| 優先 | 項目 | メモ |
+|------|------|------|
+| 中 | **V1 感情色の部屋** | 会話画面の背景が `Emotion` に連動（Neutral=温かいグレー/薄緑/柔らかい紺。happy/curious/sad 等は export 案） |
+| 低 | **V2 イントロ演出** | Embodied LLM スプラッシュ → こより顕在化（GIF/イラスト切替。朝=起きる/昼=歩く・伸び/終了=別演出）。表示中に status/camera ウォームアップ |
+| 低 | **V3 発話ビジュアル** | るな再生中の波形 or 軽い動き（`web_ui_design` Task 6） |
+| 中 | **V4 see_near（近目）** | Surface 内蔵カメラ → ma-home caption / 記憶。遠目=Tapo。→ [koyori-near-eye.md](./koyori-near-eye.md) |
+| **高** | **V5 PC↔Surface 入力共有** | キオスクはタッチ+簡易KB。まー要望: **PC のキーボード・マウスを Surface 入力に**（BT キーボード切替は信用できずワンステップ余計）。Barrier / Input Leap / 有線・LAN 系を調査。ブラウザ内 KB 共有はハードル高（過去トライ） |
+| 低 | **V6 家族・関係サイドバー** | ゴンザ・千ちゃん等の常時リスト（PoC では後回しと合意） |
+| 低 | **V7 Phase 2 掃除** | `user_prompt.py` / `stripEnrichedUserPrompt` 削除（JSONL 履歴が純発話のみになった後） |
+| 中 | **V8 room_say poll フォールバック** | SSE 未接続でも `room-say` 届く（`room_say_pending.py` WIP） |
+| — | **V9 Linux Cage キオスク** | Ubuntu Server + cage + Chromium（`scripts/koyori-kiosk/`）。**現運用は Win Surface + `?kiosk=1`**。Linux 路は代替 |
+
+- [ ] **V1** 感情色背景
+- [ ] **V2** イントロ / スプラッシュ
+- [ ] **V3** 発話インジケーター
+- [ ] **V4** see_near
+- [ ] **V5** PC キーボード・マウス → Surface（入力ストレス解消）
+- [ ] **V6** 家族リスト UI
+- [ ] **V7** enriched user 履歴後処理の削除
+- [ ] **V8** room_say オフライン配信
+- [ ] **V9** koyori Cage キオスク（任意・Linux 時）
 
 ---
 

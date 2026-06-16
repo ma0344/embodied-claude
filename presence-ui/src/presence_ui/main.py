@@ -58,6 +58,22 @@ def create_app() -> FastAPI:
         version=__version__,
     )
 
+    @app.on_event("startup")
+    async def _prune_wifi_cam_capture_cache() -> None:
+        import asyncio
+        import logging
+
+        from presence_ui.services.capture_cache import prune_startup
+
+        try:
+            removed = await asyncio.to_thread(prune_startup)
+            if removed:
+                logging.getLogger(__name__).info(
+                    "Pruned %d stale wifi-cam capture file(s)", removed
+                )
+        except Exception as exc:
+            logging.getLogger(__name__).debug("capture cache prune skipped: %s", exc)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=os.getenv("PRESENCE_CORS_ORIGINS", "*").split(","),

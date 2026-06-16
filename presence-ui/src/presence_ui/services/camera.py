@@ -35,6 +35,11 @@ _PREVIEW_SKIP_IF_BUSY = os.getenv("PRESENCE_CAMERA_PREVIEW_SKIP_IF_BUSY", "1").l
 }
 
 
+def _camera_save_to_disk() -> bool:
+    """Gateway captures default to memory-only; set PRESENCE_CAMERA_SAVE_TO_DISK=1 to keep JPEGs."""
+    return os.getenv("PRESENCE_CAMERA_SAVE_TO_DISK", "0").lower() in {"1", "true", "yes"}
+
+
 def _set_capture_failure(msg: str) -> None:
     global _capture_backoff_until, _camera_last_failure
     _camera_last_failure = msg
@@ -163,8 +168,10 @@ async def _capture_raw(*, save_to_file: bool = True):
     return await asyncio.wait_for(_run(), timeout=timeout_s)
 
 
-async def capture_for_mode(mode: SeeMode, *, save_to_file: bool = True) -> CaptureOutcome:
+async def capture_for_mode(mode: SeeMode, *, save_to_file: bool | None = None) -> CaptureOutcome:
     """Capture one frame (or look_around center) with optional window preset."""
+    if save_to_file is None:
+        save_to_file = _camera_save_to_disk()
     preset_id: str | None = None
     view_label = "current"
     if is_preset_location(mode):
@@ -200,7 +207,7 @@ async def capture_for_mode(mode: SeeMode, *, save_to_file: bool = True) -> Captu
                 camera = await _get_camera()
 
                 async def _scan():
-                    return await camera.look_around()
+                    return await camera.look_around(save_to_file=save_to_file)
 
                 captures = await asyncio.wait_for(
                     _scan(),
@@ -319,7 +326,7 @@ async def camera_look_around() -> list:
             camera = await _get_camera()
 
             async def _scan():
-                return await camera.look_around()
+                return await camera.look_around(save_to_file=_camera_save_to_disk())
 
             captures = await asyncio.wait_for(
                 _scan(),

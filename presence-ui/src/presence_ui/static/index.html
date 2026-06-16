@@ -22,10 +22,6 @@
         <p class="subtitle">Koyori's Room</p>
       </div>
       <div class="meta">
-        <div class="kiosk-audio" id="kiosk-audio" hidden>
-          <button type="button" id="kiosk-audio-test" class="kiosk-audio__test">音声テスト</button>
-          <span id="kiosk-audio-status" class="kiosk-audio__status" aria-live="polite">タップで解除</span>
-        </div>
         <div class="clock" id="clock">--:--</div>
         <div class="temperature" id="temperature" aria-live="polite">—</div>
       </div>
@@ -131,6 +127,36 @@
             <p class="placeholder">読み込み中…</p>
           </div>
         </section>
+
+        <section
+          class="room-drawer__section room-drawer__section--audio"
+          id="kiosk-audio-section"
+          hidden
+          aria-label="音声"
+        >
+          <h3 class="room-drawer__section-title">音声</h3>
+          <p id="kiosk-audio-status" class="kiosk-audio__status" aria-live="polite">
+            画面タップでブラウザ音声を解除
+          </p>
+          <p class="kiosk-audio__hint">
+            スライダーは部屋の再生音量（Aivis 等）。Windows 全体の音量は別 — 設定 → サウンド。
+          </p>
+          <label class="kiosk-audio__volume" for="kiosk-audio-volume">
+            <span class="kiosk-audio__volume-label">
+              音量 <span id="kiosk-audio-volume-pct">100</span>%
+            </span>
+            <input
+              type="range"
+              id="kiosk-audio-volume"
+              class="kiosk-audio__slider"
+              min="0"
+              max="100"
+              step="5"
+              value="100"
+            />
+          </label>
+          <button type="button" id="kiosk-audio-test" class="drawer-action">音声テスト</button>
+        </section>
       </div>
 
       <div class="room-drawer__footer">
@@ -182,6 +208,6 @@
   <script src="/static/chat-markdown.js?v=20260610-md-both"></script>
   <script src="/static/cc-messages.js?v=20260615-memory-inject"></script>
   <script src="/static/koyori-voice.js?v=20260615-social-ja"></script>
-  <script src="/static/app.js?v=20260610-kiosk-audio"></script>
+  <script src="/static/app.js?v=20260610-kiosk-volume"></script>
 </body>
 </html>

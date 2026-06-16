@@ -81,34 +81,39 @@ body {
   font-size: 1.55rem;
 }
 
-.kiosk-audio {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.2rem;
-  margin-bottom: 0.15rem;
-}
-
-.kiosk-audio__test {
-  font-size: 0.78rem;
-  padding: 0.28rem 0.55rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface-2, rgba(255, 255, 255, 0.06));
-  color: inherit;
-  cursor: pointer;
-}
-
-.kiosk-audio__test:active {
-  opacity: 0.85;
-}
-
 .kiosk-audio__status {
-  font-size: 0.68rem;
-  line-height: 1.25;
-  max-width: 11rem;
-  text-align: right;
-  opacity: 0.82;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  margin: 0 0 0.45rem;
+  opacity: 0.92;
+}
+
+.kiosk-audio__hint {
+  font-size: 0.72rem;
+  line-height: 1.4;
+  margin: 0 0 0.55rem;
+  opacity: 0.72;
+}
+
+.kiosk-audio__volume {
+  display: block;
+  margin: 0 0 0.65rem;
+}
+
+.kiosk-audio__volume-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+  margin-bottom: 0.35rem;
+}
+
+.kiosk-audio__slider {
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  accent-color: rgba(138, 154, 140, 0.85);
+  cursor: pointer;
 }
 
 .kiosk-audio__status.is-ok {

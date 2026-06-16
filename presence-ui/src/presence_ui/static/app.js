@@ -14,6 +14,8 @@ const NATIVE_SESSIONS_API = "/api/v1/native/sessions";
 const NATIVE_HIDDEN_API = "/api/v1/native/hidden";
 const SHOW_DEBUG_INJECTION_KEY = "koyori-show-debug-injection";
 const KIOSK_LAYOUT_STORAGE_KEY = "koyori-kiosk-layout";
+const KIOSK_AUDIO_VOLUME_KEY = "koyori-kiosk-audio-volume";
+const KIOSK_AUDIO_VOLUME_DEFAULT = 1;
 const CONTEXT_RAIL_PINS_KEY = "koyori-context-rail-pins";
 const STATUS_EXPAND_KEY = "koyori-status-expand";
 
@@ -1883,6 +1885,7 @@ function speakOutboundNudge(text) {
   const voices = speechSynthesis.getVoices?.() || [];
   const jaVoice = voices.find((voice) => voice.lang && voice.lang.startsWith("ja"));
   if (jaVoice) utter.voice = jaVoice;
+  utter.volume = getKioskPlaybackVolume();
   speechSynthesis.cancel();
   speechSynthesis.speak(utter);
 }
@@ -1918,7 +1921,7 @@ async function playOutboundNudgeAudio(text) {
     }
     const audio = new Audio(url);
     audio.preload = "auto";
-    audio.volume = 1;
+    audio.volume = getKioskPlaybackVolume();
     await audio.play();
     return { ok: true, detail: "surface-tts" };
   } catch (err) {
@@ -1932,10 +1935,49 @@ async function playOutboundNudgeAudio(text) {
   }
 }
 
+function kioskAudioPathLabel(detail) {
+  if (detail === "surface-tts") return "Aivis";
+  if (detail === "web-speech") return "Web Speech";
+  if (detail === "web-speech-fallback") return "Web Speech（予備）";
+  return detail || "不明";
+}
+
+function getKioskPlaybackVolume() {
+  if (!isKioskLayout()) return 1;
+  try {
+    const raw = localStorage.getItem(KIOSK_AUDIO_VOLUME_KEY);
+    if (raw == null) return KIOSK_AUDIO_VOLUME_DEFAULT;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return KIOSK_AUDIO_VOLUME_DEFAULT;
+    return Math.min(1, Math.max(0, n));
+  } catch {
+    return KIOSK_AUDIO_VOLUME_DEFAULT;
+  }
+}
+
+function setKioskPlaybackVolume(level) {
+  const clamped = Math.min(1, Math.max(0, level));
+  try {
+    localStorage.setItem(KIOSK_AUDIO_VOLUME_KEY, String(clamped));
+  } catch {
+    /* ignore quota */
+  }
+  syncKioskAudioVolumeUi(clamped);
+  return clamped;
+}
+
+function syncKioskAudioVolumeUi(level = getKioskPlaybackVolume()) {
+  const slider = document.getElementById("kiosk-audio-volume");
+  const pct = document.getElementById("kiosk-audio-volume-pct");
+  const pctValue = Math.round(level * 100);
+  if (slider) slider.value = String(pctValue);
+  if (pct) pct.textContent = String(pctValue);
+}
+
 function setKioskAudioStatus(message, tone = "neutral") {
-  const root = document.getElementById("kiosk-audio");
+  const section = document.getElementById("kiosk-audio-section");
   const statusEl = document.getElementById("kiosk-audio-status");
-  if (!root || !statusEl || root.hidden) return;
+  if (!section || !statusEl || section.hidden) return;
   statusEl.textContent = message;
   statusEl.classList.remove("is-ok", "is-warn", "is-error");
   if (tone === "ok") statusEl.classList.add("is-ok");
@@ -1948,41 +1990,47 @@ async function runKioskAudioTest() {
   setKioskAudioStatus("再生中…", "warn");
   const result = await playOutboundNudgeAudio("まー、聞こえる？");
   if (result.ok) {
-    setKioskAudioStatus("再生した。無音なら Surface 音量↑", "ok");
+    const via = kioskAudioPathLabel(result.detail);
+    setKioskAudioStatus(`再生OK（${via}）。音量は下のスライダー`, "ok");
     return;
   }
   const blocked = /notallowed|gesture|interact/i.test(result.detail || "");
   if (blocked) {
-    setKioskAudioStatus("もう一度タップして解除", "warn");
+    setKioskAudioStatus("画面をタップしてからもう一度", "warn");
     return;
   }
   setKioskAudioStatus(`失敗: ${result.detail}`, "error");
 }
 
 function setupKioskAudio() {
-  const root = document.getElementById("kiosk-audio");
+  const section = document.getElementById("kiosk-audio-section");
   const testBtn = document.getElementById("kiosk-audio-test");
-  if (!root || !testBtn) return;
+  const slider = document.getElementById("kiosk-audio-volume");
+  if (!section || !testBtn) return;
   if (isKioskLayout()) {
-    root.hidden = false;
-    setKioskAudioStatus("タップで音声解除", "warn");
+    section.hidden = false;
+    syncKioskAudioVolumeUi();
+    setKioskAudioStatus("画面タップでブラウザ音声を解除", "warn");
   } else {
-    root.hidden = true;
+    section.hidden = true;
     return;
   }
   testBtn.addEventListener("click", () => {
     void runKioskAudioTest();
   });
-  document.addEventListener(
-    "click",
-    () => {
-      unlockSpeechOnce();
-      if (isKioskLayout()) {
-        setKioskAudioStatus("音声解除済み", "ok");
-      }
-    },
-    { once: true, passive: true },
-  );
+  if (slider) {
+    slider.addEventListener("input", () => {
+      setKioskPlaybackVolume(Number(slider.value) / 100);
+    });
+  }
+  const onFirstGesture = () => {
+    unlockSpeechOnce();
+    if (isKioskLayout()) {
+      setKioskAudioStatus("ブラウザ音声は解除済み", "ok");
+    }
+  };
+  document.addEventListener("click", onFirstGesture, { once: true, passive: true });
+  document.addEventListener("touchstart", onFirstGesture, { once: true, passive: true });
 }
 
 async function playKioskSpeech(text) {
@@ -1993,7 +2041,8 @@ async function playKioskSpeech(text) {
   setKioskAudioStatus("こよりが話す…", "warn");
   const result = await playOutboundNudgeAudio(text);
   if (result.ok) {
-    setKioskAudioStatus("再生した。無音なら Surface 音量↑", "ok");
+    const via = kioskAudioPathLabel(result.detail);
+    setKioskAudioStatus(`再生OK（${via}）`, "ok");
     return;
   }
   setKioskAudioStatus(`再生できず: ${result.detail}`, "error");

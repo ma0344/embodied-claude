@@ -319,6 +319,9 @@ class TapoCamera:
             file_path = str(self._capture_dir / f"capture_{timestamp}.jpg")
             with open(file_path, "wb") as f:
                 f.write(buffer.getvalue())
+            from wifi_cam_mcp.capture_cache import prune_capture_dir
+
+            prune_capture_dir(self._capture_dir)
 
         return CaptureResult(
             image_base64=image_base64,
@@ -586,7 +589,7 @@ class TapoCamera:
         """Tilt camera downward."""
         return await self.move(Direction.DOWN, degrees)
 
-    async def look_around(self) -> list[CaptureResult]:
+    async def look_around(self, save_to_file: bool = True) -> list[CaptureResult]:
         """Look around the room by capturing multiple angles.
 
         Captures: center, left, right, up-center positions.
@@ -596,20 +599,20 @@ class TapoCamera:
         """
         captures: list[CaptureResult] = []
 
-        center = await self.capture_image()
+        center = await self.capture_image(save_to_file=save_to_file)
         captures.append(center)
 
         await self.pan_left(45)
-        left = await self.capture_image()
+        left = await self.capture_image(save_to_file=save_to_file)
         captures.append(left)
 
         await self.pan_right(90)
-        right = await self.capture_image()
+        right = await self.capture_image(save_to_file=save_to_file)
         captures.append(right)
 
         await self.pan_left(45)
         await self.tilt_up(20)
-        up = await self.capture_image()
+        up = await self.capture_image(save_to_file=save_to_file)
         captures.append(up)
 
         await self.tilt_down(20)

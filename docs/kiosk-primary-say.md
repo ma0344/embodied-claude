@@ -5,8 +5,8 @@ Surface が「こよりの本線」のとき、PC スピーカーは黙り、キ
 ## 前提
 
 1. `http://<ma-home-ip>:8090/?kiosk=1` を **Surface で開く**（`?kiosk=1` 必須）
-2. 画面を **1回タップ**（ブラウザ音声の解除）→ 右上 **「音声テスト」** で確認
-3. **無音のとき** — Surface の **音量ボタン** か **アクションセンター（右下）の音量スライダー**（0 だと curl 成功でも鳴らない）
+2. 画面を **1回タップ**（ブラウザの自動再生ロック解除）→ ハンバーガーメニュー → **音量** + **音声テスト**
+3. **無音のとき** — メニュー内スライダー（部屋の再生）と **設定 → サウンド**（Windows 全体）の両方を確認
 4. `restart-presence-ui.ps1` 済み（8090 のみ使うなら Claude Code 再起動は不要）
 5. 診断: `curl -s http://127.0.0.1:8090/api/v1/ui-config` → `"kiosk_primary_active": true`
 
@@ -40,4 +40,6 @@ curl -X POST http://127.0.0.1:8090/api/v1/tts/room-say `
 - Surface URL に `?kiosk=1` がない → `client_id` が kiosk にならない
 - 古い `app.js` キャッシュ → Ctrl+Shift+R
 - `kiosk_primary_active: false` → キオスク側で SSE 切断、90s 待つかタブを前面に
-- Surface **システム音量が 0** → API は `routed to kiosk` でも無音（ブラウザは OS 音量を読めない）
+- **画面タップ前は無音** — ブラウザの自動再生ポリシー（OS 音量とは別）。タップ後に急に聞こえ始めるのはこれ
+- Surface **システム音量が 0** → API は `routed to kiosk` でも無音
+- **物理音量ボタンで OSD が出ない** — Edge 全画面などでは出ないことがある。設定 → サウンド、または音量ミキサーで **Microsoft Edge** のスライダーを確認

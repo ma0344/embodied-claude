@@ -55,8 +55,23 @@ def publish_room_inbound(payload: dict[str, Any]) -> None:
     _publish("room_inbound", payload, kiosk_only=False)
 
 
-def publish_room_say(payload: dict[str, Any]) -> None:
-    _publish("room_say", payload, kiosk_only=True)
+def publish_room_say(payload: dict[str, Any]) -> int:
+    delivered = 0
+    global _loop
+    loop = _loop
+    if loop is None or not _listeners:
+        return delivered
+    message: RoomSseMessage = ("room_say", payload)
+    for queue, client_id in list(_listeners.items()):
+        if not is_kiosk_client(client_id):
+            continue
+        loop.call_soon_threadsafe(_safe_put, queue, message)
+        delivered += 1
+    return delivered
+
+
+def kiosk_sse_subscriber_count() -> int:
+    return sum(1 for client_id in _listeners.values() if is_kiosk_client(client_id))
 
 
 def _safe_put(queue: asyncio.Queue[RoomSseMessage], message: RoomSseMessage) -> None:

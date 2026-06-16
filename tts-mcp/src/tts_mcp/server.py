@@ -19,6 +19,7 @@ from ._behavior import load_behavior
 from .config import ServerConfig, TTSConfig
 from .engines import TTSEngine
 from .engines.elevenlabs import ElevenLabsEngine
+from .kiosk_routing import delegate_say_to_kiosk, should_route_local_say_to_kiosk
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +167,19 @@ class TTSMCP:
             )
             use_local = speaker_target in {"local", "both"}
             use_camera = speaker_target in {"camera", "both"} and pb.go2rtc_url
+
+            if should_route_local_say_to_kiosk(play_audio=play_audio, use_local=use_local):
+                routed_ok, routed_detail = await asyncio.to_thread(delegate_say_to_kiosk, text)
+                if routed_ok:
+                    message = (
+                        "Routed to kiosk Surface (say)\n"
+                        f"Detail: {routed_detail}\n"
+                        f"Speaker: {speaker_target}\n"
+                        "Local playback: skipped (kiosk primary)\n"
+                        "Camera: skipped (kiosk routing)"
+                    )
+                    return [TextContent(type="text", text=message)]
+                logger.warning("kiosk say routing failed, falling back to local: %s", routed_detail)
 
             try:
                 engine = self._get_engine(arguments.get("engine"))

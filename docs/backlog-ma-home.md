@@ -268,6 +268,7 @@ MVP チェックリスト:
 - [x] **A4b+** SSE `room_inbound` + 着信即時（poll はフォールバック 60s）
 - [x] **A4c+** Server TTS URL + Web Audio（`POST/GET /api/v1/tts/surface`、Aivis/VOICEVOX）
 - [x] **A4d-lite** kiosk-primary — Surface SSE alive 時は PC（Win/browser/voice_local）抑制、ntfy は維持
+- [x] **A4d-lite+** `say` → kiosk — MCP `say` を `room_say` SSE + surface TTS へ（PC local 抑制）
 - [ ] **A4d** チャネル選択（MVP 後）
 - [x] **A4f** tick スケジューラ（desire-updater + `POST /api/v1/autonomous-tick`、Task 15m）
 - [x] **A4g** Win Push（enqueue → ntfy / Pushover HTTP）

@@ -1,4 +1,4 @@
-"""In-process SSE hub for instant room_inbound delivery (A4b+)."""
+"""In-process SSE hub for room_inbound + room_say delivery."""
 
 from __future__ import annotations
 
@@ -10,12 +10,14 @@ from typing import Any
 from presence_ui.services.outbound import OutboundPendingItem
 from presence_ui.services.outbound_kiosk import (
     is_kiosk_client,
-    note_kiosk_seen,
     kiosk_sse_connected,
+    note_kiosk_seen,
     should_deliver_to_client,
 )
 
-_listeners: dict[asyncio.Queue[dict[str, Any]], str] = {}
+RoomSseMessage = tuple[str, dict[str, Any]]
+
+_listeners: dict[asyncio.Queue[RoomSseMessage], str] = {}
 _loop: asyncio.AbstractEventLoop | None = None
 
 
@@ -34,29 +36,40 @@ def format_sse(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def publish_room_inbound(payload: dict[str, Any]) -> None:
-    """Notify SSE clients allowed for current kiosk-primary policy."""
+def _publish(event: str, payload: dict[str, Any], *, kiosk_only: bool) -> None:
     global _loop
     loop = _loop
     if loop is None or not _listeners:
         return
+    message: RoomSseMessage = (event, payload)
     for queue, client_id in list(_listeners.items()):
-        if not should_deliver_to_client(client_id):
+        if kiosk_only:
+            if not is_kiosk_client(client_id):
+                continue
+        elif not should_deliver_to_client(client_id):
             continue
-        loop.call_soon_threadsafe(_safe_put, queue, payload)
+        loop.call_soon_threadsafe(_safe_put, queue, message)
 
 
-def _safe_put(queue: asyncio.Queue[dict[str, Any]], payload: dict[str, Any]) -> None:
+def publish_room_inbound(payload: dict[str, Any]) -> None:
+    _publish("room_inbound", payload, kiosk_only=False)
+
+
+def publish_room_say(payload: dict[str, Any]) -> None:
+    _publish("room_say", payload, kiosk_only=True)
+
+
+def _safe_put(queue: asyncio.Queue[RoomSseMessage], message: RoomSseMessage) -> None:
     try:
-        queue.put_nowait(payload)
+        queue.put_nowait(message)
     except asyncio.QueueFull:
         pass
 
 
-async def subscribe(client_id: str) -> asyncio.Queue[dict[str, Any]]:
+async def subscribe(client_id: str) -> asyncio.Queue[RoomSseMessage]:
     global _loop
     _loop = asyncio.get_running_loop()
-    queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=64)
+    queue: asyncio.Queue[RoomSseMessage] = asyncio.Queue(maxsize=64)
     client_id = client_id.strip()
     _listeners[queue] = client_id
     if is_kiosk_client(client_id):
@@ -64,7 +77,7 @@ async def subscribe(client_id: str) -> asyncio.Queue[dict[str, Any]]:
     return queue
 
 
-def unsubscribe(queue: asyncio.Queue[dict[str, Any]], client_id: str) -> None:
+def unsubscribe(queue: asyncio.Queue[RoomSseMessage], client_id: str) -> None:
     if queue in _listeners:
         del _listeners[queue]
     if is_kiosk_client(client_id):
@@ -99,12 +112,15 @@ async def stream_room_inbound(
             yield format_sse("room_inbound", item)
         while True:
             try:
-                payload = await asyncio.wait_for(queue.get(), timeout=heartbeat_seconds())
+                event_name, payload = await asyncio.wait_for(
+                    queue.get(),
+                    timeout=heartbeat_seconds(),
+                )
             except asyncio.TimeoutError:
                 if kiosk:
                     note_kiosk_seen()
                 yield ": heartbeat\n\n"
                 continue
-            yield format_sse("room_inbound", payload)
+            yield format_sse(event_name, payload)
     finally:
         unsubscribe(queue, client_id)

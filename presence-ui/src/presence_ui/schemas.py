@@ -288,6 +288,11 @@ class TtsSurfaceRequest(BaseModel):
 
 class TtsSurfaceResponse(BaseModel):
     ok: bool = True
-    token: str
-    audio_url: str
-    content_type: str
+    token: str = ""
+    audio_url: str = ""
+    content_type: str = ""
+
+
+class RoomSayResponse(BaseModel):
+    ok: bool = True
+    detail: str = "routed to kiosk"

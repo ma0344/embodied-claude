@@ -2165,6 +2165,14 @@ function setupOutboundSse() {
       console.warn("outbound SSE parse failed:", err.message);
     }
   });
+  source.addEventListener("room_say", (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.text) void playOutboundNudgeAudio(data.text);
+    } catch (err) {
+      console.warn("room_say SSE parse failed:", err.message);
+    }
+  });
   source.onerror = () => {
     if (source.readyState === EventSource.CLOSED) {
       outboundSseConnected = false;

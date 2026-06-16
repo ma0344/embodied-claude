@@ -28,6 +28,7 @@ from presence_ui.schemas import (
     OutboundPendingResponse,
     TtsSurfaceRequest,
     TtsSurfaceResponse,
+    RoomSayResponse,
 )
 from presence_ui.services.camera import fetch_camera_snapshot
 from presence_ui.services.display_time import display_timezone
@@ -278,6 +279,23 @@ def create_app() -> FastAPI:
             media_type=surface_media_type(path),
             headers={"Cache-Control": "private, max-age=3600"},
         )
+
+    @app.post("/api/v1/tts/room-say", response_model=RoomSayResponse)
+    async def post_room_say(body: TtsSurfaceRequest) -> RoomSayResponse:
+        from presence_ui.services.outbound_kiosk import kiosk_primary_active, note_kiosk_seen
+        from presence_ui.services.outbound_sse import publish_room_say
+
+        if not kiosk_primary_active():
+            raise HTTPException(
+                status_code=409,
+                detail="kiosk not primary — play on local speaker",
+            )
+        line = body.text.strip()
+        if not line:
+            raise HTTPException(status_code=400, detail="empty text")
+        note_kiosk_seen()
+        publish_room_say({"text": line, "source": "say"})
+        return RoomSayResponse(ok=True, detail="routed to kiosk")
 
     @app.get("/api/v1/native/sessions", response_model=NativeSessionListResponse)
     def get_native_sessions(limit: int = 40) -> NativeSessionListResponse:

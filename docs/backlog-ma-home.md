@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ
 
-**最終更新**: 2026-06-16（OL1+OL2 済・A4g 運用済・次は C11g）  
+**最終更新**: 2026-06-16（C11g 済・次は **Desire 自律** ⑤a→d）  
 **方針**: こより本体（記憶・gateway 身体）は **様子見**。部屋 UI は **Native 会話エンジン + `/` の殻** を育てる（8080 プロキシ UI は投資しない）。
 
 **実行方針（合意 2026-06-14）**: 判断は compose/plan/stores のまま。**身体・自律の実行**は MCP に頼らず gateway 直実行へ（remember 直実行と同型）。詳細 → [gateway-direct-actions.md](./gateway-direct-actions.md)
@@ -21,17 +21,22 @@
 | **A** | 記憶・gateway 身体 | compose / see / dismiss | **様子見**（大きな追加は止める） |
 | **C12** | intent router | 曖昧な「見て」分類 | 会話快適化（後） |
 
-### 次の一手 — 優先度案（2026-06-10 → **まー合意: 1→3→2→C11g**）
+### 次の一手 — 優先度案（2026-06-10 → **まー合意: 1→3→2→C11g → Desire**）
 
-**いまのボトルネック**: **C11g**（Surface 画面消灯）と **OL 実戦確認**（リマインド発火・reinstall 手順）。詳細 → [open-loops-reminders.md](./open-loops-reminders.md)
+**いまのボトルネック**: **Desire 自律ループ**（tick 実行穴・旧 conf 整理）と **OL 実戦確認**（リマインド発火・reinstall 手順）。詳細 → [open-loops-reminders.md](./open-loops-reminders.md) / [gateway-direct-actions.md](./gateway-direct-actions.md)
 
 | tier | 順 | 項目 | 状態 |
 |------|----|------|------|
 | **1** | ① | **A4f 運用** | **済** — `EmbodiedClaude-AutonomousTick`、15m + logon |
 | **2** | ② | **OL1 + OL2** | **済（コード）** — 日付解決 + commitment → tick リマインド。実機確認・残リスクは上記 doc |
 | **3** | ③ | **A4g 運用** | **済** — ntfy / Pushover（外出時・8090 閉じてる PC 向け） |
-| **4** | ④ | **C11g** スリープ / 画面消灯 | **次** — 仕様合意済み（下記） |
-| **—** | ⑤ | **A4j+** / **C12** | 着信返信 UX・intent router（任意） |
+| **4** | ④ | **C11g** スリープ / 画面消灯 | **済** — wakeLock + ドロワー UI（2026-06-16） |
+| **5** | ⑤ | **Desire 自律ループ** | **次** — ⑤a→d（まー合意 2026-06-16） |
+| **5a** | ⑤-1 | **browse_curiosity** | plan `web_search` → gateway 直実行が未接続 |
+| **5b** | ⑤-2 | **cognitive_load** | plan `think_or_discuss_topic` → gateway 未実装 |
+| **5c** | ⑤-3 | **identity_coherence** | `recall_memories` がスタブ（自律 tick で実 recall 要） |
+| **5d** | ⑤-4 | **旧 `desires.conf`** | `desires.sample.conf` / `desire-tick.ts` と v2 `DESIRE_CONFIGS` の整理・廃止判断 |
+| **—** | ⑥ | **A4j+** / **C12** | 着信返信 UX・intent router（任意） |
 | **—** | — | C11c/d、体温 LHM、Irodori TTS | 任意の磨き |
 
 **やらない順**: C12 だけ先にやっても「リマインドが鳴らない」は **OL デプロイ忘れ**（`relationship-mcp` reinstall）を疑う — [open-loops-reminders.md](./open-loops-reminders.md)
@@ -185,6 +190,24 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 - [ ] **Gemma `remember` 信頼性** — 観察のみ
 - [ ] **初回 remember の遅さ** — 低優先（daemon 常駐で大部分解消）
 - [x] **ミッションB/C**（欲求・体験・関係性）— compose `compact_prompt_block` に `[desires]` / `[open_loops]` / `[interpretation_shifts]` / `[recent_experiences]` 注入。plan は shift 本文を `must_include` に載せる（2026-06-14）
+
+**Desire 自律 — 実行穴（合意 2026-06-16、順序 ⑤a→d）**
+
+インフラ（`desire_updater` → `desires.json`、A4f tick、compose `[desires]`、see/say/miss 直実行）は **済**。以下は `execute_autonomous_plan` / gateway が plan の `allowed_actions` をまだ実行できない箇所。
+
+| 順 | ID | 欲求 | plan が許可 | 現状 | やること |
+|----|-----|------|-------------|------|----------|
+| 1 | **⑤a** | `browse_curiosity` | `web_search` | 分岐なし → tick スキップ | gateway で bounded WebSearch（または private note + 後続ターン委譲） |
+| 2 | **⑤b** | `cognitive_load` | `think_or_discuss_topic` | 未実装 | 自律 tick 用の軽い思考/メモ（private reflection 寄せ or 短い LLM 1ターン） |
+| 3 | **⑤c** | `identity_coherence` | `recall_memories` | スタブのみ | tick 内で `:18900/recall` + experience（再撮影なし想起） |
+| 4 | **⑤d** | — | — | 二重系統 | **本線** = `desire-system` v2 `DESIRE_CONFIGS` + `~/.claude/desires.json`。`desires.conf` / `desire-tick.ts` / sample の旧 growth_rate 欲求は整理・ドキュメント更新・廃止判断 |
+
+- [ ] **⑤a** `browse_curiosity` — gateway `web_search` 直実行
+- [ ] **⑤b** `cognitive_load` — gateway `think_or_discuss_topic`
+- [ ] **⑤c** `identity_coherence` — 自律 tick で実 recall
+- [ ] **⑤d** 旧 `desires.conf` 系の整理（v2 一本化）
+
+**運用確認（随時）**: `EmbodiedClaude-AutonomousTick` / `autonomous-tick.log` / 状態カードの dominant desire。⑤a 前に 1〜2 日ログを見て tick が `act_autonomously` まで届いているか確認してよい。
 
 ### A4 — こよりからの能動届け（Outbound）
 
@@ -360,7 +383,7 @@ MVP チェックリスト:
 
 - [ ] **C12** intent router（送信前に LM Studio で `desk|left|see|window|chat` 等を JSON 分類。regex 未検出 or 低 confidence 時のみ。Gateway 即実行 → 足りなければ compose/plan）
 
-**実装順**: C0 → … → C10 → **C11** → **A4f → OL → A4g → C11g**（まー合意）→ **C12** / ビジョン（V）
+**実装順**: C0 → … → C10 → **C11** → **A4f → OL → A4g → C11g** → **Desire ⑤a→d**（まー合意）→ **C12** / ビジョン（V）
 
 ---
 

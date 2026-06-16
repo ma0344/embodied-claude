@@ -126,6 +126,80 @@ body {
 }
 /* ── C11g ここまで ─────────────────────────────────────────────── */
 
+.claude-perms__hint {
+  font-size: 0.72rem;
+  line-height: 1.45;
+  margin: 0 0 0.55rem;
+  opacity: 0.75;
+}
+
+.claude-perms__hint code {
+  font-size: 0.68rem;
+}
+
+.claude-perms__status {
+  font-size: 0.78rem;
+  margin: 0 0 0.45rem;
+  min-height: 1.1em;
+  opacity: 0.9;
+}
+
+.claude-perms__status.is-ok {
+  color: #7dcea0;
+}
+
+.claude-perms__status.is-warn {
+  color: #f5b041;
+}
+
+.claude-perms__status.is-error {
+  color: #e74c3c;
+}
+
+.claude-perms__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0 0 0.65rem;
+}
+
+.claude-perms__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.claude-perms__row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin-top: 0.1rem;
+  flex: 0 0 auto;
+  accent-color: rgba(138, 154, 140, 0.85);
+  cursor: pointer;
+}
+
+.claude-perms__row-label {
+  flex: 1 1 auto;
+}
+
+.claude-perms__row-rule {
+  display: block;
+  font-size: 0.68rem;
+  opacity: 0.6;
+  font-family: ui-monospace, monospace;
+  margin-top: 0.15rem;
+}
+
+.claude-perms__preserved {
+  font-size: 0.68rem;
+  opacity: 0.65;
+  margin: 0 0 0.55rem;
+  line-height: 1.4;
+}
+
 .kiosk-audio__status {
   font-size: 0.82rem;
   line-height: 1.35;

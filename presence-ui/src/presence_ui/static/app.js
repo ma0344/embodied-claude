@@ -2445,7 +2445,126 @@ function setupKioskSleep() {
   setupIdleSleep();
 }
 
-// ── C11g ここまで ─────────────────────────────────────────────────
+// ── Claude Code permissions UI ─────────────────────────────────────
+
+let claudePermsEditable = false;
+let claudePermsDirty = false;
+
+function setClaudePermsStatus(message, tone = "neutral") {
+  const el = document.getElementById("claude-perms-status");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove("is-ok", "is-warn", "is-error");
+  if (tone === "ok") el.classList.add("is-ok");
+  if (tone === "warn") el.classList.add("is-warn");
+  if (tone === "error") el.classList.add("is-error");
+}
+
+function syncClaudePermsSaveButton() {
+  const btn = document.getElementById("claude-perms-save");
+  if (!btn) return;
+  btn.disabled = !claudePermsEditable || !claudePermsDirty;
+}
+
+function renderClaudePermissions(data) {
+  const list = document.getElementById("claude-perms-list");
+  if (!list) return;
+  claudePermsEditable = Boolean(data.editable);
+  const presets = data.presets || [];
+  list.innerHTML = presets
+    .map(
+      (p) => `
+    <label class="claude-perms__row">
+      <input type="checkbox" data-perm-id="${escapeAttr(p.id)}" ${
+        p.enabled ? "checked" : ""
+      } ${claudePermsEditable ? "" : "disabled"} />
+      <span class="claude-perms__row-label">
+        ${escapeHtml(p.label)}
+        <span class="claude-perms__row-rule">${escapeHtml(p.rule)}</span>
+      </span>
+    </label>`,
+    )
+    .join("");
+
+  const preserved = data.preserved_rules || [];
+  let preservedEl = document.getElementById("claude-perms-preserved");
+  if (!preservedEl) {
+    preservedEl = document.createElement("p");
+    preservedEl.id = "claude-perms-preserved";
+    preservedEl.className = "claude-perms__preserved";
+    list.after(preservedEl);
+  }
+  preservedEl.textContent = preserved.length
+    ? `その他（UI外・保持）: ${preserved.join(" · ")}`
+    : "";
+
+  if (!claudePermsEditable) {
+    setClaudePermsStatus("閲覧のみ（保存は ma-home ローカルかログイン後）", "warn");
+  } else {
+    setClaudePermsStatus("", "neutral");
+  }
+  claudePermsDirty = false;
+  syncClaudePermsSaveButton();
+}
+
+async function loadClaudePermissions() {
+  try {
+    const data = await fetchJson("/api/v1/claude/permissions");
+    renderClaudePermissions(data);
+  } catch (err) {
+    setClaudePermsStatus(`読み込み失敗: ${err.message}`, "error");
+  }
+}
+
+async function saveClaudePermissions() {
+  const list = document.getElementById("claude-perms-list");
+  if (!list || !claudePermsEditable) return;
+  const enabledIds = [...list.querySelectorAll("input[data-perm-id]:checked")].map(
+    (el) => el.getAttribute("data-perm-id"),
+  );
+  setClaudePermsStatus("保存中…", "warn");
+  try {
+    if (usesNativeChat()) {
+      await ensureNativeLogin();
+    }
+    const headers = { "Content-Type": "application/json; charset=utf-8" };
+    if (nativeAuthToken) {
+      headers.Authorization = `Bearer ${nativeAuthToken}`;
+    }
+    const res = await fetch("/api/v1/claude/permissions", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ enabled_ids: enabledIds }),
+    });
+    if (!res.ok) {
+      const detail = await res.text();
+      throw new Error(`${res.status} ${detail}`);
+    }
+    const data = await res.json();
+    renderClaudePermissions({ ...data, editable: true });
+    setClaudePermsStatus(data.note || "保存した", "ok");
+  } catch (err) {
+    setClaudePermsStatus(`保存できなかった: ${err.message}`, "error");
+  }
+}
+
+function setupClaudePermissions() {
+  const section = document.getElementById("claude-permissions-section");
+  const list = document.getElementById("claude-perms-list");
+  const saveBtn = document.getElementById("claude-perms-save");
+  if (!section || !list || !saveBtn) return;
+  list.addEventListener("change", () => {
+    if (!claudePermsEditable) return;
+    claudePermsDirty = true;
+    syncClaudePermsSaveButton();
+  });
+  saveBtn.addEventListener("click", () => {
+    void saveClaudePermissions();
+  });
+  void loadClaudePermissions();
+}
+
+// ── Claude permissions ここまで ──────────────────────────────────
 
 async function playKioskSpeech(text) {
   if (!isKioskLayout()) {
@@ -2846,6 +2965,7 @@ function setupKioskLayout() {
 
 setupRoomInbound();
 setupKioskLayout();
+setupClaudePermissions();
 setupStatusCardExpand();
 setupReminderCardActions();
 setupChatScroll();

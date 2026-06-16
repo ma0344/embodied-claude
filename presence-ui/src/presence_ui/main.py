@@ -20,6 +20,9 @@ from presence_ui.schemas import (
     CameraSnapshotResponse,
     CancelReminderRequest,
     CancelReminderResponse,
+    ClaudePermissionsResponse,
+    ClaudePermissionsSaveRequest,
+    ClaudePermissionsSaveResponse,
     HealthResponse,
     NativeHiddenSessionsRequest,
     NativeHideSessionResponse,
@@ -218,6 +221,63 @@ def create_app() -> FastAPI:
             ok=True,
             commitment_id=body.commitment_id,
             speak_line=body.speak_line,
+        )
+
+    @app.get("/api/v1/claude/permissions", response_model=ClaudePermissionsResponse)
+    def get_claude_permissions(request: Request) -> ClaudePermissionsResponse:
+        """Claude Code permissions.allow presets (no secrets from settings.local.json)."""
+        from presence_ui.gateway.native_chat_router import can_edit_claude_permissions
+        from presence_ui.services.claude_permissions import (
+            list_permission_state,
+            settings_local_path,
+        )
+
+        presets, preserved = list_permission_state()
+        return ClaudePermissionsResponse(
+            presets=[
+                {
+                    "id": p.id,
+                    "rule": p.rule,
+                    "label": p.label,
+                    "enabled": p.enabled,
+                }
+                for p in presets
+            ],
+            preserved_rules=preserved,
+            settings_path=str(settings_local_path()),
+            editable=can_edit_claude_permissions(request),
+        )
+
+    @app.post("/api/v1/claude/permissions", response_model=ClaudePermissionsSaveResponse)
+    def post_claude_permissions(
+        body: ClaudePermissionsSaveRequest,
+        request: Request,
+    ) -> ClaudePermissionsSaveResponse:
+        """Update permissions.allow presets in settings.local.json."""
+        from presence_ui.gateway.native_chat_router import can_edit_claude_permissions
+        from presence_ui.services.claude_permissions import (
+            list_permission_state,
+            save_enabled_preset_ids,
+        )
+
+        if not can_edit_claude_permissions(request):
+            raise HTTPException(status_code=403, detail="permissions edit denied")
+        try:
+            save_enabled_preset_ids(body.enabled_ids)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        presets, preserved = list_permission_state()
+        return ClaudePermissionsSaveResponse(
+            presets=[
+                {
+                    "id": p.id,
+                    "rule": p.rule,
+                    "label": p.label,
+                    "enabled": p.enabled,
+                }
+                for p in presets
+            ],
+            preserved_rules=preserved,
         )
 
     @app.get("/api/v1/outbound/pending", response_model=OutboundPendingResponse)

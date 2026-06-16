@@ -353,3 +353,28 @@ class RoomSayAckRequest(BaseModel):
 class RoomSayAckResponse(BaseModel):
     ok: bool = True
     say_id: str = ""
+
+
+class ClaudePermissionPresetItem(BaseModel):
+    id: str
+    rule: str
+    label: str
+    enabled: bool
+
+
+class ClaudePermissionsResponse(BaseModel):
+    presets: list[ClaudePermissionPresetItem] = Field(default_factory=list)
+    preserved_rules: list[str] = Field(default_factory=list)
+    settings_path: str
+    editable: bool = False
+
+
+class ClaudePermissionsSaveRequest(BaseModel):
+    enabled_ids: list[str] = Field(default_factory=list, max_length=32)
+
+
+class ClaudePermissionsSaveResponse(BaseModel):
+    ok: bool = True
+    presets: list[ClaudePermissionPresetItem] = Field(default_factory=list)
+    preserved_rules: list[str] = Field(default_factory=list)
+    note: str = "次のメッセージから反映（新しい会話推奨）"

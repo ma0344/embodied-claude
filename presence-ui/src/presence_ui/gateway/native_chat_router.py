@@ -17,13 +17,13 @@ from presence_ui.gateway.ccs_integration import (
     agent_config_from_intercept,
     default_agent_config,
 )
-from presence_ui.gateway.see_prefetch import prefetch_camera_for_message
 from presence_ui.gateway.deterministic_memory import (
     MemoryListRequest,
     detect_memory_list_request,
     fetch_memory_list,
     format_memory_list_reply,
 )
+from presence_ui.gateway.see_prefetch import prefetch_camera_for_message
 from presence_ui.gateway.social_chat import ChatInterceptResult, intercept_chat_request_async
 
 logger = logging.getLogger(__name__)
@@ -34,13 +34,26 @@ _CLAUDE_SESSION_IDS: set[str] = set()
 
 
 def _require_auth(request: Request) -> None:
-    auth = request.headers.get("authorization", "")
-    if auth.startswith("Bearer ") and auth[7:] in _TOKENS:
-        return
-    token = request.query_params.get("token", "")
-    if token and token in _TOKENS:
+    if native_bearer_authorized(request):
         return
     raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def native_bearer_authorized(request: Request) -> bool:
+    """True when request carries a valid native-chat login token."""
+    auth = request.headers.get("authorization", "")
+    if auth.startswith("Bearer ") and auth[7:] in _TOKENS:
+        return True
+    token = request.query_params.get("token", "")
+    return bool(token and token in _TOKENS)
+
+
+def can_edit_claude_permissions(request: Request) -> bool:
+    """Localhost or native login — settings.local.json lives on ma-home."""
+    client = request.client
+    if client and client.host in {"127.0.0.1", "::1", "testclient"}:
+        return True
+    return native_bearer_authorized(request)
 
 
 def _sse(event: str, data: dict) -> str:

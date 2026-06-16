@@ -136,8 +136,9 @@
         >
           <h3 class="room-drawer__section-title">画面</h3>
           <p class="kiosk-sleep__hint">
-            無操作が続いたとき Surface の画面を消灯します（wakeLock 解除 → Windows 電源プランで消灯）。<br>
-            消灯時間は Windows 設定 → 電源 → 画面オフの値と合わせてください。
+            無操作が続いたとき、このページが画面の常時点灯（wakeLock）をやめます。
+            実際の消灯は <strong>Surface（Ubuntu）側の OS 設定</strong>（DPMS / logind）に任せます。<br>
+            ここで選ぶ分数は「いつ wakeLock を離すか」だけ。ma-home のモニター設定には影響しません。
           </p>
           <label class="kiosk-sleep__row" for="kiosk-sleep-minutes">
             <span class="kiosk-sleep__label">消灯まで</span>
@@ -151,6 +152,23 @@
             <input type="checkbox" id="kiosk-sleep-wake-notify" checked />
             <span class="kiosk-sleep__label">say / 着信で自動復帰する</span>
           </label>
+        </section>
+
+        <section
+          class="room-drawer__section room-drawer__section--permissions"
+          id="claude-permissions-section"
+          aria-label="ツール権限"
+        >
+          <h3 class="room-drawer__section-title">ツール権限</h3>
+          <p class="claude-perms__hint">
+            Claude Code の <code>permissions.allow</code>（<code>settings.local.json</code>）を編集。
+            保存後は<strong>次の送信</strong>から反映。迷ったら「新しい会話」を。
+          </p>
+          <p id="claude-perms-status" class="claude-perms__status" aria-live="polite"></p>
+          <div id="claude-perms-list" class="claude-perms__list"></div>
+          <button type="button" id="claude-perms-save" class="drawer-action drawer-action--primary" disabled>
+            権限を保存
+          </button>
         </section>
 
         <section

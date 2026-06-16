@@ -341,7 +341,7 @@ MVP チェックリスト:
 - [x] **C11g** スリープ / 画面消灯 — **実装済み 2026-06-16**:
   - **アイドル判定**: 無操作時間（タッチ・キー・送信等）が閾値超え
   - **N 分**: 5 / 10 / 15 — **ドロワー UI で可変**（localStorage）
-  - **消灯**: ブラウザ黒オーバーレイは使わず **OS 画面オフ任せ**（`wakeLock` 解除 → Windows 電源プラン）
+  - **消灯**: ブラウザ黒オーバーレイは使わず **OS 画面オフ任せ**（wakeLock 解除 → Surface Ubuntu の DPMS / logind）。UI の N 分は OS 電源設定を書き換えない
   - **自動復帰**: 消灯中の say / 着信（outbound・room_say）で画面を戻す — **UI で ON/OFF 可変**
   - **実装メモ**: キオスクは SSE で着信・リマインドは `document.hidden` でも届くが、ポール fallback は hidden 時スキップ中 → 自動復帰 ON 時は `wakeLock.request` + 音声再生で復帰を試みる
 

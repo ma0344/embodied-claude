@@ -26,6 +26,8 @@ from presence_ui.schemas import (
     OutboundAckRequest,
     OutboundAckResponse,
     OutboundPendingResponse,
+    TtsSurfaceRequest,
+    TtsSurfaceResponse,
 )
 from presence_ui.services.camera import fetch_camera_snapshot
 from presence_ui.services.display_time import display_timezone
@@ -92,6 +94,7 @@ def create_app() -> FastAPI:
         """Frontend routing: native SSE vs legacy 8080 proxy chat."""
         from presence_ui.services.outbound import outbound_web_speech_suppress_on_localhost
         from presence_ui.services.outbound_sse import sse_enabled
+        from presence_ui.services.tts_surface import surface_tts_enabled
 
         return utf8_json(
             {
@@ -106,6 +109,8 @@ def create_app() -> FastAPI:
                 "outbound_ack_path": "/api/v1/outbound/ack",
                 "outbound_stream_path": "/api/v1/outbound/stream",
                 "outbound_sse_enabled": sse_enabled(),
+                "outbound_surface_tts_enabled": surface_tts_enabled(),
+                "surface_tts_synthesize_path": "/api/v1/tts/surface",
                 "outbound_poll_ms": int(os.getenv("PRESENCE_OUTBOUND_POLL_MS", "3000")),
                 "outbound_poll_fallback_ms": int(
                     os.getenv("PRESENCE_OUTBOUND_POLL_FALLBACK_MS", "60000")
@@ -208,6 +213,42 @@ def create_app() -> FastAPI:
                 "Connection": "keep-alive",
                 "X-Accel-Buffering": "no",
             },
+        )
+
+    @app.post("/api/v1/tts/surface", response_model=TtsSurfaceResponse)
+    async def post_tts_surface(body: TtsSurfaceRequest) -> TtsSurfaceResponse:
+        from presence_ui.services.tts_surface import (
+            surface_tts_enabled,
+            synthesize_surface_audio_async,
+        )
+
+        if not surface_tts_enabled():
+            raise HTTPException(status_code=503, detail="surface TTS not configured")
+        try:
+            token, _fmt, content_type = await synthesize_surface_audio_async(body.text)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=str(exc) or type(exc).__name__) from exc
+        return TtsSurfaceResponse(
+            token=token,
+            audio_url=f"/api/v1/tts/surface/{token}",
+            content_type=content_type,
+        )
+
+    @app.get("/api/v1/tts/surface/{token}")
+    def get_tts_surface(token: str) -> FileResponse:
+        from presence_ui.services.tts_surface import surface_audio_path, surface_media_type
+
+        path = surface_audio_path(token)
+        if path is None:
+            raise HTTPException(status_code=404, detail="audio not found")
+        return FileResponse(
+            path,
+            media_type=surface_media_type(path),
+            headers={"Cache-Control": "private, max-age=3600"},
         )
 
     @app.get("/api/v1/native/sessions", response_model=NativeSessionListResponse)

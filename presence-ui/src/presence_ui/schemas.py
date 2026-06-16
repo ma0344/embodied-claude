@@ -280,3 +280,14 @@ class OutboundAckRequest(BaseModel):
 class OutboundAckResponse(BaseModel):
     ok: bool
     nudge_id: str
+
+
+class TtsSurfaceRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class TtsSurfaceResponse(BaseModel):
+    ok: bool = True
+    token: str
+    audio_url: str
+    content_type: str

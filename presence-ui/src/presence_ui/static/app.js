@@ -264,7 +264,12 @@ async function loadUiConfig() {
     display_timezone: data.display_timezone || "Asia/Tokyo",
     outbound_pending_path: data.outbound_pending_path || "/api/v1/outbound/pending",
     outbound_ack_path: data.outbound_ack_path || "/api/v1/outbound/ack",
+    outbound_stream_path: data.outbound_stream_path || "/api/v1/outbound/stream",
+    outbound_sse_enabled: data.outbound_sse_enabled !== false,
+    outbound_surface_tts_enabled: Boolean(data.outbound_surface_tts_enabled),
+    surface_tts_synthesize_path: data.surface_tts_synthesize_path || "/api/v1/tts/surface",
     outbound_poll_ms: Number(data.outbound_poll_ms) || OUTBOUND_POLL_MS_DEFAULT,
+    outbound_poll_fallback_ms: Number(data.outbound_poll_fallback_ms) || 60000,
     outbound_web_speech_suppress_on_localhost: Boolean(
       data.outbound_web_speech_suppress_on_localhost,
     ),
@@ -1876,6 +1881,44 @@ function speakOutboundNudge(text) {
   speechSynthesis.speak(utter);
 }
 
+function surfaceTtsSynthesizePath() {
+  return uiConfig.surface_tts_synthesize_path || "/api/v1/tts/surface";
+}
+
+function outboundSurfaceTtsEnabled() {
+  return Boolean(uiConfig.outbound_surface_tts_enabled);
+}
+
+async function playOutboundNudgeAudio(text) {
+  if (!text) return;
+  unlockSpeechOnce();
+  if (!outboundSurfaceTtsEnabled()) {
+    speakOutboundNudge(text);
+    return;
+  }
+  try {
+    const res = await fetch(surfaceTtsSynthesizePath(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) {
+      throw new Error(`surface TTS ${res.status}`);
+    }
+    const data = await res.json();
+    const url = data.audio_url;
+    if (!url) {
+      throw new Error("surface TTS missing audio_url");
+    }
+    const audio = new Audio(url);
+    audio.preload = "auto";
+    await audio.play();
+  } catch (err) {
+    console.warn("surface TTS failed, falling back to Web Speech:", err.message);
+    speakOutboundNudge(text);
+  }
+}
+
 async function ackOutboundNudge(nudgeId, channels) {
   await fetch(outboundAckPath(), {
     method: "POST",
@@ -1927,7 +1970,7 @@ async function pumpRoomInbound() {
   roomInboundCurrent = roomInboundQueue.shift();
   showRoomInboundModal(roomInboundCurrent);
   if (roomInboundCurrent.speak) {
-    speakOutboundNudge(roomInboundCurrent.text);
+    void playOutboundNudgeAudio(roomInboundCurrent.text);
   }
 }
 

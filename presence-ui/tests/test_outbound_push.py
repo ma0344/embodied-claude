@@ -85,7 +85,7 @@ def test_enqueue_triggers_push(tmp_path, monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv("PRESENCE_OUTBOUND_NTFY_URL", "https://ntfy.sh/test-topic")
     pushed: list[str] = []
 
-    def fake_push(*, text: str, title: str = "こより") -> tuple[bool, str]:
+    def fake_push(*, text: str, title: str = "こより", **kwargs) -> tuple[bool, str]:
         pushed.append(text)
         return True, "ntfy:ok"
 

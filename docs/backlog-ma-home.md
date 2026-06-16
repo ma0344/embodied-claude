@@ -192,7 +192,7 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 | `room_inbound` | キオスク中央ダイアログ（poll → 目標 SSE） | **実装済み（A4i）** |
 | `chat_compose` | 着信「返事する」→ 新規 native 会話 + 送信 | **実装済み（A4j）** |
 | `voice_local` | ma-home PC スピーカー（Aivis via `services/tts.py`） | **運用中** |
-| `voice_surface` | Surface スピーカー（**MVP: Web Speech** → **目標: 8090 TTS URL**） | MVP（キオスク着信時）。localhost + `voice_local` 時は Web Speech 抑制 |
+| `voice_surface` | Surface スピーカー（**A4c+** Server TTS URL） | **済** — kiosk 優先時は PC ブラウザ無音 |
 | `voice_camera` | Tapo / go2rtc カメラ側スピーカー | 設定時のみ |
 | `kiosk_banner` | Surface 部屋 UI ヘッダー／トースト（視覚のみ） | 未実装 |
 | `push_windows` / `push_android` | ntfy / Pushover 等（**A4g**） | **実装済み**（env 要） |
@@ -267,6 +267,7 @@ MVP チェックリスト:
 - [ ] **A4j+** 着信返信 UX — 下書き編集可（自動送信オプション）、`suggestInboundReplyText` 拡充
 - [x] **A4b+** SSE `room_inbound` + 着信即時（poll はフォールバック 60s）
 - [x] **A4c+** Server TTS URL + Web Audio（`POST/GET /api/v1/tts/surface`、Aivis/VOICEVOX）
+- [x] **A4d-lite** kiosk-primary — Surface SSE alive 時は PC（Win/browser/voice_local）抑制、ntfy は維持
 - [ ] **A4d** チャネル選択（MVP 後）
 - [x] **A4f** tick スケジューラ（desire-updater + `POST /api/v1/autonomous-tick`、Task 15m）
 - [x] **A4g** Win Push（enqueue → ntfy / Pushover HTTP）

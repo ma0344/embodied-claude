@@ -268,6 +268,8 @@ async function loadUiConfig() {
     outbound_sse_enabled: data.outbound_sse_enabled !== false,
     outbound_surface_tts_enabled: Boolean(data.outbound_surface_tts_enabled),
     surface_tts_synthesize_path: data.surface_tts_synthesize_path || "/api/v1/tts/surface",
+    kiosk_primary_enabled: data.kiosk_primary_enabled !== false,
+    kiosk_primary_active: Boolean(data.kiosk_primary_active),
     outbound_poll_ms: Number(data.outbound_poll_ms) || OUTBOUND_POLL_MS_DEFAULT,
     outbound_poll_fallback_ms: Number(data.outbound_poll_fallback_ms) || 60000,
     outbound_web_speech_suppress_on_localhost: Boolean(
@@ -2121,6 +2123,7 @@ async function showBrowserOutboundNotification(item) {
 
 function deliverOutboundItem(item) {
   if (!item?.nudge_id || !item.text) return;
+  if (uiConfig.kiosk_primary_active && !isKioskLayout()) return;
   const kiosk = isKioskLayout();
   if (kiosk) {
     enqueueRoomInbound(item);
@@ -2170,8 +2173,21 @@ function setupOutboundSse() {
   };
 }
 
+async function refreshOutboundRoutingConfig() {
+  try {
+    const data = await fetchJson("/api/v1/ui-config");
+    uiConfig.kiosk_primary_active = Boolean(data.kiosk_primary_active);
+    uiConfig.kiosk_primary_enabled = data.kiosk_primary_enabled !== false;
+  } catch {
+    /* ignore */
+  }
+}
+
 async function pollOutboundNudges() {
   const kiosk = isKioskLayout();
+  if (!kiosk) {
+    await refreshOutboundRoutingConfig();
+  }
   if (kiosk && document.hidden) return;
   const since = sessionStorage.getItem(OUTBOUND_SINCE_KEY) || "";
   const params = new URLSearchParams({ client_id: outboundClientId() });

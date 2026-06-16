@@ -93,6 +93,7 @@ def create_app() -> FastAPI:
     def ui_config() -> JSONResponse:
         """Frontend routing: native SSE vs legacy 8080 proxy chat."""
         from presence_ui.services.outbound import outbound_web_speech_suppress_on_localhost
+        from presence_ui.services.outbound_kiosk import kiosk_primary_active, kiosk_primary_enabled
         from presence_ui.services.outbound_sse import sse_enabled
         from presence_ui.services.tts_surface import surface_tts_enabled
 
@@ -111,6 +112,8 @@ def create_app() -> FastAPI:
                 "outbound_sse_enabled": sse_enabled(),
                 "outbound_surface_tts_enabled": surface_tts_enabled(),
                 "surface_tts_synthesize_path": "/api/v1/tts/surface",
+                "kiosk_primary_enabled": kiosk_primary_enabled(),
+                "kiosk_primary_active": kiosk_primary_active(),
                 "outbound_poll_ms": int(os.getenv("PRESENCE_OUTBOUND_POLL_MS", "3000")),
                 "outbound_poll_fallback_ms": int(
                     os.getenv("PRESENCE_OUTBOUND_POLL_FALLBACK_MS", "60000")
@@ -132,15 +135,27 @@ def create_app() -> FastAPI:
 
         from presence_ui.deps import get_stores
         from presence_ui.services.outbound import list_pending_outbound
+        from presence_ui.services.outbound_kiosk import (
+            is_kiosk_client,
+            note_kiosk_seen,
+            should_deliver_to_client,
+        )
 
         if not client_id.strip():
             raise HTTPException(status_code=400, detail="client_id is required")
+        client = client_id.strip()
+        if is_kiosk_client(client):
+            note_kiosk_seen()
+        if not should_deliver_to_client(client):
+            from social_core import utc_now
+
+            return OutboundPendingResponse(items=[], server_ts=utc_now())
 
         stores = get_stores()
         items = list_pending_outbound(
             stores,
             person_id=person_id,
-            client_id=client_id.strip(),
+            client_id=client,
             since=since,
             limit=limit,
         )
@@ -184,6 +199,13 @@ def create_app() -> FastAPI:
     ) -> StreamingResponse:
         from presence_ui.deps import get_stores
         from presence_ui.services.outbound import list_pending_outbound
+        from presence_ui.services.outbound_kiosk import (
+            is_kiosk_client,
+            kiosk_primary_active,
+            kiosk_primary_enabled,
+            note_kiosk_seen,
+            should_deliver_to_client,
+        )
         from presence_ui.services.outbound_sse import (
             pending_item_payload,
             sse_enabled,
@@ -195,18 +217,24 @@ def create_app() -> FastAPI:
         if not client_id.strip():
             raise HTTPException(status_code=400, detail="client_id is required")
 
+        client = client_id.strip()
+        if is_kiosk_client(client):
+            note_kiosk_seen()
+
         stores = get_stores()
-        pending = list_pending_outbound(
-            stores,
-            person_id=person_id,
-            client_id=client_id.strip(),
-            since=since,
-            limit=limit,
-        )
+        pending: list = []
+        if should_deliver_to_client(client):
+            pending = list_pending_outbound(
+                stores,
+                person_id=person_id,
+                client_id=client,
+                since=since,
+                limit=limit,
+            )
         catch_up = [pending_item_payload(item) for item in pending]
 
         return StreamingResponse(
-            stream_room_inbound(catch_up=catch_up),
+            stream_room_inbound(catch_up=catch_up, client_id=client),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",

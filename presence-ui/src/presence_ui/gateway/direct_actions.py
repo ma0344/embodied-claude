@@ -298,11 +298,12 @@ async def talk_to_companion_direct(
             ],
         )
 
+    from presence_ui.services.outbound_kiosk import should_deliver_pc_local
     from presence_ui.services.tts import speak_text
 
     spoke_local = False
     speak_detail = ""
-    if voice_local_enabled():
+    if voice_local_enabled() and should_deliver_pc_local():
         spoke_local, speak_detail = await speak_text(line, speaker="local")
 
     stores.orchestrator.record_agent_experience(

@@ -245,7 +245,7 @@ async def test_stream_room_inbound_catch_up() -> None:
         }
     ]
     chunks: list[str] = []
-    async for chunk in stream_room_inbound(catch_up=catch_up):
+    async for chunk in stream_room_inbound(catch_up=catch_up, client_id="kiosk"):
         chunks.append(chunk)
         if "room_inbound" in chunk:
             break
@@ -261,7 +261,7 @@ async def test_publish_room_inbound_reaches_subscriber() -> None:
 
     from presence_ui.services.outbound_sse import publish_room_inbound, stream_room_inbound
 
-    gen = stream_room_inbound(catch_up=[])
+    gen = stream_room_inbound(catch_up=[], client_id="kiosk")
     received: asyncio.Queue[str] = asyncio.Queue()
 
     async def reader() -> None:

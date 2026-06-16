@@ -141,7 +141,12 @@ def _post_ntfy(
             raise HTTPError(url, response.status, response.reason, response.headers, None)
 
 
-def send_outbound_push(*, text: str, title: str = "Koyori") -> tuple[bool, str]:
+def send_outbound_push(
+    *,
+    text: str,
+    title: str = "Koyori",
+    include_pc_local: bool = True,
+) -> tuple[bool, str]:
     """Fire configured push backends. Returns (any_ok, detail)."""
     if not outbound_push_enabled():
         return False, "push disabled"
@@ -152,7 +157,7 @@ def send_outbound_push(*, text: str, title: str = "Koyori") -> tuple[bool, str]:
 
     ntfy = _ntfy_url()
     pushover_token, pushover_user = _pushover_credentials()
-    win_toast = _win_toast_enabled() and _win_toast_script() is not None
+    win_toast = include_pc_local and _win_toast_enabled() and _win_toast_script() is not None
     if not ntfy and not (pushover_token and pushover_user) and not win_toast:
         return False, "no push targets configured"
 

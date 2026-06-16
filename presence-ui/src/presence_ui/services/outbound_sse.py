@@ -8,8 +8,14 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from presence_ui.services.outbound import OutboundPendingItem
+from presence_ui.services.outbound_kiosk import (
+    is_kiosk_client,
+    note_kiosk_seen,
+    kiosk_sse_connected,
+    should_deliver_to_client,
+)
 
-_listeners: set[asyncio.Queue[dict[str, Any]]] = set()
+_listeners: dict[asyncio.Queue[dict[str, Any]], str] = {}
 _loop: asyncio.AbstractEventLoop | None = None
 
 
@@ -29,12 +35,14 @@ def format_sse(event: str, data: dict[str, Any]) -> str:
 
 
 def publish_room_inbound(payload: dict[str, Any]) -> None:
-    """Notify all connected SSE clients (thread-safe)."""
+    """Notify SSE clients allowed for current kiosk-primary policy."""
     global _loop
     loop = _loop
     if loop is None or not _listeners:
         return
-    for queue in list(_listeners):
+    for queue, client_id in list(_listeners.items()):
+        if not should_deliver_to_client(client_id):
+            continue
         loop.call_soon_threadsafe(_safe_put, queue, payload)
 
 
@@ -45,16 +53,22 @@ def _safe_put(queue: asyncio.Queue[dict[str, Any]], payload: dict[str, Any]) -> 
         pass
 
 
-async def subscribe() -> asyncio.Queue[dict[str, Any]]:
+async def subscribe(client_id: str) -> asyncio.Queue[dict[str, Any]]:
     global _loop
     _loop = asyncio.get_running_loop()
     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=64)
-    _listeners.add(queue)
+    client_id = client_id.strip()
+    _listeners[queue] = client_id
+    if is_kiosk_client(client_id):
+        kiosk_sse_connected(1)
     return queue
 
 
-def unsubscribe(queue: asyncio.Queue[dict[str, Any]]) -> None:
-    _listeners.discard(queue)
+def unsubscribe(queue: asyncio.Queue[dict[str, Any]], client_id: str) -> None:
+    if queue in _listeners:
+        del _listeners[queue]
+    if is_kiosk_client(client_id):
+        kiosk_sse_connected(-1)
 
 
 def sse_enabled() -> bool:
@@ -71,10 +85,15 @@ def heartbeat_seconds() -> float:
 
 async def stream_room_inbound(
     *,
+    client_id: str,
     catch_up: list[dict[str, Any]],
 ) -> AsyncIterator[str]:
-    queue = await subscribe()
+    client_id = client_id.strip()
+    queue = await subscribe(client_id)
+    kiosk = is_kiosk_client(client_id)
     try:
+        if kiosk:
+            note_kiosk_seen()
         yield format_sse("connected", {"ok": True})
         for item in catch_up:
             yield format_sse("room_inbound", item)
@@ -82,8 +101,10 @@ async def stream_room_inbound(
             try:
                 payload = await asyncio.wait_for(queue.get(), timeout=heartbeat_seconds())
             except asyncio.TimeoutError:
+                if kiosk:
+                    note_kiosk_seen()
                 yield ": heartbeat\n\n"
                 continue
             yield format_sse("room_inbound", payload)
     finally:
-        unsubscribe(queue)
+        unsubscribe(queue, client_id)

@@ -213,9 +213,13 @@ def enqueue_outbound_nudge(
             ),
         )
 
+    from presence_ui.services.outbound_kiosk import should_deliver_pc_local
     from presence_ui.services.outbound_push import send_outbound_push
 
-    push_ok, push_detail = send_outbound_push(text=line)
+    push_ok, push_detail = send_outbound_push(
+        text=line,
+        include_pc_local=should_deliver_pc_local(),
+    )
     if push_detail and push_detail != "no push targets configured":
         import logging
 

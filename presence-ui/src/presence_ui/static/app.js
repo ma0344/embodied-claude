@@ -1896,11 +1896,11 @@ function outboundSurfaceTtsEnabled() {
 }
 
 async function playOutboundNudgeAudio(text) {
-  if (!text) return;
+  if (!text) return { ok: false, detail: "empty text" };
   unlockSpeechOnce();
   if (!outboundSurfaceTtsEnabled()) {
     speakOutboundNudge(text);
-    return;
+    return { ok: true, detail: "web-speech" };
   }
   try {
     const res = await fetch(surfaceTtsSynthesizePath(), {
@@ -1918,11 +1918,85 @@ async function playOutboundNudgeAudio(text) {
     }
     const audio = new Audio(url);
     audio.preload = "auto";
+    audio.volume = 1;
     await audio.play();
+    return { ok: true, detail: "surface-tts" };
   } catch (err) {
     console.warn("surface TTS failed, falling back to Web Speech:", err.message);
-    speakOutboundNudge(text);
+    try {
+      speakOutboundNudge(text);
+      return { ok: true, detail: "web-speech-fallback" };
+    } catch (inner) {
+      return { ok: false, detail: err.message || String(inner) };
+    }
   }
+}
+
+function setKioskAudioStatus(message, tone = "neutral") {
+  const root = document.getElementById("kiosk-audio");
+  const statusEl = document.getElementById("kiosk-audio-status");
+  if (!root || !statusEl || root.hidden) return;
+  statusEl.textContent = message;
+  statusEl.classList.remove("is-ok", "is-warn", "is-error");
+  if (tone === "ok") statusEl.classList.add("is-ok");
+  if (tone === "warn") statusEl.classList.add("is-warn");
+  if (tone === "error") statusEl.classList.add("is-error");
+}
+
+async function runKioskAudioTest() {
+  unlockSpeechOnce();
+  setKioskAudioStatus("再生中…", "warn");
+  const result = await playOutboundNudgeAudio("まー、聞こえる？");
+  if (result.ok) {
+    setKioskAudioStatus("再生した。無音なら Surface 音量↑", "ok");
+    return;
+  }
+  const blocked = /notallowed|gesture|interact/i.test(result.detail || "");
+  if (blocked) {
+    setKioskAudioStatus("もう一度タップして解除", "warn");
+    return;
+  }
+  setKioskAudioStatus(`失敗: ${result.detail}`, "error");
+}
+
+function setupKioskAudio() {
+  const root = document.getElementById("kiosk-audio");
+  const testBtn = document.getElementById("kiosk-audio-test");
+  if (!root || !testBtn) return;
+  if (isKioskLayout()) {
+    root.hidden = false;
+    setKioskAudioStatus("タップで音声解除", "warn");
+  } else {
+    root.hidden = true;
+    return;
+  }
+  testBtn.addEventListener("click", () => {
+    void runKioskAudioTest();
+  });
+  document.addEventListener(
+    "click",
+    () => {
+      unlockSpeechOnce();
+      if (isKioskLayout()) {
+        setKioskAudioStatus("音声解除済み", "ok");
+      }
+    },
+    { once: true, passive: true },
+  );
+}
+
+async function playKioskSpeech(text) {
+  if (!isKioskLayout()) {
+    await playOutboundNudgeAudio(text);
+    return;
+  }
+  setKioskAudioStatus("こよりが話す…", "warn");
+  const result = await playOutboundNudgeAudio(text);
+  if (result.ok) {
+    setKioskAudioStatus("再生した。無音なら Surface 音量↑", "ok");
+    return;
+  }
+  setKioskAudioStatus(`再生できず: ${result.detail}`, "error");
 }
 
 async function ackOutboundNudge(nudgeId, channels) {
@@ -1976,7 +2050,7 @@ async function pumpRoomInbound() {
   roomInboundCurrent = roomInboundQueue.shift();
   showRoomInboundModal(roomInboundCurrent);
   if (roomInboundCurrent.speak) {
-    void playOutboundNudgeAudio(roomInboundCurrent.text);
+    void playKioskSpeech(roomInboundCurrent.text);
   }
 }
 
@@ -2172,7 +2246,7 @@ function setupOutboundSse() {
   source.addEventListener("room_say", (event) => {
     try {
       const data = JSON.parse(event.data);
-      if (data.text) void playOutboundNudgeAudio(data.text);
+      if (data.text) void playKioskSpeech(data.text);
     } catch (err) {
       console.warn("room_say SSE parse failed:", err.message);
     }
@@ -2272,6 +2346,7 @@ function setupKioskLayout() {
   applyDebugInjectionVisibility();
   setupRoomDrawer();
   setupContextRail();
+  setupKioskAudio();
   setupOutboundPoll();
 }
 

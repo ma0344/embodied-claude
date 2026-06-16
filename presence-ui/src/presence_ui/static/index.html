@@ -22,6 +22,10 @@
         <p class="subtitle">Koyori's Room</p>
       </div>
       <div class="meta">
+        <div class="kiosk-audio" id="kiosk-audio" hidden>
+          <button type="button" id="kiosk-audio-test" class="kiosk-audio__test">音声テスト</button>
+          <span id="kiosk-audio-status" class="kiosk-audio__status" aria-live="polite">タップで解除</span>
+        </div>
         <div class="clock" id="clock">--:--</div>
         <div class="temperature" id="temperature" aria-live="polite">—</div>
       </div>
@@ -178,6 +182,6 @@
   <script src="/static/chat-markdown.js?v=20260610-md-both"></script>
   <script src="/static/cc-messages.js?v=20260615-memory-inject"></script>
   <script src="/static/koyori-voice.js?v=20260615-social-ja"></script>
-  <script src="/static/app.js?v=20260610-kiosk-client-id"></script>
+  <script src="/static/app.js?v=20260610-kiosk-audio"></script>
 </body>
 </html>

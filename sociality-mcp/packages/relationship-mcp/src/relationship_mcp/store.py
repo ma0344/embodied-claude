@@ -337,12 +337,14 @@ class RelationshipStore:
         text: str,
         due_at: str | None,
         source: str,
+        metadata: dict | None = None,
     ) -> dict[str, str]:
         self._ensure_person(person_id)
         commitment_id = f"commit_{uuid.uuid4().hex[:10]}"
         created_at = ensure_iso8601(
             self.events.get_latest_timestamp(person_id=person_id) or "2026-01-01T12:00:00+00:00"
         )
+        metadata_json = json.dumps(metadata or {}, ensure_ascii=False)
         with self.db.transaction() as connection:
             connection.execute(
                 """
@@ -357,9 +359,9 @@ class RelationshipStore:
                     completed_at,
                     metadata_json
                 )
-                VALUES (?, ?, ?, ?, ?, 'active', ?, NULL, '{}')
+                VALUES (?, ?, ?, ?, ?, 'active', ?, NULL, ?)
                 """,
-                (commitment_id, person_id, text, due_at, source, created_at),
+                (commitment_id, person_id, text, due_at, source, created_at, metadata_json),
             )
         self.events.ingest(
             SocialEventCreate(
@@ -411,7 +413,7 @@ class RelationshipStore:
     ) -> list[CommitmentRecord]:
         rows = self.db.fetchall(
             """
-            SELECT commitment_id, text, due_at, source
+            SELECT commitment_id, text, due_at, source, metadata_json
             FROM commitments
             WHERE person_id = ? AND status = 'active'
             ORDER BY COALESCE(due_at, created_at)
@@ -425,6 +427,7 @@ class RelationshipStore:
                 text=row["text"],
                 due_at=row["due_at"],
                 source=row["source"],
+                metadata=json.loads(row["metadata_json"] or "{}"),
             )
             for row in rows
         ]
@@ -477,6 +480,7 @@ class RelationshipStore:
                     text=row["text"],
                     due_at=row["due_at"],
                     source=row["source"],
+                    metadata=metadata,
                 )
             )
             if len(due) >= limit:
@@ -594,10 +598,11 @@ class RelationshipStore:
                 text=row["text"],
                 due_at=row["due_at"],
                 source=row["source"],
+                metadata=json.loads(row["metadata_json"] or "{}"),
             )
             for row in self.db.fetchall(
                 """
-                SELECT commitment_id, text, due_at, source
+                SELECT commitment_id, text, due_at, source, metadata_json
                 FROM commitments
                 WHERE person_id = ? AND status = 'active'
                 ORDER BY COALESCE(due_at, created_at)
@@ -830,19 +835,23 @@ class RelationshipStore:
         ts: str,
         timezone: str = DEFAULT_TIMEZONE,
     ) -> dict[str, str] | None:
-        parsed = extract_reminder_request(text, ts=ts, tz_name=timezone)
-        if parsed is None:
+        spec = extract_reminder_request(text, ts=ts, tz_name=timezone)
+        if spec is None:
             return None
-        label, due_at = parsed
-        label_key = _commitment_label(label)
-        for commitment in self.list_active_commitments(person_id=person_id, limit=20):
-            if commitment.due_at == due_at and _commitment_label(commitment.text) == label_key:
+        for commitment in self.list_active_commitments(person_id=person_id, limit=50):
+            if commitment.due_at == spec.due_at:
                 return None
+        metadata = {
+            "speak_line": spec.speak_line,
+            "delivery": spec.delivery,
+            "source_utterance": text[:240],
+        }
         return self.create_commitment(
             person_id=person_id,
-            text=label,
-            due_at=due_at,
+            text=spec.title,
+            due_at=spec.due_at,
             source="reminder_request",
+            metadata=metadata,
         )
 
     def _extract_topic(self, text: str, *, direction: str = "human_to_ai") -> str | None:

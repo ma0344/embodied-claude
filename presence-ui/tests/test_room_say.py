@@ -37,6 +37,64 @@ def test_room_say_api_publishes_when_kiosk_active(monkeypatch: pytest.MonkeyPatc
     assert response.json()["ok"] is True
 
 
+def test_room_say_pending_poll_for_kiosk(monkeypatch: pytest.MonkeyPatch) -> None:
+    from presence_ui.services.outbound_kiosk import note_kiosk_seen
+    from presence_ui.services.room_say_pending import enqueue_room_say
+
+    note_kiosk_seen()
+    item = enqueue_room_say(text="poll-test-line-unique", source="reminder")
+    client = TestClient(create_app())
+    response = client.get("/api/v1/tts/room-say/pending", params={"client_id": "kiosk"})
+    assert response.status_code == 200
+    data = response.json()
+    ids = [row["say_id"] for row in data["items"]]
+    assert item.say_id in ids
+
+    ack = client.post(
+        "/api/v1/tts/room-say/ack",
+        json={"say_id": item.say_id, "client_id": "kiosk"},
+    )
+    assert ack.status_code == 200
+
+    again = client.get("/api/v1/tts/room-say/pending", params={"client_id": "kiosk"})
+    again_ids = [row["say_id"] for row in again.json()["items"]]
+    assert item.say_id not in again_ids
+
+
+def test_room_say_pending_includes_audio_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    from presence_ui.services.outbound_kiosk import note_kiosk_seen
+    from presence_ui.services.room_say_pending import enqueue_room_say, room_say_payload
+
+    note_kiosk_seen()
+    item = enqueue_room_say(
+        text="prebuilt-line",
+        source="say",
+        audio_url="/api/v1/tts/surface/deadbeefcafebabe",
+    )
+    payload = room_say_payload(item)
+    assert payload["audio_url"] == "/api/v1/tts/surface/deadbeefcafebabe"
+
+    client = TestClient(create_app())
+    response = client.get("/api/v1/tts/room-say/pending", params={"client_id": "kiosk"})
+    assert response.status_code == 200
+    row = next(r for r in response.json()["items"] if r["say_id"] == item.say_id)
+    assert row["audio_url"] == "/api/v1/tts/surface/deadbeefcafebabe"
+
+
+def test_deliver_speak_prebuilds_audio(monkeypatch: pytest.MonkeyPatch) -> None:
+    from presence_ui.services.kiosk_say import deliver_speak_to_kiosk
+    from presence_ui.services.outbound_kiosk import note_kiosk_seen
+
+    note_kiosk_seen()
+    monkeypatch.setattr(
+        "presence_ui.services.kiosk_say.prebuild_surface_audio_url",
+        lambda text: f"/api/v1/tts/surface/{text[:8]}",
+    )
+    delivered, say_id, audio_url = deliver_speak_to_kiosk("pre-synth test", source="say")
+    assert say_id
+    assert audio_url == "/api/v1/tts/surface/pre-synt"
+
+
 @pytest.mark.asyncio
 async def test_publish_room_say_reaches_kiosk_only(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PRESENCE_OUTBOUND_KIOSK_PRIMARY", "1")

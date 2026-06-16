@@ -296,3 +296,29 @@ class TtsSurfaceResponse(BaseModel):
 class RoomSayResponse(BaseModel):
     ok: bool = True
     detail: str = "routed to kiosk"
+    say_id: str = ""
+    sse_listeners: int = 0
+    queued: bool = True
+
+
+class RoomSayPendingItem(BaseModel):
+    say_id: str
+    ts: str
+    text: str
+    source: str = "say"
+    audio_url: str | None = None
+
+
+class RoomSayPendingResponse(BaseModel):
+    items: list[RoomSayPendingItem] = Field(default_factory=list)
+    server_ts: str = ""
+
+
+class RoomSayAckRequest(BaseModel):
+    say_id: str = Field(min_length=1)
+    client_id: str = Field(min_length=1)
+
+
+class RoomSayAckResponse(BaseModel):
+    ok: bool = True
+    say_id: str = ""

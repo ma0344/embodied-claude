@@ -87,6 +87,20 @@ def test_tts_surface_api_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     assert response.status_code == 503
 
 
+def test_surface_tts_ready_checks_engine(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VOICEVOX_URL", "http://127.0.0.1:10101")
+
+    class DownEngine:
+        def is_available(self) -> bool:
+            return False
+
+    monkeypatch.setattr("presence_ui.services.tts_surface._build_engine", lambda: DownEngine())
+    from presence_ui.services.tts_surface import surface_tts_ready, surface_tts_status
+
+    assert surface_tts_ready() is False
+    assert "not running" in surface_tts_status()
+
+
 def test_ui_config_exposes_surface_tts(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VOICEVOX_URL", "http://127.0.0.1:10101")
     body = TestClient(create_app()).get("/api/v1/ui-config").json()

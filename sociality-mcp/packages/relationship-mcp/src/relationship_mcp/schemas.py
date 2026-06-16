@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -14,6 +14,7 @@ class CommitmentRecord(BaseModel):
     text: str
     due_at: str | None = None
     source: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class OpenLoopRecord(BaseModel):

@@ -94,6 +94,8 @@ def compose_interaction_context(
                 text=item.get("text", ""),
                 due_at=item.get("due_at"),
                 status=item.get("status", "active"),
+                speak_line=_commitment_speak_line(item),
+                delivery=_commitment_delivery(item),
             )
             for item in _optional_list(
                 relationship_store,
@@ -624,6 +626,20 @@ def _format_desire_section(
         if shown >= max_lines:
             break
     return lines if len(lines) > 1 else []
+
+
+def _commitment_speak_line(item: dict[str, Any]) -> str | None:
+    metadata = item.get("metadata") or {}
+    speak_line = metadata.get("speak_line") or item.get("speak_line")
+    if not speak_line:
+        return None
+    return str(speak_line).strip() or None
+
+
+def _commitment_delivery(item: dict[str, Any]) -> str:
+    metadata = item.get("metadata") or {}
+    delivery = metadata.get("delivery") or item.get("delivery") or "say"
+    return "nudge_only" if delivery == "nudge_only" else "say"
 
 
 def _format_open_loops_section(

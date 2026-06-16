@@ -45,6 +45,7 @@ if ($webuiOptional) {
 Write-Host "`n-- Scheduled tasks --" -ForegroundColor Yellow
 $taskNames = @(
     "EmbodiedClaude-MemoryHTTP",
+    "EmbodiedClaude-AivisTTS",
     "EmbodiedClaude-WebUI",
     "EmbodiedClaude-PresenceUI",
     "EmbodiedClaude-Watchdog"
@@ -53,9 +54,16 @@ foreach ($name in $taskNames) {
     $status = Test-TaskRunning $name
     $isWatchdog = ($name -eq "EmbodiedClaude-Watchdog")
     $isWebui = ($name -eq "EmbodiedClaude-WebUI")
-    $ok = ($status -eq "running") -or ($isWatchdog -and $status -match "^state=Ready")
+    $isAivis = ($name -eq "EmbodiedClaude-AivisTTS")
+    $ok = ($status -eq "running") -or (
+        ($isWatchdog -or $isAivis) -and $status -match "^state=Ready"
+    )
     if ($isWebui -and $webuiOptional -and $status -ne "running") {
         Write-Host "  $name : $status (optional — Native chat)" -ForegroundColor DarkGray
+        continue
+    }
+    if ($isAivis -and $status -eq "missing") {
+        Write-Host "  $name : missing (recommended — kiosk TTS)" -ForegroundColor Yellow
         continue
     }
     $color = if ($ok) { "Green" } else { "Yellow" }
@@ -63,7 +71,7 @@ foreach ($name in $taskNames) {
     if ($status -eq "missing") {
         if ($isWebui -and $webuiOptional) { continue }
         $failures += "task $name missing"
-    } elseif (-not $ok -and -not $isWatchdog) {
+    } elseif (-not $ok -and -not $isWatchdog -and -not $isAivis) {
         if ($isWebui -and $webuiOptional) { continue }
         $failures += "task $name not running ($status)"
     }
@@ -72,6 +80,7 @@ foreach ($name in $taskNames) {
 Write-Host "`n-- Ports --" -ForegroundColor Yellow
 $portChecks = @(
     @{ Port = 18900; Label = "memory HTTP"; Optional = $false },
+    @{ Port = 10101; Label = "Aivis TTS"; Optional = $false },
     @{ Port = 8080; Label = "webui"; Optional = $webuiOptional },
     @{ Port = 8090; Label = "presence-ui"; Optional = $false }
 )
@@ -103,7 +112,14 @@ Write-Host "`n-- presence health --" -ForegroundColor Yellow
 try {
     $h = Invoke-RestMethod http://localhost:8090/api/v1/health -TimeoutSec 5
     $nativeFlag = if ($h.details.native_chat) { " native_chat=1" } else { "" }
-    Write-Host "  :8090 $($h.details.mode)$nativeFlag ok" -ForegroundColor Green
+    $ttsFlag = if ($null -ne $h.details.surface_tts_ready) {
+        if ($h.details.surface_tts_ready) { " surface_tts=ready" } else { " surface_tts=DOWN" }
+    } else { "" }
+    $color = if ($h.status -eq "ok") { "Green" } else { "Yellow" }
+    Write-Host "  :8090 $($h.details.mode)$nativeFlag$ttsFlag status=$($h.status)" -ForegroundColor $color
+    if ($h.details.surface_tts_ready -eq $false) {
+        $failures += "surface TTS not ready ($($h.details.surface_tts_status))"
+    }
 } catch {
     Write-Host "  :8090 FAIL $($_.Exception.Message)" -ForegroundColor Red
     $failures += "8090 health fail"

@@ -70,6 +70,40 @@ def _build_engine():
     raise RuntimeError("no TTS engine configured")
 
 
+def surface_tts_engine_url() -> str | None:
+    """Configured TTS HTTP endpoint (for status messages)."""
+    from presence_ui.repo_env import load_repo_env
+
+    load_repo_env()
+    url = os.getenv("VOICEVOX_URL", "").strip()
+    return url or None
+
+
+def surface_tts_ready() -> bool:
+    """True when a configured engine responds (not just env vars set)."""
+    if not surface_tts_enabled():
+        return False
+    try:
+        engine = _build_engine()
+        is_available = getattr(engine, "is_available", None)
+        if callable(is_available):
+            return bool(is_available())
+    except Exception:
+        return False
+    return False
+
+
+def surface_tts_status() -> str:
+    if not surface_tts_enabled():
+        return "surface TTS disabled"
+    url = surface_tts_engine_url()
+    if not url:
+        return "TTS not configured (set VOICEVOX_URL or ELEVENLABS_API_KEY)"
+    if surface_tts_ready():
+        return f"TTS ready ({url})"
+    return f"TTS engine not running ({url}) — start Aivis: scripts/start-aivis-tts.ps1"
+
+
 def synthesize_surface_audio(text: str) -> tuple[str, str, str]:
     """Return (token, audio_format, content_type). Writes cached file under surface_dir."""
     line = text.strip()
@@ -84,7 +118,18 @@ def synthesize_surface_audio(text: str) -> tuple[str, str, str]:
             return token, ext, media
 
     engine = _build_engine()
-    audio_bytes, audio_format = engine.synthesize(line)
+    try:
+        audio_bytes, audio_format = engine.synthesize(line)
+    except OSError as exc:
+        url = surface_tts_engine_url() or "TTS engine"
+        raise RuntimeError(f"TTS engine not reachable at {url}: {exc}") from exc
+    except Exception as exc:
+        if type(exc).__name__ == "URLError":
+            url = surface_tts_engine_url() or "TTS engine"
+            raise RuntimeError(f"TTS engine not reachable at {url}: {exc.reason}") from exc
+        url = surface_tts_engine_url()
+        hint = f" ({url})" if url else ""
+        raise RuntimeError(f"TTS synthesis failed{hint}: {exc}") from exc
     fmt = str(audio_format or "wav").lower().lstrip(".")
     if fmt not in _MEDIA_TYPES:
         fmt = "wav"

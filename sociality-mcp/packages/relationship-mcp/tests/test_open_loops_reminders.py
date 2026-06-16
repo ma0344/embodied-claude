@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import json
+
 from relationship_mcp.date_resolution import is_stale, resolve_relative_date
-from relationship_mcp.reminder_intent import extract_reminder_request
+from relationship_mcp.reminder_intent import (
+    detect_delivery_mode,
+    extract_quoted_speak_line,
+    extract_reminder_request,
+)
 
 
 def test_resolve_relative_date_tomorrow():
@@ -34,9 +40,8 @@ def test_extract_reminder_request_tomorrow_at_ten():
         tz_name="Asia/Tokyo",
     )
     assert parsed is not None
-    label, due_at = parsed
-    assert "会議" in label
-    assert "2026-04-16T10:00:00" in due_at
+    assert "会議" in parsed.title
+    assert "2026-04-16T10:00:00" in parsed.due_at
 
 
 def test_extract_reminder_request_today_rolls_forward():
@@ -46,8 +51,27 @@ def test_extract_reminder_request_today_rolls_forward():
         tz_name="Asia/Tokyo",
     )
     assert parsed is not None
-    _, due_at = parsed
-    assert "2026-04-16T03:00:00" in due_at
+    assert "2026-04-16T03:00:00" in parsed.due_at
+
+
+def test_extract_reminder_request_ten_minutes_later_with_quote():
+    parsed = extract_reminder_request(
+        "１０分後に、「まー、時間やで！！」って say でしゃべって教えて",
+        ts="2026-06-16T18:04:00+09:00",
+        tz_name="Asia/Tokyo",
+    )
+    assert parsed is not None
+    assert parsed.speak_line == "まー、時間やで！！"
+    assert parsed.delivery == "say"
+    assert "2026-06-16T18:14:00" in parsed.due_at
+
+
+def test_extract_quoted_speak_line():
+    assert extract_quoted_speak_line("「お茶飲んで」って言って") == "お茶飲んで"
+
+
+def test_detect_delivery_mode_nudge_only():
+    assert detect_delivery_mode("10時にテキストだけでリマインドして") == "nudge_only"
 
 
 def test_note_human_creates_reminder_commitment(store):
@@ -62,6 +86,39 @@ def test_note_human_creates_reminder_commitment(store):
     assert len(commitments) == 1
     assert commitments[0].due_at is not None
     assert "2026-04-16T09:00:00" in commitments[0].due_at
+
+
+def test_note_human_creates_reminder_with_speak_line_metadata(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.note_human_utterance_for_loops(
+        person_id="ma",
+        text="10分後に「まー、時間やで」と say で教えて",
+        ts="2026-06-16T18:04:00+09:00",
+        source_event_id="evt_remind_quote",
+    )
+    commitments = store.list_active_commitments(person_id="ma")
+    assert len(commitments) == 1
+    assert commitments[0].metadata.get("speak_line") == "まー、時間やで"
+    assert commitments[0].metadata.get("delivery") == "say"
+    assert "2026-06-16T18:14:00" in commitments[0].due_at
+
+
+def test_reminder_commitment_dedupes_same_due_at(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.note_human_utterance_for_loops(
+        person_id="ma",
+        text="10分後に「A」と教えて",
+        ts="2026-06-16T18:04:00+09:00",
+        source_event_id="evt_remind_a",
+    )
+    store.note_human_utterance_for_loops(
+        person_id="ma",
+        text="10分後に「B」と教えて",
+        ts="2026-06-16T18:04:30+09:00",
+        source_event_id="evt_remind_b",
+    )
+    commitments = store.list_active_commitments(person_id="ma")
+    assert len(commitments) == 1
 
 
 def test_close_stale_open_loops_on_ingest(store):
@@ -91,6 +148,7 @@ def test_list_due_commitments_within_catch_up_window(store):
         text="standup",
         due_at="2026-04-16T09:00:00+09:00",
         source="test",
+        metadata={"speak_line": "まー、standup の時間やで"},
     )
     due = store.list_due_commitments(
         person_id="ma",
@@ -99,6 +157,7 @@ def test_list_due_commitments_within_catch_up_window(store):
     )
     assert len(due) == 1
     assert due[0].text == "standup"
+    assert due[0].metadata.get("speak_line") == "まー、standup の時間やで"
 
     future = store.list_due_commitments(
         person_id="ma",
@@ -122,7 +181,5 @@ def test_open_loop_detail_has_resolved_date(store):
         ("ma",),
     )
     assert row is not None
-    import json
-
     detail = json.loads(row["detail_json"])
     assert detail.get("resolved_date") == "2026-04-16"

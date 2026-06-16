@@ -52,7 +52,8 @@ def test_delegate_say_to_kiosk_posts_text() -> None:
         )
 
     with patch("tts_mcp.kiosk_routing.urllib.request.urlopen", fake_urlopen):
-        ok, detail = delegate_say_to_kiosk("こんにちは")
+        ok, detail, listeners = delegate_say_to_kiosk("こんにちは")
     assert ok is True
+    assert listeners == 0
     assert "/api/v1/tts/room-say" in captured["url"]
     assert b"\xe3\x81\x93\xe3\x82\x93\xe3\x81\xab\xe3\x81\xa1\xe3\x81\xaf" in captured["body"]

@@ -84,6 +84,7 @@
 | サービス | ポート | Scheduled Task | スクリプト | ログ |
 |---------|--------|----------------|-----------|------|
 | memory HTTP daemon | 18900 | `EmbodiedClaude-MemoryHTTP` | `install-memory-daemon-task.ps1` | `%USERPROFILE%\.config\embodied-claude\logs\memory-daemon.log` |
+| AivisSpeech TTS | 10101 | `EmbodiedClaude-AivisTTS` | `install-aivis-tts-task.ps1` | `...\aivis-tts.log` |
 | Claude Code Web UI | 8080 | `EmbodiedClaude-WebUI` | `install-webui-task.ps1` | `...\webui.log` | **任意**（Native 本線では不要） |
 | presence-ui | 8090 | `EmbodiedClaude-PresenceUI` | `install-presence-ui-task.ps1` | `...\presence-ui.log` |
 
@@ -94,6 +95,9 @@ cd C:\Users\ma\src\embodied-claude
 
 .\scripts\install-memory-daemon-task.ps1
 Start-ScheduledTask -TaskName EmbodiedClaude-MemoryHTTP
+
+.\scripts\install-aivis-tts-task.ps1
+Start-ScheduledTask -TaskName EmbodiedClaude-AivisTTS
 
 # 任意 — Native 会話だけなら省略可
 # .\scripts\install-webui-task.ps1
@@ -344,7 +348,7 @@ MVP チェックリスト:
 | 低 | **OL4** ノイズ loop 運用 | `purge-noise-open-loops.py` |
 
 - [x] **OL1** Open Loops 日付解決 — ingest `resolved_date`、期限過ぎ auto-close、`date_resolution.py`（2026-06-16）
-- [x] **OL2** リマインド配線 — 「○時にリマインド」→ commitment、tick `remind_commitment_direct`、compose `[commitments_due]`（2026-06-16）
+- [x] **OL2+** リマインド仕様 — `N分後` / `「」`→`speak_line` / `delivery` metadata、`remind_commitment_direct` が speak_line 優先（2026-06-16）
 - [x] **OL0** stale open loop 掃除（`purge-stale-open-loops.py`、ingest/tick でも自動 close）
 
 - [x] **C11f** 部屋の空気 日本語化（`summary_for_prompt` + UI タグの availability/phase マップ）

@@ -29,6 +29,10 @@ from presence_ui.schemas import (
     TtsSurfaceRequest,
     TtsSurfaceResponse,
     RoomSayResponse,
+    RoomSayPendingResponse,
+    RoomSayPendingItem,
+    RoomSayAckRequest,
+    RoomSayAckResponse,
 )
 from presence_ui.services.camera import fetch_camera_snapshot
 from presence_ui.services.display_time import display_timezone
@@ -74,6 +78,20 @@ def create_app() -> FastAPI:
         except Exception as exc:
             logging.getLogger(__name__).debug("capture cache prune skipped: %s", exc)
 
+        from presence_ui.gateway.reminder_watchdog import start_reminder_watchdog
+        from presence_ui.gateway.tts_health_watchdog import start_tts_health_watchdog
+
+        start_reminder_watchdog()
+        start_tts_health_watchdog()
+
+    @app.on_event("shutdown")
+    async def _stop_background_tasks() -> None:
+        from presence_ui.gateway.reminder_watchdog import stop_reminder_watchdog
+        from presence_ui.gateway.tts_health_watchdog import stop_tts_health_watchdog
+
+        stop_reminder_watchdog()
+        stop_tts_health_watchdog()
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=os.getenv("PRESENCE_CORS_ORIGINS", "*").split(","),
@@ -94,8 +112,16 @@ def create_app() -> FastAPI:
 
     @app.get("/api/v1/health", response_model=HealthResponse)
     def health() -> HealthResponse:
+        from presence_ui.services.tts_surface import (
+            surface_tts_enabled,
+            surface_tts_ready,
+            surface_tts_status,
+        )
+
+        tts_ready = surface_tts_ready() if surface_tts_enabled() else True
+        status = "ok" if tts_ready else "degraded"
         return HealthResponse(
-            status="ok",
+            status=status,
             version=__version__,
             details={
                 "person_id": DEFAULT_PERSON_ID,
@@ -103,6 +129,8 @@ def create_app() -> FastAPI:
                 "mode": "gateway+native" if native_chat else "gateway",
                 "native_chat": native_chat,
                 "native_chat_prefix": "/api/native" if native_chat else None,
+                "surface_tts_ready": tts_ready,
+                "surface_tts_status": surface_tts_status(),
             },
         )
 
@@ -112,7 +140,11 @@ def create_app() -> FastAPI:
         from presence_ui.services.outbound import outbound_web_speech_suppress_on_localhost
         from presence_ui.services.outbound_kiosk import kiosk_primary_active, kiosk_primary_enabled
         from presence_ui.services.outbound_sse import sse_enabled
-        from presence_ui.services.tts_surface import surface_tts_enabled
+        from presence_ui.services.tts_surface import (
+            surface_tts_enabled,
+            surface_tts_ready,
+            surface_tts_status,
+        )
 
         return utf8_json(
             {
@@ -128,6 +160,8 @@ def create_app() -> FastAPI:
                 "outbound_stream_path": "/api/v1/outbound/stream",
                 "outbound_sse_enabled": sse_enabled(),
                 "outbound_surface_tts_enabled": surface_tts_enabled(),
+                "surface_tts_ready": surface_tts_ready(),
+                "surface_tts_status": surface_tts_status(),
                 "surface_tts_synthesize_path": "/api/v1/tts/surface",
                 "kiosk_primary_enabled": kiosk_primary_enabled(),
                 "kiosk_primary_active": kiosk_primary_active(),
@@ -135,6 +169,10 @@ def create_app() -> FastAPI:
                 "outbound_poll_fallback_ms": int(
                     os.getenv("PRESENCE_OUTBOUND_POLL_FALLBACK_MS", "60000")
                 ),
+                "room_say_pending_path": "/api/v1/tts/room-say/pending",
+                "room_say_ack_path": "/api/v1/tts/room-say/ack",
+                "room_say_poll_ms": int(os.getenv("PRESENCE_ROOM_SAY_POLL_MS", "3000")),
+                "reminder_watchdog_sec": int(os.getenv("PRESENCE_REMINDER_POLL_SEC", "60")),
                 "outbound_web_speech_suppress_on_localhost": (
                     outbound_web_speech_suppress_on_localhost()
                 ),
@@ -298,8 +336,8 @@ def create_app() -> FastAPI:
 
     @app.post("/api/v1/tts/room-say", response_model=RoomSayResponse)
     async def post_room_say(body: TtsSurfaceRequest) -> RoomSayResponse:
+        from presence_ui.services.kiosk_say import deliver_speak_to_kiosk
         from presence_ui.services.outbound_kiosk import kiosk_primary_active, note_kiosk_seen
-        from presence_ui.services.outbound_sse import publish_room_say
 
         if not kiosk_primary_active():
             raise HTTPException(
@@ -310,8 +348,54 @@ def create_app() -> FastAPI:
         if not line:
             raise HTTPException(status_code=400, detail="empty text")
         note_kiosk_seen()
-        publish_room_say({"text": line, "source": "say"})
-        return RoomSayResponse(ok=True, detail="routed to kiosk")
+        delivered, say_id, audio_url = deliver_speak_to_kiosk(line, source="say")
+        detail = (
+            f"routed to kiosk (listeners={delivered}, say_id={say_id}, audio={'yes' if audio_url else 'no'})"
+            if delivered
+            else f"queued for kiosk poll (no SSE listeners, say_id={say_id}, audio={'yes' if audio_url else 'no'})"
+        )
+        return RoomSayResponse(
+            ok=True,
+            detail=detail,
+            say_id=say_id,
+            sse_listeners=delivered,
+            queued=True,
+        )
+
+    @app.get("/api/v1/tts/room-say/pending", response_model=RoomSayPendingResponse)
+    def get_room_say_pending(
+        client_id: str = "",
+        since: str | None = None,
+        limit: int = 10,
+    ) -> RoomSayPendingResponse:
+        from social_core import utc_now
+
+        from presence_ui.services.outbound_kiosk import is_kiosk_client, note_kiosk_seen
+        from presence_ui.services.room_say_pending import list_pending_room_say, room_say_payload
+
+        if not client_id.strip():
+            raise HTTPException(status_code=400, detail="client_id is required")
+        client = client_id.strip()
+        if is_kiosk_client(client):
+            note_kiosk_seen()
+        items = list_pending_room_say(
+            client_id=client,
+            since=since,
+            limit=min(max(limit, 1), 20),
+        )
+        return RoomSayPendingResponse(
+            items=[RoomSayPendingItem(**room_say_payload(item)) for item in items],
+            server_ts=utc_now(),
+        )
+
+    @app.post("/api/v1/tts/room-say/ack", response_model=RoomSayAckResponse)
+    def post_room_say_ack(body: RoomSayAckRequest) -> RoomSayAckResponse:
+        from presence_ui.services.room_say_pending import ack_room_say
+
+        ok = ack_room_say(say_id=body.say_id, client_id=body.client_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="unknown say_id")
+        return RoomSayAckResponse(ok=True, say_id=body.say_id)
 
     @app.get("/api/v1/native/sessions", response_model=NativeSessionListResponse)
     def get_native_sessions(limit: int = 40) -> NativeSessionListResponse:

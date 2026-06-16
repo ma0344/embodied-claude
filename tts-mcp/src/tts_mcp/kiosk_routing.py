@@ -37,10 +37,10 @@ def fetch_kiosk_primary_active(*, timeout: float = 2.0) -> bool:
     return bool(body.get("kiosk_primary_active"))
 
 
-def delegate_say_to_kiosk(text: str, *, timeout: float = 8.0) -> tuple[bool, str]:
+def delegate_say_to_kiosk(text: str, *, timeout: float = 8.0) -> tuple[bool, str, int]:
     line = text.strip()
     if not line:
-        return False, "empty text"
+        return False, "empty text", 0
     url = f"{presence_ui_base_url()}/api/v1/tts/room-say"
     payload = json.dumps({"text": line}, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
@@ -54,16 +54,17 @@ def delegate_say_to_kiosk(text: str, *, timeout: float = 8.0) -> tuple[bool, str
             raw = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:200]
-        return False, f"http {exc.code}: {detail or exc.reason}"
+        return False, f"http {exc.code}: {detail or exc.reason}", 0
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        return False, str(exc)
+        return False, str(exc), 0
     try:
         body = json.loads(raw)
     except json.JSONDecodeError:
-        return True, "routed"
+        return True, "routed", 0
+    listeners = int(body.get("sse_listeners") or 0)
     if body.get("ok"):
-        return True, str(body.get("detail") or "routed to kiosk")
-    return False, str(body.get("detail") or "room-say rejected")
+        return True, str(body.get("detail") or "routed to kiosk"), listeners
+    return False, str(body.get("detail") or "room-say rejected"), listeners
 
 
 def should_route_local_say_to_kiosk(

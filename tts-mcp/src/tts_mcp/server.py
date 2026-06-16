@@ -169,17 +169,26 @@ class TTSMCP:
             use_camera = speaker_target in {"camera", "both"} and pb.go2rtc_url
 
             if should_route_local_say_to_kiosk(play_audio=play_audio, use_local=use_local):
-                routed_ok, routed_detail = await asyncio.to_thread(delegate_say_to_kiosk, text)
-                if routed_ok:
+                routed_ok, routed_detail, listeners = await asyncio.to_thread(
+                    delegate_say_to_kiosk, text
+                )
+                if routed_ok and listeners > 0:
                     message = (
                         "Routed to kiosk Surface (say)\n"
                         f"Detail: {routed_detail}\n"
+                        f"SSE listeners: {listeners}\n"
                         f"Speaker: {speaker_target}\n"
                         "Local playback: skipped (kiosk primary)\n"
                         "Camera: skipped (kiosk routing)"
                     )
                     return [TextContent(type="text", text=message)]
-                logger.warning("kiosk say routing failed, falling back to local: %s", routed_detail)
+                if routed_ok and listeners == 0:
+                    logger.warning(
+                        "kiosk say queued but no SSE listeners; falling back to local: %s",
+                        routed_detail,
+                    )
+                elif not routed_ok:
+                    logger.warning("kiosk say routing failed, falling back to local: %s", routed_detail)
 
             try:
                 engine = self._get_engine(arguments.get("engine"))

@@ -23,6 +23,22 @@ def test_health_reports_gateway_mode(client: TestClient) -> None:
     assert body["details"]["mode"] == "gateway"
 
 
+def test_health_reports_degraded_when_surface_tts_down(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VOICEVOX_URL", "http://127.0.0.1:10101")
+
+    class DownEngine:
+        def is_available(self) -> bool:
+            return False
+
+    monkeypatch.setattr("presence_ui.services.tts_surface._build_engine", lambda: DownEngine())
+    client = TestClient(create_app())
+    response = client.get("/api/v1/health")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "degraded"
+    assert body["details"]["surface_tts_ready"] is False
+
+
 def test_ui_config_reports_proxy_backend(client: TestClient) -> None:
     response = client.get("/api/v1/ui-config")
     assert response.status_code == 200

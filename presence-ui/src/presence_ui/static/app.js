@@ -1,6 +1,7 @@
 const REFRESH_MS = 7000;
 const OUTBOUND_POLL_MS_DEFAULT = 3000;
 const OUTBOUND_SINCE_KEY = "koyori-outbound-since";
+const ROOM_SAY_SINCE_KEY = "koyori-room-say-since";
 const OUTBOUND_CLIENT_ID_KEY = "koyori-outbound-client-id";
 const OUTBOUND_BROWSER_NOTIFIED_KEY = "koyori-outbound-browser-notified";
 const SCROLL_PIN_THRESHOLD = 56;
@@ -41,6 +42,9 @@ let showDebugInjection = localStorage.getItem(SHOW_DEBUG_INJECTION_KEY) === "1";
 let roomDrawerOpen = false;
 let contextRailPins = loadContextRailPins();
 let outboundPollTimer = null;
+let roomSayPollTimer = null;
+const roomSayInFlight = new Set();
+const roomSayPlayed = new Set();
 let outboundEventSource = null;
 let outboundSseConnected = false;
 let speechUnlocked = false;
@@ -269,6 +273,8 @@ async function loadUiConfig() {
     outbound_stream_path: data.outbound_stream_path || "/api/v1/outbound/stream",
     outbound_sse_enabled: data.outbound_sse_enabled !== false,
     outbound_surface_tts_enabled: Boolean(data.outbound_surface_tts_enabled),
+    surface_tts_ready: Boolean(data.surface_tts_ready),
+    surface_tts_status: data.surface_tts_status || "",
     surface_tts_synthesize_path: data.surface_tts_synthesize_path || "/api/v1/tts/surface",
     kiosk_primary_enabled: data.kiosk_primary_enabled !== false,
     kiosk_primary_active: Boolean(data.kiosk_primary_active),
@@ -278,6 +284,7 @@ async function loadUiConfig() {
       data.outbound_web_speech_suppress_on_localhost,
     ),
   };
+  syncKioskTtsHealthFromConfig();
 }
 
 async function ensureNativeLogin() {
@@ -1865,12 +1872,118 @@ function activeOutboundPollMs() {
   return outboundPollMs();
 }
 
+function roomSayPollMs() {
+  const ms = Number(uiConfig.room_say_poll_ms);
+  return Number.isFinite(ms) && ms >= 1000 ? ms : 3000;
+}
+
+function roomSayPendingPath() {
+  return uiConfig.room_say_pending_path || "/api/v1/tts/room-say/pending";
+}
+
+function roomSayAckPath() {
+  return uiConfig.room_say_ack_path || "/api/v1/tts/room-say/ack";
+}
+
+async function deliverRoomSayLine(itemOrText, { source = "say" } = {}) {
+  const text = (
+    typeof itemOrText === "string" ? itemOrText : itemOrText?.text || ""
+  ).trim();
+  const sayId = typeof itemOrText === "object" && itemOrText ? itemOrText.say_id : null;
+  const audioUrl =
+    typeof itemOrText === "object" && itemOrText ? itemOrText.audio_url : null;
+  if (!text) return { ok: false, detail: "empty text" };
+  if (sayId) {
+    if (roomSayPlayed.has(sayId)) {
+      return { ok: true, detail: "already-played" };
+    }
+    if (roomSayInFlight.has(sayId)) {
+      return { ok: false, detail: "duplicate in flight" };
+    }
+    roomSayInFlight.add(sayId);
+  }
+  unlockSpeechOnce();
+  if (isKioskLayout()) {
+    setKioskAudioStatus("こよりが話す…", "warn");
+  }
+  let result;
+  try {
+    result = audioUrl
+      ? await playAudioUrl(audioUrl)
+      : await playOutboundNudgeAudio(text);
+  } finally {
+    if (sayId) roomSayInFlight.delete(sayId);
+  }
+  if (result.ok && sayId) {
+    roomSayPlayed.add(sayId);
+  }
+  if (isKioskLayout()) {
+    if (result.ok) {
+      const via = kioskAudioPathLabel(result.detail);
+      setKioskAudioStatus(`再生OK（${via}）`, "ok");
+    } else {
+      setKioskAudioStatus(`再生できず: ${result.detail}`, "error");
+    }
+  }
+  if (!result.ok) {
+    console.warn(`room_say playback failed (${source}):`, result.detail);
+  }
+  return result;
+}
+
+async function pollRoomSayPending() {
+  if (!isKioskLayout()) return;
+  const since = sessionStorage.getItem(ROOM_SAY_SINCE_KEY) || "";
+  const params = new URLSearchParams({ client_id: outboundClientId() });
+  if (since) params.set("since", since);
+  try {
+    const data = await fetchJson(`${roomSayPendingPath()}?${params.toString()}`);
+    for (const item of data.items || []) {
+      if (!item.text) continue;
+      const result = await deliverRoomSayLine(item, { source: item.source || "poll" });
+      if (!result.ok) {
+        continue;
+      }
+      if (item.ts) {
+        const prev = sessionStorage.getItem(ROOM_SAY_SINCE_KEY) || "";
+        if (!prev || item.ts > prev) {
+          sessionStorage.setItem(ROOM_SAY_SINCE_KEY, item.ts);
+        }
+      }
+      if (item.say_id) {
+        await fetch(roomSayAckPath(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+          body: JSON.stringify({
+            say_id: item.say_id,
+            client_id: outboundClientId(),
+          }),
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("room_say poll failed:", err.message);
+  }
+}
+
+function restartRoomSayPollTimer() {
+  if (!isKioskLayout()) return;
+  if (roomSayPollTimer) {
+    clearInterval(roomSayPollTimer);
+    roomSayPollTimer = null;
+  }
+  roomSayPollTimer = setInterval(() => void pollRoomSayPending(), roomSayPollMs());
+}
+
 function restartOutboundPollTimer() {
   if (outboundPollTimer) {
     clearInterval(outboundPollTimer);
     outboundPollTimer = null;
   }
-  outboundPollTimer = setInterval(() => void pollOutboundNudges(), activeOutboundPollMs());
+  outboundPollTimer = setInterval(() => {
+    void pollOutboundNudges();
+  }, activeOutboundPollMs());
+  restartRoomSayPollTimer();
 }
 
 function unlockSpeechOnce() {
@@ -1915,6 +2028,20 @@ function outboundSurfaceTtsEnabled() {
   return Boolean(uiConfig.outbound_surface_tts_enabled);
 }
 
+async function playAudioUrl(url) {
+  if (!url) return { ok: false, detail: "missing audio_url" };
+  unlockSpeechOnce();
+  try {
+    const audio = new Audio(url);
+    audio.preload = "auto";
+    audio.volume = getKioskPlaybackVolume();
+    await audio.play();
+    return { ok: true, detail: "surface-tts-prepared" };
+  } catch (err) {
+    return { ok: false, detail: err.message || "audio-play-failed" };
+  }
+}
+
 async function playOutboundNudgeAudio(text) {
   if (!text) return { ok: false, detail: "empty text" };
   unlockSpeechOnce();
@@ -1929,7 +2056,14 @@ async function playOutboundNudgeAudio(text) {
       body: JSON.stringify({ text }),
     });
     if (!res.ok) {
-      throw new Error(`surface TTS ${res.status}`);
+      let detail = `surface TTS ${res.status}`;
+      try {
+        const errBody = await res.json();
+        if (errBody?.detail) detail = String(errBody.detail);
+      } catch {
+        /* ignore */
+      }
+      throw new Error(detail);
     }
     const data = await res.json();
     const url = data.audio_url;
@@ -1942,7 +2076,11 @@ async function playOutboundNudgeAudio(text) {
     await audio.play();
     return { ok: true, detail: "surface-tts" };
   } catch (err) {
-    console.warn("surface TTS failed, falling back to Web Speech:", err.message);
+    console.warn("surface TTS failed:", err.message);
+    if (isKioskLayout()) {
+      return { ok: false, detail: err.message || "surface-tts-failed" };
+    }
+    console.warn("falling back to Web Speech:", err.message);
     try {
       speakOutboundNudge(text);
       return { ok: true, detail: "web-speech-fallback" };
@@ -1953,7 +2091,7 @@ async function playOutboundNudgeAudio(text) {
 }
 
 function kioskAudioPathLabel(detail) {
-  if (detail === "surface-tts") return "Aivis";
+  if (detail === "surface-tts" || detail === "surface-tts-prepared") return "Aivis";
   if (detail === "web-speech") return "Web Speech";
   if (detail === "web-speech-fallback") return "Web Speech（予備）";
   return detail || "不明";
@@ -2027,7 +2165,11 @@ function setupKioskAudio() {
   if (isKioskLayout()) {
     section.hidden = false;
     syncKioskAudioVolumeUi();
-    setKioskAudioStatus("画面タップでブラウザ音声を解除", "warn");
+    if (uiConfig.surface_tts_ready === false && uiConfig.surface_tts_status) {
+      setKioskAudioStatus(uiConfig.surface_tts_status, "error");
+    } else {
+      setKioskAudioStatus("画面タップでブラウザ音声を解除", "warn");
+    }
   } else {
     section.hidden = true;
     return;
@@ -2312,7 +2454,23 @@ function setupOutboundSse() {
   source.addEventListener("room_say", (event) => {
     try {
       const data = JSON.parse(event.data);
-      if (data.text) void playKioskSpeech(data.text);
+      if (!data.text) return;
+      void (async () => {
+        const result = await deliverRoomSayLine(data, { source: "sse" });
+        if (!result.ok || !data.say_id) return;
+        try {
+          await fetch(roomSayAckPath(), {
+            method: "POST",
+            headers: { "Content-Type": "application/json; charset=utf-8" },
+            body: JSON.stringify({
+              say_id: data.say_id,
+              client_id: outboundClientId(),
+            }),
+          });
+        } catch (ackErr) {
+          console.warn("room_say ack failed:", ackErr.message);
+        }
+      })();
     } catch (err) {
       console.warn("room_say SSE parse failed:", err.message);
     }
@@ -2325,21 +2483,31 @@ function setupOutboundSse() {
   };
 }
 
+function syncKioskTtsHealthFromConfig() {
+  if (!isKioskLayout()) return;
+  const section = document.getElementById("kiosk-audio-section");
+  if (!section || section.hidden) return;
+  if (uiConfig.outbound_surface_tts_enabled && uiConfig.surface_tts_ready === false) {
+    setKioskAudioStatus(uiConfig.surface_tts_status || "TTS エンジンが止まっています", "error");
+  }
+}
+
 async function refreshOutboundRoutingConfig() {
   try {
     const data = await fetchJson("/api/v1/ui-config");
     uiConfig.kiosk_primary_active = Boolean(data.kiosk_primary_active);
     uiConfig.kiosk_primary_enabled = data.kiosk_primary_enabled !== false;
+    uiConfig.surface_tts_ready = Boolean(data.surface_tts_ready);
+    uiConfig.surface_tts_status = data.surface_tts_status || "";
+    syncKioskTtsHealthFromConfig();
   } catch {
     /* ignore */
   }
 }
 
 async function pollOutboundNudges() {
+  await refreshOutboundRoutingConfig();
   const kiosk = isKioskLayout();
-  if (!kiosk) {
-    await refreshOutboundRoutingConfig();
-  }
   if (kiosk && document.hidden) return;
   const since = sessionStorage.getItem(OUTBOUND_SINCE_KEY) || "";
   const params = new URLSearchParams({ client_id: outboundClientId() });
@@ -2381,9 +2549,11 @@ function setupOutboundPoll() {
   setupOutboundSse();
   restartOutboundPollTimer();
   void pollOutboundNudges();
+  void pollRoomSayPending();
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
       void pollOutboundNudges();
+      void pollRoomSayPending();
       if (outboundSseEnabled() && outboundEventSource?.readyState === EventSource.CLOSED) {
         setupOutboundSse();
       }

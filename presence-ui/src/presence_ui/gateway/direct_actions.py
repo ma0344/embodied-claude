@@ -31,6 +31,21 @@ from presence_ui.services.outbound import (
 
 logger = logging.getLogger(__name__)
 
+
+def outbound_nudge_speak_enabled(*, want_speak: bool) -> bool:
+    """When kiosk is primary, TTS goes via room_say only (avoid double playback)."""
+    if not want_speak:
+        return False
+    try:
+        from presence_ui.services.outbound_kiosk import kiosk_primary_active
+
+        if kiosk_primary_active():
+            return False
+    except Exception:
+        pass
+    return True
+
+
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _HOOKS = _REPO_ROOT / ".claude" / "hooks"
 if _HOOKS.is_dir() and str(_HOOKS) not in sys.path:
@@ -277,7 +292,7 @@ async def talk_to_companion_direct(
         stores,
         person_id=person_id,
         text=line,
-        speak=True,
+        speak=outbound_nudge_speak_enabled(want_speak=True),
         channels=channels,
         desire="miss_companion",
         skip_cooldown=skip_cooldown,
@@ -305,6 +320,15 @@ async def talk_to_companion_direct(
     speak_detail = ""
     if voice_local_enabled() and should_deliver_pc_local():
         spoke_local, speak_detail = await speak_text(line, speaker="local")
+
+    try:
+        from presence_ui.services.kiosk_say import deliver_speak_to_kiosk
+        from presence_ui.services.outbound_kiosk import kiosk_primary_active
+
+        if kiosk_primary_active():
+            deliver_speak_to_kiosk(line, source="talk")
+    except Exception as exc:
+        logger.warning("kiosk talk say failed: %s", exc)
 
     stores.orchestrator.record_agent_experience(
         RecordAgentExperienceInput(
@@ -397,15 +421,20 @@ async def remind_commitment_direct(
 
     line = (text or "").strip()
     if not line:
-        label = commitment.text.strip()
-        line = f"まー、{label} の時間やで" if label else "まー、リマインドの時間やで"
+        speak_line = (commitment.speak_line or "").strip()
+        if speak_line:
+            line = speak_line
+        else:
+            label = commitment.text.strip()
+            line = f"まー、{label} の時間やで" if label else "まー、リマインドの時間やで"
 
+    use_say = commitment.delivery != "nudge_only"
     channels = default_surface_channels()
     enqueue = enqueue_outbound_nudge(
         stores,
         person_id=person_id,
         text=line,
-        speak=True,
+        speak=outbound_nudge_speak_enabled(want_speak=use_say),
         channels=channels,
         desire="reminder",
         skip_cooldown=True,
@@ -431,8 +460,18 @@ async def remind_commitment_direct(
 
     spoke_local = False
     speak_detail = ""
-    if voice_local_enabled() and should_deliver_pc_local():
+    if use_say and voice_local_enabled() and should_deliver_pc_local():
         spoke_local, speak_detail = await speak_text(line, speaker="local")
+
+    if use_say:
+        try:
+            from presence_ui.services.kiosk_say import deliver_speak_to_kiosk
+            from presence_ui.services.outbound_kiosk import kiosk_primary_active
+
+            if kiosk_primary_active():
+                deliver_speak_to_kiosk(line, source="reminder")
+        except Exception as exc:
+            logger.warning("kiosk reminder say failed: %s", exc)
 
     commitment_id = commitment.commitment_id
     if commitment_id:
@@ -454,7 +493,7 @@ async def remind_commitment_direct(
             artifacts=outbound_delivery_artifacts(
                 nudge_id=enqueue.nudge_id or "",
                 channels=list(enqueue.channels),
-                speak=True,
+                speak=use_say,
                 delivered_local=spoke_local,
             ),
         )

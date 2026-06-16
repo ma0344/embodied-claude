@@ -7,10 +7,11 @@ Surface が「こよりの本線」のとき、PC スピーカーは黙り、キ
 1. `http://<ma-home-ip>:8090/?kiosk=1` を **Surface で開く**（`?kiosk=1` 必須）
 2. 画面を **1回タップ**（ブラウザの自動再生ロック解除）→ ハンバーガーメニュー → **音量** + **音声テスト**
 3. **無音のとき** — メニュー内スライダー（部屋の再生）と **設定 → サウンド**（Windows 全体）の両方を確認
-4. `restart-presence-ui.ps1` 済み（8090 のみ使うなら Claude Code 再起動は不要）
-5. 診断: `curl -s http://127.0.0.1:8090/api/v1/ui-config` → `"kiosk_primary_active": true`
+4. **AivisSpeech が ma-home PC で起動** — `scripts/start-aivis-tts.ps1`（`:10101`）。未起動だとキオスクは `surface TTS 502/503`
+5. `restart-presence-ui.ps1` 済み（8090 のみ使うなら Claude Code 再起動は不要）
+6. 診断: `curl -s http://127.0.0.1:8090/api/v1/ui-config` → `"kiosk_primary_active": true` **かつ** `"surface_tts_ready": true`
 
-`false` のときはキオスクがサーバーに未登録（SSE 未接続 or 古い app.js で `client_id` が `web-*` のまま）。
+`kiosk_primary_active` が `false` のときはキオスクがサーバーに未登録（SSE 未接続 or 古い app.js で `client_id` が `web-*` のまま）。
 
 ## 会話で say を試す
 

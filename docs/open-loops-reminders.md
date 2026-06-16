@@ -62,9 +62,10 @@ uv run python -c "from relationship_mcp.store import RelationshipStore; print(ha
 | 項目 | 内容 | 対策 |
 |------|------|------|
 | **relationship-mcp の reinstall 忘れ** | 古い venv だと `list_due_commitments` が無く、`commitments_due` が常に空 → リマインドが鳴らない | 上記デプロイ手順。コード変更のたびに `uv pip install --reinstall` + restart |
-| **リマインド文面** | 固定テンプレ（例: 「まー、{text} の時間やで」）。LLM 生成は未接続 | 将来 `generate_koyori_reply` を `remind_commitment_direct` に載せる余地あり |
-| **`grace_minutes`** | API 引数はあるが、現状は **24h catch-up**（`catch_up_hours`）のみで期限切れ commitment を拾う。狭い grace 窓は未使用 | tick 間隔（15m）と catch-up で実運用。必要なら `list_due_commitments` を絞る |
-| **時刻パース** | 日本語の「N時にリマインド」「明日の10時」中心。英語・曖昧表現は未対応 | 失敗時は commitment が作られないだけ（既存 loop は維持） |
+| **リマインド文面** | 登録時に `「…」` から `speak_line` を抽出し `metadata_json` に保存。鳴るときは `speak_line` をそのまま使用（LLM 生成は Phase B） | `delivery: say \| nudge_only` で音声 on/off |
+| **`N分後`** | `10分後に…教えて` / `say でしゃべって` をパース（全角数字対応） | 曖昧な相対表現は未対応 |
+| **時刻精度** | Windows タスクは **15分間隔**（18:26 → 次 18:41）。`3分後` は最大 ~15分遅れ | presence-ui **reminder watchdog**（既定60秒、`PRESENCE_REMINDER_POLL_SEC`） |
+| **音声（Surface）** | `room_inbound` のみだと SSE 切断時に無音。MCP `say` 経路と別 | `room_say` SSE + **poll フォールバック**（`/api/v1/tts/room-say/pending`） |
 | **当日の相対日** | `明日` loop は **会議当日は open のまま**（`include_today=false`）。当日終了後に auto-close | 当日中に閉じたいときは `purge-stale-open-loops.py --include-today` |
 
 ---
@@ -74,7 +75,7 @@ uv run python -c "from relationship_mcp.store import RelationshipStore; print(ha
 | モジュール | 役割 |
 |-----------|------|
 | `relationship_mcp/date_resolution.py` | 相対日付 → `date` |
-| `relationship_mcp/reminder_intent.py` | 発話 → `(label, due_at_iso)` |
+| `relationship_mcp/reminder_intent.py` | 発話 → `ReminderSpec`（title / due_at / speak_line / delivery） |
 | `relationship_mcp/store.py` | ingest / `list_due_commitments` / `close_stale_open_loops` |
 | `interaction_orchestrator_mcp/compose.py` | `[commitments_due]` |
 | `interaction_orchestrator_mcp/plan.py` | 自律時 commitment 優先 |

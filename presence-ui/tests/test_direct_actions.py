@@ -6,7 +6,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from interaction_orchestrator_mcp.schemas import InteractionContext, ResponseContract, ResponsePlan
+from interaction_orchestrator_mcp.schemas import (
+    CommitmentSummary,
+    InteractionContext,
+    ResponseContract,
+    ResponsePlan,
+)
 from presence_ui.gateway import direct_actions, social_chat
 from presence_ui.services.llm import build_social_turn_delta
 from presence_ui.services.vision_capture import VisionCaptureResult
@@ -161,6 +166,27 @@ async def test_execute_autonomous_plan_silent_move() -> None:
     assert outcome.action == "stay_silent"
 
 
+def test_outbound_nudge_speak_disabled_when_kiosk_primary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "presence_ui.services.outbound_kiosk.kiosk_primary_active",
+        lambda: True,
+    )
+    assert direct_actions.outbound_nudge_speak_enabled(want_speak=True) is False
+    assert direct_actions.outbound_nudge_speak_enabled(want_speak=False) is False
+
+
+def test_outbound_nudge_speak_enabled_when_kiosk_inactive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "presence_ui.services.outbound_kiosk.kiosk_primary_active",
+        lambda: False,
+    )
+    assert direct_actions.outbound_nudge_speak_enabled(want_speak=True) is True
+
+
 @pytest.mark.asyncio
 async def test_execute_smoke_action_observe_room() -> None:
     stores = MagicMock()
@@ -266,3 +292,149 @@ def test_intercept_private_reflection_skips_claude(
     )
     assert result.forward is False
     assert result.direct_action_summary == "saved"
+
+
+@pytest.mark.asyncio
+async def test_remind_commitment_direct_kiosk_primary_skips_outbound_speak() -> None:
+    stores = MagicMock()
+    stores.relationship.complete_commitment.return_value = {"commitment_id": "c1"}
+    ctx = _ctx()
+    ctx.commitments_due = [
+        CommitmentSummary(
+            commitment_id="c1",
+            text="reminder",
+            due_at="2026-06-16T19:50:00+09:00",
+            status="active",
+            speak_line="まー、時間やで",
+            delivery="say",
+        )
+    ]
+    plan = _plan(allowed=["remind_commitment"])
+
+    with (
+        patch(
+            "presence_ui.gateway.direct_actions.boundary_allows",
+            return_value=(True, []),
+        ),
+        patch(
+            "presence_ui.gateway.direct_actions.enqueue_outbound_nudge",
+            return_value=MagicMock(ok=True, nudge_id="n1", channels=["kiosk"]),
+        ) as enqueue_mock,
+        patch(
+            "presence_ui.gateway.direct_actions.voice_local_enabled",
+            return_value=False,
+        ),
+        patch(
+            "presence_ui.services.outbound_kiosk.kiosk_primary_active",
+            return_value=True,
+        ),
+        patch(
+            "presence_ui.services.kiosk_say.deliver_speak_to_kiosk",
+            return_value=(1, "say_1", "/api/v1/tts/surface/abc"),
+        ) as kiosk_say_mock,
+    ):
+        outcome = await direct_actions.remind_commitment_direct(
+            stores,
+            person_id="ma",
+            ctx=ctx,
+            plan=plan,
+        )
+
+    assert outcome.ok is True
+    enqueue_mock.assert_called_once()
+    assert enqueue_mock.call_args.kwargs["speak"] is False
+    kiosk_say_mock.assert_called_once_with("まー、時間やで", source="reminder")
+
+
+@pytest.mark.asyncio
+async def test_remind_commitment_direct_uses_speak_line_metadata() -> None:
+    stores = MagicMock()
+    stores.relationship.complete_commitment.return_value = {"commitment_id": "c1"}
+    ctx = _ctx()
+    ctx.commitments_due = [
+        CommitmentSummary(
+            commitment_id="c1",
+            text="10分後リマインド",
+            due_at="2026-06-16T18:14:00+09:00",
+            status="active",
+            speak_line="まー、時間やで！！",
+            delivery="say",
+        )
+    ]
+    plan = _plan(allowed=["remind_commitment"])
+
+    with (
+        patch(
+            "presence_ui.gateway.direct_actions.boundary_allows",
+            return_value=(True, []),
+        ),
+        patch(
+            "presence_ui.gateway.direct_actions.enqueue_outbound_nudge",
+            return_value=MagicMock(ok=True, nudge_id="n1", channels=["kiosk"]),
+        ) as enqueue_mock,
+        patch(
+            "presence_ui.gateway.direct_actions.voice_local_enabled",
+            return_value=False,
+        ),
+    ):
+        outcome = await direct_actions.remind_commitment_direct(
+            stores,
+            person_id="ma",
+            ctx=ctx,
+            plan=plan,
+        )
+
+    assert outcome.ok is True
+    assert outcome.summary == "まー、時間やで！！"
+    enqueue_mock.assert_called_once()
+    assert enqueue_mock.call_args.kwargs["text"] == "まー、時間やで！！"
+    assert enqueue_mock.call_args.kwargs["speak"] is True
+
+
+@pytest.mark.asyncio
+async def test_remind_commitment_direct_nudge_only_skips_say() -> None:
+    stores = MagicMock()
+    stores.relationship.complete_commitment.return_value = {"commitment_id": "c2"}
+    ctx = _ctx()
+    ctx.commitments_due = [
+        CommitmentSummary(
+            commitment_id="c2",
+            text="quiet reminder",
+            due_at="2026-06-16T18:14:00+09:00",
+            status="active",
+            speak_line="まー、そろそろやで",
+            delivery="nudge_only",
+        )
+    ]
+    plan = _plan(allowed=["remind_commitment"])
+
+    with (
+        patch(
+            "presence_ui.gateway.direct_actions.boundary_allows",
+            return_value=(True, []),
+        ),
+        patch(
+            "presence_ui.gateway.direct_actions.enqueue_outbound_nudge",
+            return_value=MagicMock(ok=True, nudge_id="n2", channels=["kiosk"]),
+        ) as enqueue_mock,
+        patch(
+            "presence_ui.gateway.direct_actions.voice_local_enabled",
+            return_value=True,
+        ),
+        patch(
+            "presence_ui.services.tts.speak_text",
+            new=AsyncMock(),
+        ) as speak_mock,
+    ):
+        outcome = await direct_actions.remind_commitment_direct(
+            stores,
+            person_id="ma",
+            ctx=ctx,
+            plan=plan,
+        )
+
+    assert outcome.ok is True
+    enqueue_mock.assert_called_once()
+    assert enqueue_mock.call_args.kwargs["speak"] is False
+    speak_mock.assert_not_called()
+

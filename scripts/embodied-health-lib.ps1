@@ -73,6 +73,23 @@ function Test-MemoryHttpHealth {
     }
 }
 
+function Test-AivisHttpHealth {
+    param(
+        [int]$Port = 10101,
+        [double]$TimeoutSec = 3.0
+    )
+    $uri = "http://127.0.0.1:$Port/version"
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        $null = Invoke-RestMethod -Uri $uri -TimeoutSec $TimeoutSec
+        $sw.Stop()
+        return @{ Ok = $true; Ms = $sw.ElapsedMilliseconds }
+    } catch {
+        $sw.Stop()
+        return @{ Ok = $false; Reason = $_.Exception.Message; Ms = $sw.ElapsedMilliseconds }
+    }
+}
+
 function Test-MemoryHttpRecall {
     param(
         [int]$Port = 18900,

@@ -88,6 +88,8 @@ class CommitmentSummary(BaseModel):
     text: str
     due_at: str | None = None
     status: str
+    speak_line: str | None = None
+    delivery: Literal["say", "nudge_only"] = "say"
 
 
 class FollowupSuggestion(BaseModel):

@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ
 
-**最終更新**: 2026-06-16（OL1+OL2 実装・A4f 済・次は A4g）  
+**最終更新**: 2026-06-16（OL1+OL2 済・A4g 運用済・次は C11g）  
 **方針**: こより本体（記憶・gateway 身体）は **様子見**。部屋 UI は **Native 会話エンジン + `/` の殻** を育てる（8080 プロキシ UI は投資しない）。
 
 **実行方針（合意 2026-06-14）**: 判断は compose/plan/stores のまま。**身体・自律の実行**は MCP に頼らず gateway 直実行へ（remember 直実行と同型）。詳細 → [gateway-direct-actions.md](./gateway-direct-actions.md)
@@ -16,21 +16,21 @@
 | **D** | Backlog 最新化 | このファイルを現実に合わせる | **随時** |
 | **B** | 運用自動化 | ログオン常駐・手起動を減らす | **ほぼ完了**（B2 LM Studio 手動のみ） |
 | **C** | **部屋 UI（Native + Surface）** | `/` 殻 + キオスク UX | **C11 実戦 OK** → 磨きは任意 |
-| **A4** | **能動届け（Outbound）** | A4b+/c+/f/g 実装済み | **A4g 運用** |
+| **A4** | **能動届け（Outbound）** | A4b+/c+/f/g 実装・運用済み | **運用中** |
 | **OL** | Open Loops / リマインド | OL1+OL2 実装済み（→ [open-loops-reminders.md](./open-loops-reminders.md)） | **運用確認** |
 | **A** | 記憶・gateway 身体 | compose / see / dismiss | **様子見**（大きな追加は止める） |
 | **C12** | intent router | 曖昧な「見て」分類 | 会話快適化（後） |
 
 ### 次の一手 — 優先度案（2026-06-10 → **まー合意: 1→3→2→C11g**）
 
-**いまのボトルネック**: **A4g 運用**（外出時 ntfy）と **OL 実戦確認**（リマインド発火・reinstall 手順）。詳細 → [open-loops-reminders.md](./open-loops-reminders.md)
+**いまのボトルネック**: **C11g**（Surface 画面消灯）と **OL 実戦確認**（リマインド発火・reinstall 手順）。詳細 → [open-loops-reminders.md](./open-loops-reminders.md)
 
 | tier | 順 | 項目 | 状態 |
 |------|----|------|------|
 | **1** | ① | **A4f 運用** | **済** — `EmbodiedClaude-AutonomousTick`、15m + logon |
 | **2** | ② | **OL1 + OL2** | **済（コード）** — 日付解決 + commitment → tick リマインド。実機確認・残リスクは上記 doc |
-| **3** | ③ | **A4g 運用** | **次** — `PRESENCE_OUTBOUND_NTFY_URL`（外出時・8090 閉じてる PC 向け） |
-| **4** | ④ | **C11g** スリープ / 画面消灯 | Surface 常時点灯・焼き付き対策 |
+| **3** | ③ | **A4g 運用** | **済** — ntfy / Pushover（外出時・8090 閉じてる PC 向け） |
+| **4** | ④ | **C11g** スリープ / 画面消灯 | **次** — 仕様合意済み（下記） |
 | **—** | ⑤ | **A4j+** / **C12** | 着信返信 UX・intent router（任意） |
 | **—** | — | C11c/d、体温 LHM、Irodori TTS | 任意の磨き |
 
@@ -338,7 +338,12 @@ MVP チェックリスト:
 - [x] **C11e** 右コンテキストレール（視界/状態のピン留め、localStorage 永続、チャット左・レール右）
 - [x] **C11d−** 状態カード折りたたみ（`[ いまの気持ち > ]`、レール/ドロワーは初期閉、開閉は localStorage）
 - [x] **C11f+** キオスク音量スライダー — メニュー内 0–100%、localStorage、Aivis / Web Speech に適用
-- [ ] **C11g** スリープ / 画面消灯 — アイドル N 分で画面オフ（`navigator.wakeLock` 解除 or OS 電源設定連携）、タップで復帰。SSE は維持 or バックグラウンド方針要検討
+- [x] **C11g** スリープ / 画面消灯 — **実装済み 2026-06-16**:
+  - **アイドル判定**: 無操作時間（タッチ・キー・送信等）が閾値超え
+  - **N 分**: 5 / 10 / 15 — **ドロワー UI で可変**（localStorage）
+  - **消灯**: ブラウザ黒オーバーレイは使わず **OS 画面オフ任せ**（`wakeLock` 解除 → Windows 電源プラン）
+  - **自動復帰**: 消灯中の say / 着信（outbound・room_say）で画面を戻す — **UI で ON/OFF 可変**
+  - **実装メモ**: キオスクは SSE で着信・リマインドは `document.hidden` でも届くが、ポール fallback は hidden 時スキップ中 → 自動復帰 ON 時は `wakeLock.request` + 音声再生で復帰を試みる
 
 | 優先 | 項目 | メモ |
 |------|------|------|

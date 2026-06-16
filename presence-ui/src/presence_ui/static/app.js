@@ -17,6 +17,9 @@ const SHOW_DEBUG_INJECTION_KEY = "koyori-show-debug-injection";
 const KIOSK_LAYOUT_STORAGE_KEY = "koyori-kiosk-layout";
 const KIOSK_AUDIO_VOLUME_KEY = "koyori-kiosk-audio-volume";
 const KIOSK_AUDIO_VOLUME_DEFAULT = 1;
+const KIOSK_SLEEP_MINUTES_KEY = "koyori-kiosk-sleep-minutes";
+const KIOSK_SLEEP_MINUTES_DEFAULT = 10;
+const KIOSK_SLEEP_WAKE_ON_NOTIFY_KEY = "koyori-kiosk-sleep-wake-on-notify";
 const CONTEXT_RAIL_PINS_KEY = "koyori-context-rail-pins";
 const STATUS_EXPAND_KEY = "koyori-status-expand";
 
@@ -48,6 +51,9 @@ const roomSayPlayed = new Set();
 let outboundEventSource = null;
 let outboundSseConnected = false;
 let speechUnlocked = false;
+let wakeLock = null;
+let idleTimer = null;
+let idleActive = false;
 let roomInboundQueue = [];
 let roomInboundCurrent = null;
 
@@ -1418,6 +1424,8 @@ async function sendChatMessage(text) {
   setComposeEnabled(false);
   clearChatDraft();
   chatPinnedToBottom = true;
+  // C11g: 送信でアイドルタイマーをリセット
+  document.dispatchEvent(new Event("chat-send"));
 
   try {
     if (isNativeChat()) {
@@ -1983,6 +1991,8 @@ function roomSayAckPath() {
 }
 
 async function deliverRoomSayLine(itemOrText, { source = "say" } = {}) {
+  // C11g: say 到着で画面復帰
+  void wakeFromSleepOnNotify();
   const text = (
     typeof itemOrText === "string" ? itemOrText : itemOrText?.text || ""
   ).trim();
@@ -2289,6 +2299,154 @@ function setupKioskAudio() {
   document.addEventListener("touchstart", onFirstGesture, { once: true, passive: true });
 }
 
+// ── C11g スリープ / 画面消灯 ──────────────────────────────────────
+
+function getKioskSleepMinutes() {
+  try {
+    const raw = localStorage.getItem(KIOSK_SLEEP_MINUTES_KEY);
+    if (raw == null) return KIOSK_SLEEP_MINUTES_DEFAULT;
+    const n = Number(raw);
+    return [5, 10, 15].includes(n) ? n : KIOSK_SLEEP_MINUTES_DEFAULT;
+  } catch {
+    return KIOSK_SLEEP_MINUTES_DEFAULT;
+  }
+}
+
+function setKioskSleepMinutes(minutes) {
+  const valid = [5, 10, 15].includes(Number(minutes)) ? Number(minutes) : KIOSK_SLEEP_MINUTES_DEFAULT;
+  try {
+    localStorage.setItem(KIOSK_SLEEP_MINUTES_KEY, String(valid));
+  } catch {
+    /* ignore quota */
+  }
+  return valid;
+}
+
+function getKioskSleepWakeOnNotify() {
+  try {
+    const raw = localStorage.getItem(KIOSK_SLEEP_WAKE_ON_NOTIFY_KEY);
+    return raw !== "0";  // default ON
+  } catch {
+    return true;
+  }
+}
+
+function setKioskSleepWakeOnNotify(enabled) {
+  try {
+    localStorage.setItem(KIOSK_SLEEP_WAKE_ON_NOTIFY_KEY, enabled ? "1" : "0");
+  } catch {
+    /* ignore quota */
+  }
+}
+
+async function acquireWakeLock() {
+  if (!("wakeLock" in navigator)) return;
+  if (wakeLock && !wakeLock.released) return;
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    wakeLock.addEventListener("release", () => {
+      // OS が手動で解放した場合（例: 画面オフ後の復帰）
+    });
+  } catch {
+    wakeLock = null;
+  }
+}
+
+function releaseWakeLock() {
+  if (!wakeLock || wakeLock.released) return;
+  try {
+    wakeLock.release();
+  } catch {
+    /* ignore */
+  }
+  wakeLock = null;
+}
+
+function resetIdleTimer() {
+  if (!isKioskLayout() || !idleActive) return;
+  if (idleTimer) clearTimeout(idleTimer);
+  const ms = getKioskSleepMinutes() * 60 * 1000;
+  idleTimer = setTimeout(() => {
+    if (!isKioskLayout()) return;
+    releaseWakeLock();
+  }, ms);
+}
+
+function setupIdleSleep() {
+  if (!isKioskLayout()) return;
+  idleActive = true;
+  const resetEvents = ["pointerdown", "pointermove", "touchstart", "keydown"];
+  for (const ev of resetEvents) {
+    document.addEventListener(ev, resetIdleTimer, { passive: true });
+  }
+  // 送信でもリセット
+  document.addEventListener("chat-send", resetIdleTimer, { passive: true });
+  // visibilitychange: 画面復帰時に wakeLock を再取得
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && isKioskLayout()) {
+      void acquireWakeLock();
+      resetIdleTimer();
+    }
+  });
+  void acquireWakeLock();
+  resetIdleTimer();
+}
+
+/** say / 着信 到着時に画面を戻す（自動復帰 ON の場合）。
+ *  wakeLock.request は visible でないと拒否されるため、document.title 変更で
+ *  OSレベルの通知は出せないが、SSE 自体は hidden でも届く。
+ *  audio 再生が成功すると OS が Surface 画面を戻すことが多い。 */
+async function wakeFromSleepOnNotify() {
+  if (!isKioskLayout() || !getKioskSleepWakeOnNotify()) return;
+  if (!document.hidden) {
+    // すでに見えている場合は wakeLock を念のため再取得してタイマーをリセット
+    await acquireWakeLock();
+    resetIdleTimer();
+    return;
+  }
+  // document が hidden の間は wakeLock.request は失敗するが、
+  // 音声再生でブラウザが前面に出ることを期待（Chromium Edge は kiosk で全画面のため問題ない）
+  await acquireWakeLock();
+  resetIdleTimer();
+}
+
+function syncKioskSleepUi() {
+  const minutes = getKioskSleepMinutes();
+  const wakeOnNotify = getKioskSleepWakeOnNotify();
+  const select = document.getElementById("kiosk-sleep-minutes");
+  const checkbox = document.getElementById("kiosk-sleep-wake-notify");
+  if (select) select.value = String(minutes);
+  if (checkbox) checkbox.checked = wakeOnNotify;
+}
+
+function setupKioskSleep() {
+  if (!isKioskLayout()) {
+    const section = document.getElementById("kiosk-sleep-section");
+    if (section) section.hidden = true;
+    return;
+  }
+  const section = document.getElementById("kiosk-sleep-section");
+  if (section) section.hidden = false;
+  syncKioskSleepUi();
+
+  const select = document.getElementById("kiosk-sleep-minutes");
+  if (select) {
+    select.addEventListener("change", () => {
+      setKioskSleepMinutes(Number(select.value));
+      resetIdleTimer();
+    });
+  }
+  const checkbox = document.getElementById("kiosk-sleep-wake-notify");
+  if (checkbox) {
+    checkbox.addEventListener("change", () => {
+      setKioskSleepWakeOnNotify(checkbox.checked);
+    });
+  }
+  setupIdleSleep();
+}
+
+// ── C11g ここまで ─────────────────────────────────────────────────
+
 async function playKioskSpeech(text) {
   if (!isKioskLayout()) {
     await playOutboundNudgeAudio(text);
@@ -2346,6 +2504,8 @@ function enqueueRoomInbound(item) {
   if (!item?.nudge_id || !item.text) return;
   if (roomInboundCurrent?.nudge_id === item.nudge_id) return;
   if (roomInboundQueue.some((row) => row.nudge_id === item.nudge_id)) return;
+  // C11g: 着信で画面復帰
+  void wakeFromSleepOnNotify();
   roomInboundQueue.push(item);
   void pumpRoomInbound();
 }
@@ -2680,6 +2840,7 @@ function setupKioskLayout() {
   setupRoomDrawer();
   setupContextRail();
   setupKioskAudio();
+  setupKioskSleep();
   setupOutboundPoll();
 }
 

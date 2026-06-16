@@ -129,6 +129,31 @@
         </section>
 
         <section
+          class="room-drawer__section room-drawer__section--sleep"
+          id="kiosk-sleep-section"
+          hidden
+          aria-label="画面消灯"
+        >
+          <h3 class="room-drawer__section-title">画面</h3>
+          <p class="kiosk-sleep__hint">
+            無操作が続いたとき Surface の画面を消灯します（wakeLock 解除 → Windows 電源プランで消灯）。<br>
+            消灯時間は Windows 設定 → 電源 → 画面オフの値と合わせてください。
+          </p>
+          <label class="kiosk-sleep__row" for="kiosk-sleep-minutes">
+            <span class="kiosk-sleep__label">消灯まで</span>
+            <select id="kiosk-sleep-minutes" class="kiosk-sleep__select">
+              <option value="5">5 分</option>
+              <option value="10">10 分</option>
+              <option value="15">15 分</option>
+            </select>
+          </label>
+          <label class="kiosk-sleep__row kiosk-sleep__row--check" for="kiosk-sleep-wake-notify">
+            <input type="checkbox" id="kiosk-sleep-wake-notify" checked />
+            <span class="kiosk-sleep__label">say / 着信で自動復帰する</span>
+          </label>
+        </section>
+
+        <section
           class="room-drawer__section room-drawer__section--audio"
           id="kiosk-audio-section"
           hidden

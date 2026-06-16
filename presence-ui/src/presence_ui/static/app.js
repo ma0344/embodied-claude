@@ -1801,9 +1801,13 @@ async function refreshAll() {
 }
 
 function outboundClientId() {
+  if (isKioskLayout()) {
+    localStorage.setItem(OUTBOUND_CLIENT_ID_KEY, "kiosk");
+    return "kiosk";
+  }
   let id = localStorage.getItem(OUTBOUND_CLIENT_ID_KEY);
-  if (!id) {
-    id = isKioskLayout() ? "kiosk" : `web-${crypto.randomUUID().slice(0, 12)}`;
+  if (!id || id === "kiosk") {
+    id = `web-${crypto.randomUUID().slice(0, 12)}`;
     localStorage.setItem(OUTBOUND_CLIENT_ID_KEY, id);
   }
   return id;
@@ -2259,6 +2263,9 @@ function setupKioskLayout() {
     localStorage.removeItem(KIOSK_LAYOUT_STORAGE_KEY);
   } else if (localStorage.getItem(KIOSK_LAYOUT_STORAGE_KEY) === "1") {
     room.classList.add("room--kiosk");
+  }
+  if (isKioskLayout()) {
+    localStorage.setItem(OUTBOUND_CLIENT_ID_KEY, "kiosk");
   }
   ensureSessionControlsMounted();
   relocateSessionControls();

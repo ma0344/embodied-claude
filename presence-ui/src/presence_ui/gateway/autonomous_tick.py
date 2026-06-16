@@ -20,6 +20,7 @@ from presence_ui.gateway.direct_actions import (
     direct_actions_enabled,
     execute_autonomous_plan,
 )
+from social_core import utc_now
 
 
 @dataclass(slots=True)
@@ -62,6 +63,14 @@ async def run_autonomous_tick(
         )
 
     stores = get_stores()
+    try:
+        stores.relationship.close_stale_open_loops(
+            person_id=person_id,
+            as_of=utc_now(),
+            timezone=stores.policy_timezone,
+        )
+    except Exception:
+        pass
     ctx = compose_interaction_context(
         ComposeInteractionContextInput(
             person_id=person_id,

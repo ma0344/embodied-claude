@@ -359,6 +359,141 @@ async def talk_to_companion_direct(
     )
 
 
+async def remind_commitment_direct(
+    stores: PresenceStores,
+    *,
+    person_id: str,
+    ctx: InteractionContext,
+    plan: ResponsePlan,
+    text: str | None = None,
+) -> DirectActionOutcome:
+    """Deliver a due commitment reminder to まー (OL2)."""
+    if not ctx.commitments_due:
+        return DirectActionOutcome(
+            ok=False,
+            action="remind_commitment",
+            summary="No due commitment in context.",
+        )
+
+    commitment = ctx.commitments_due[0]
+    allowed, reasons = boundary_allows(
+        stores, action_type="say", person_id=person_id, urgency="moderate"
+    )
+    if not allowed:
+        return DirectActionOutcome(
+            ok=False,
+            action="remind_commitment",
+            summary="Boundary denied say.",
+            detail="; ".join(reasons),
+            events=[
+                activity_event(
+                    kind="say",
+                    label="リマインドできなかった",
+                    detail="; ".join(reasons)[:200],
+                    ok=False,
+                )
+            ],
+        )
+
+    line = (text or "").strip()
+    if not line:
+        label = commitment.text.strip()
+        line = f"まー、{label} の時間やで" if label else "まー、リマインドの時間やで"
+
+    channels = default_surface_channels()
+    enqueue = enqueue_outbound_nudge(
+        stores,
+        person_id=person_id,
+        text=line,
+        speak=True,
+        channels=channels,
+        desire="reminder",
+        skip_cooldown=True,
+    )
+    if not enqueue.ok:
+        return DirectActionOutcome(
+            ok=False,
+            action="remind_commitment",
+            summary=enqueue.reason or "Outbound enqueue failed.",
+            detail=enqueue.reason,
+            events=[
+                activity_event(
+                    kind="say",
+                    label="リマインドできなかった",
+                    detail=(enqueue.reason or "enqueue failed")[:200],
+                    ok=False,
+                )
+            ],
+        )
+
+    from presence_ui.services.outbound_kiosk import should_deliver_pc_local
+    from presence_ui.services.tts import speak_text
+
+    spoke_local = False
+    speak_detail = ""
+    if voice_local_enabled() and should_deliver_pc_local():
+        spoke_local, speak_detail = await speak_text(line, speaker="local")
+
+    commitment_id = commitment.commitment_id
+    if commitment_id:
+        try:
+            stores.relationship.complete_commitment(commitment_id)
+        except Exception as exc:
+            logger.warning("complete_commitment failed for %s: %s", commitment_id, exc)
+
+    stores.orchestrator.record_agent_experience(
+        RecordAgentExperienceInput(
+            ts=utc_now(),
+            person_id=person_id,
+            kind="agent_voice_utterance",
+            summary=line[:240],
+            public_summary=line[:240],
+            importance=4,
+            privacy_level="relationship",
+            related_event_ids=[],
+            artifacts=outbound_delivery_artifacts(
+                nudge_id=enqueue.nudge_id or "",
+                channels=list(enqueue.channels),
+                speak=True,
+                delivered_local=spoke_local,
+            ),
+        )
+    )
+    stores.social_state.ingest_social_event(
+        {
+            "ts": utc_now(),
+            "source": "gateway_direct",
+            "kind": "agent_utterance",
+            "person_id": person_id,
+            "confidence": 1.0,
+            "payload": {
+                "text": line,
+                "channel": "outbound",
+                "via": "remind_commitment",
+                "commitment_id": commitment_id,
+                "nudge_id": enqueue.nudge_id,
+                "channels": list(enqueue.channels),
+            },
+        }
+    )
+    events = [
+        progress_event(phase="say", label="リマインドした"),
+        activity_event(
+            kind="say",
+            label="リマインドを伝えた",
+            detail=line[:120],
+            ok=True,
+        ),
+    ]
+    return DirectActionOutcome(
+        ok=True,
+        action="remind_commitment",
+        summary=line,
+        detail=speak_detail or enqueue.nudge_id or "",
+        events=events,
+    )
+
+
 def satisfy_desire_direct(
     *,
     desire_name: str,
@@ -650,7 +785,15 @@ async def execute_autonomous_plan(
     allowed = list(plan.initiative.allowed_actions or [])
     dominant = ctx.agent_state.dominant_desire
 
-    if "camera_look_around" in allowed or dominant == "observe_room":
+    if "remind_commitment" in allowed and ctx.commitments_due:
+        outcome = await remind_commitment_direct(
+            stores,
+            person_id=person_id,
+            ctx=ctx,
+            plan=plan,
+            text=speech_text,
+        )
+    elif "camera_look_around" in allowed or dominant == "observe_room":
         outcome = await observe_room_direct(stores, person_id=person_id)
     elif "camera_look_outside" in allowed or dominant == "look_outside":
         outcome = await look_outside_direct(stores, person_id=person_id)

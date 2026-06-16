@@ -28,6 +28,7 @@ plan の `initiative.allowed_actions`（`plan.py`）を gateway が解釈し、*
 | `camera_look_around` | wifi-cam `look_around` + `see` | observe_room |
 | `camera_look_outside` | PTZ preset / pan + `see` | look_outside |
 | `talk_to_companion` | tts `say`（boundary OK 時） | miss_companion |
+| `remind_commitment` | outbound + tts、then `complete_commitment` | OL2、due commitment 優先 |
 | `write_private_reflection` | orchestrator `append_private_reflection` | quiet hours |
 | `recall_memories` | `:18900/recall` | identity_coherence |
 | （followup）`satisfy_desire` | desire_updater / memory marker | 1 action 1 satisfy |

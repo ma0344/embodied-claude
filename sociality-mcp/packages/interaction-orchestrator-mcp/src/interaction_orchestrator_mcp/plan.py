@@ -100,6 +100,11 @@ def _pick_primary_move(
                 "write_private_reflection",
                 "Autonomous tick during quiet hours — prefer a private note over any speech.",
             )
+        if ctx.commitments_due:
+            return (
+                "act_autonomously",
+                "Due commitment(s) — remind companion before other autonomous moves.",
+            )
         if ctx.agent_state.dominant_desire:
             return (
                 "act_autonomously",
@@ -224,6 +229,8 @@ def _pick_initiative(
         level = "low"
 
     if primary_move == "act_autonomously":
+        if ctx.commitments_due and not quiet_active:
+            allowed.append("remind_commitment")
         dominant = ctx.agent_state.dominant_desire
         if dominant == "look_outside":
             allowed.append("camera_look_outside")

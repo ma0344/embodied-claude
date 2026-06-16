@@ -78,7 +78,7 @@ def compose_interaction_context(
             person_name = person_model.get("canonical_name") or person_model.get("person_id")
         open_loops = [
             OpenLoopSummary(
-                loop_id=item.get("loop_id", ""),
+                loop_id=item.get("loop_id") or item.get("id", ""),
                 topic=item.get("topic", ""),
                 status=item.get("status", ""),
                 updated_at=item.get("updated_at"),
@@ -90,12 +90,18 @@ def compose_interaction_context(
         ]
         commitments = [
             CommitmentSummary(
-                commitment_id=item.get("commitment_id", ""),
+                commitment_id=item.get("commitment_id") or item.get("id", ""),
                 text=item.get("text", ""),
                 due_at=item.get("due_at"),
-                status=item.get("status", ""),
+                status=item.get("status", "active"),
             )
-            for item in (person_model or {}).get("commitments", [])
+            for item in _optional_list(
+                relationship_store,
+                "list_due_commitments",
+                person_id=payload.person_id,
+                as_of=ts,
+                timezone=policy_timezone,
+            )
         ]
         followups = _collect_followups(relationship_store, payload.person_id, payload.user_text)
 
@@ -202,6 +208,7 @@ def compose_interaction_context(
         desires=desires,
         discomforts=discomforts,
         open_loops=open_loops,
+        commitments_due=commitments,
         recent_shifts=recent_shifts,
         recent_experiences=recent_experiences,
         max_chars=payload.max_chars,
@@ -631,6 +638,18 @@ def _format_open_loops_section(
     return lines
 
 
+def _format_commitments_due_section(
+    commitments: list[CommitmentSummary], *, max_items: int = 3
+) -> list[str]:
+    if not commitments:
+        return []
+    lines = ["[commitments_due]"]
+    for item in commitments[:max_items]:
+        due = item.due_at or "?"
+        lines.append(f"- {item.text} (due {due})")
+    return lines
+
+
 def _format_shifts_section(
     shifts: list[InterpretationShiftSummary], *, max_items: int = 2
 ) -> list[str]:
@@ -670,6 +689,7 @@ def _compact_block(
     desires: dict[str, Any] | None = None,
     discomforts: dict[str, Any] | None = None,
     open_loops: list[OpenLoopSummary] | None = None,
+    commitments_due: list[CommitmentSummary] | None = None,
     recent_shifts: list[InterpretationShiftSummary] | None = None,
     recent_experiences: list[RecentExperienceRef] | None = None,
     max_chars: int,
@@ -712,6 +732,7 @@ def _compact_block(
             discomforts=discomforts or {},
         ),
         *_format_open_loops_section(open_loops or []),
+        *_format_commitments_due_section(commitments_due or []),
         *_format_shifts_section(recent_shifts or []),
         *_format_experiences_section(recent_experiences or []),
     ]

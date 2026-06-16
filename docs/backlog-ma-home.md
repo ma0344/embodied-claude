@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ
 
-**最終更新**: 2026-06-10（優先 1→3→2→C11g 合意 + V ビジョン追記）  
+**最終更新**: 2026-06-16（OL1+OL2 実装・A4f 済・次は A4g）  
 **方針**: こより本体（記憶・gateway 身体）は **様子見**。部屋 UI は **Native 会話エンジン + `/` の殻** を育てる（8080 プロキシ UI は投資しない）。
 
 **実行方針（合意 2026-06-14）**: 判断は compose/plan/stores のまま。**身体・自律の実行**は MCP に頼らず gateway 直実行へ（remember 直実行と同型）。詳細 → [gateway-direct-actions.md](./gateway-direct-actions.md)
@@ -16,25 +16,25 @@
 | **D** | Backlog 最新化 | このファイルを現実に合わせる | **随時** |
 | **B** | 運用自動化 | ログオン常駐・手起動を減らす | **ほぼ完了**（B2 LM Studio 手動のみ） |
 | **C** | **部屋 UI（Native + Surface）** | `/` 殻 + キオスク UX | **C11 実戦 OK** → 磨きは任意 |
-| **A4** | **能動届け（Outbound）** | A4b+/c+/f/g 実装済み | **OL2** |
-| **OL** | Open Loops / リマインド | 日付解決 + commitment + 発火 | A4b/f とセット |
+| **A4** | **能動届け（Outbound）** | A4b+/c+/f/g 実装済み | **A4g 運用** |
+| **OL** | Open Loops / リマインド | OL1+OL2 実装済み（→ [open-loops-reminders.md](./open-loops-reminders.md)） | **運用確認** |
 | **A** | 記憶・gateway 身体 | compose / see / dismiss | **様子見**（大きな追加は止める） |
 | **C12** | intent router | 曖昧な「見て」分類 | 会話快適化（後） |
 
 ### 次の一手 — 優先度案（2026-06-10 → **まー合意: 1→3→2→C11g**）
 
-**いまのボトルネック**: 自律 tick（A4f）と Open Loops（OL1/OL2）の配線。PC Push（A4g）はキオスク本線ができたあとでよい。
+**いまのボトルネック**: **A4g 運用**（外出時 ntfy）と **OL 実戦確認**（リマインド発火・reinstall 手順）。詳細 → [open-loops-reminders.md](./open-loops-reminders.md)
 
-| tier | 順 | 項目 | 理由 |
+| tier | 順 | 項目 | 状態 |
 |------|----|------|------|
-| **1** | ① | **A4f 運用** | `install-autonomous-tick-task.ps1` 登録（15m + desire-updater）— 自律の心臓 |
-| **2** | ② | **OL1 + OL2** | 日付解決 + commitment → tick でリマインド |
-| **3** | ③ | **A4g 運用** | `PRESENCE_OUTBOUND_NTFY_URL`（外出時・8090 閉じてる PC 向け） |
+| **1** | ① | **A4f 運用** | **済** — `EmbodiedClaude-AutonomousTick`、15m + logon |
+| **2** | ② | **OL1 + OL2** | **済（コード）** — 日付解決 + commitment → tick リマインド。実機確認・残リスクは上記 doc |
+| **3** | ③ | **A4g 運用** | **次** — `PRESENCE_OUTBOUND_NTFY_URL`（外出時・8090 閉じてる PC 向け） |
 | **4** | ④ | **C11g** スリープ / 画面消灯 | Surface 常時点灯・焼き付き対策 |
 | **—** | ⑤ | **A4j+** / **C12** | 着信返信 UX・intent router（任意） |
 | **—** | — | C11c/d、体温 LHM、Irodori TTS | 任意の磨き |
 
-**やらない順**: C12 だけ先にやっても「自律で話しかけてこない」は **A4f** 待ち。
+**やらない順**: C12 だけ先にやっても「リマインドが鳴らない」は **OL デプロイ忘れ**（`relationship-mcp` reinstall）を疑う — [open-loops-reminders.md](./open-loops-reminders.md)
 
 **フェーズ判断（2026-06-10）**: A4a/e/i + `voice_local`（Aivis **るな**）は **運用中**。**A4c+** で部屋着信は Server TTS（Web Speech はフォールバックのみ）。
 
@@ -48,13 +48,13 @@
 |----|------|
 | **記憶インフラ** | HTTP daemon `:18900` 常駐。compose recall・gateway remember **OK** |
 | **Gateway `:8090`** | compose/plan + KV 安定注入。**身体は gateway 直実行済み**（see / observe / reflect / autonomous-tick）。vision prefetch + remember **実戦 OK** |
-| **関係性** | open loop dismiss + commitment cancel。「覚えてる？」recall 誤 loop 抑制 |
+| **関係性** | open loop dismiss + commitment cancel + **OL1 日付解決** + **OL2 リマインド**（tick → outbound） |
 | **表面 UI** | **Native 本線** + キオスク着信（A4i）。**A4j** 着信返信は native chat 自動送信 |
 | **TTS（ma-home）** | **AivisSpeech** `:10101`（`scripts/start-aivis-tts.ps1`）。声 **るな**（style `345585728`）。`voice_local` 運用中。Irodori は参照声待ちで保留 |
 | **Outbound** | A4i/j + **A4f**（15m tick Task）+ **A4g**（enqueue → ntfy/Pushover）。PC `voice_local` |
 | **運用** | Task×3〜4（memory / presence / watchdog。**webui 任意**）+ post-logon-smoke **Native 対応** |
 
-参照: [gateway-direct-actions.md](./gateway-direct-actions.md)、[mission-A_Investigation-Report.md](./mission-A_Investigation-Report.md)
+参照: [gateway-direct-actions.md](./gateway-direct-actions.md)、[open-loops-reminders.md](./open-loops-reminders.md)、[mission-A_Investigation-Report.md](./mission-A_Investigation-Report.md)
 
 ---
 
@@ -72,6 +72,7 @@
 - [x] **A3 gateway 身体（実装）** — see / observe / reflect / autonomous-tick / vision prefetch（2026-06-14）
 - [x] **A3 実戦確認（まー）** — 見える・窓/デスク/ダイニング preset・`remember=ok`・煎餅 dismiss（2026-06-14）
 - [x] **関係性 dismiss** — 「忘れて/中止」→ open loop close + commitment cancel（2026-06-14）
+- [x] **OL1 + OL2** — 日付解決 + リマインド tick（2026-06-16）→ [open-loops-reminders.md](./open-loops-reminders.md)
 - [x] **UI snapshot** — ポーリング用キャプチャはディスク保存しない（2026-06-14）
 
 ---
@@ -339,11 +340,12 @@ MVP チェックリスト:
 |------|------|------|
 | 中 | **C12 Gateway + LLM ハイブリッド intent** | regex 即応 + ローカル LLM ルーター（曖昧な一文だけ分類） |
 | 低 | **体温センサー（ma-home）** | WSL ではない → **LibreHardwareMonitor** 常駐で WMI 経由読取。未導入時は「センサーなし」 |
-| 中 | **OL1 Open Loops 日付解決** | ingest 時 `明日`→`resolved_date`（JST）、類似 topic マージ、期限過ぎ auto-close |
-| 中 | **OL2 リマインド配線** | 「○時にリマインド」→ `create_commitment(due_at)` + 定期 tick で say / UI 通知 |
-| 低 | **OL3 Open Loops 運用** | stale 掃除 `purge-stale-open-loops.py`、ノイズは `purge-noise-open-loops.py` |
+| 低 | **OL3** リマインド改善 | 固定テンプレ → LLM 文面、`grace_minutes` 厳密化 — [open-loops-reminders.md](./open-loops-reminders.md) |
+| 低 | **OL4** ノイズ loop 運用 | `purge-noise-open-loops.py` |
 
-- [x] **OL0** stale open loop 掃除（`purge-stale-open-loops.py`、既定は resolved が今日より前、`--include-today` で当日分も）
+- [x] **OL1** Open Loops 日付解決 — ingest `resolved_date`、期限過ぎ auto-close、`date_resolution.py`（2026-06-16）
+- [x] **OL2** リマインド配線 — 「○時にリマインド」→ commitment、tick `remind_commitment_direct`、compose `[commitments_due]`（2026-06-16）
+- [x] **OL0** stale open loop 掃除（`purge-stale-open-loops.py`、ingest/tick でも自動 close）
 
 - [x] **C11f** 部屋の空気 日本語化（`summary_for_prompt` + UI タグの availability/phase マップ）
 
@@ -392,7 +394,8 @@ MVP チェックリスト:
 | スクリプト | 用途 |
 |-----------|------|
 | `purge-noise-open-loops.py` | エージェント台詞ノイズ loop を close |
-| `purge-stale-open-loops.py` | 相対日付（明日等）が過去の open loop を close |
+| `purge-stale-open-loops.py` | 相対日付（明日等）が過去の open loop を close（ingest/tick でも自動） |
+| [open-loops-reminders.md](./open-loops-reminders.md) | OL 運用・デプロイ・**残リスク** |
 | `test-memory-stack.ps1` | 記憶スタック自動スモーク |
 | `verify-mission-a.ps1` | ミッションA 一発確認（stack + 煎餅 + 任意 :8090 chat） |
 | `watch-embodied-health.ps1` | ハング検出・daemon 再起動（手動 / Task から） |

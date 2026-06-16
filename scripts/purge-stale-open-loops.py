@@ -14,10 +14,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
-import re
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -28,50 +26,8 @@ for _p in (_REL, _CORE):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+from relationship_mcp.date_resolution import as_of_date, is_stale  # noqa: E402
 from relationship_mcp.store import RelationshipStore  # noqa: E402
-
-_RELATIVE_MARKERS: list[tuple[re.Pattern[str], int]] = [
-    (re.compile(r"明後日|あさって|day after tomorrow", re.I), 2),
-    (re.compile(r"明日|tomorrow", re.I), 1),
-    (re.compile(r"今日|きょう|today", re.I), 0),
-]
-
-
-def _parse_updated_day(updated_at: str, tz: ZoneInfo) -> date:
-    raw = updated_at.strip()
-    if raw.endswith("Z"):
-        raw = raw[:-1] + "+00:00"
-    dt = datetime.fromisoformat(raw)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
-    return dt.astimezone(tz).date()
-
-
-def resolve_relative_date(*, topic: str, updated_at: str, tz_name: str) -> date | None:
-    """Return the calendar day the topic refers to, or None if no relative marker."""
-    tz = ZoneInfo(tz_name)
-    base = _parse_updated_day(updated_at, tz)
-    for pattern, offset_days in _RELATIVE_MARKERS:
-        if pattern.search(topic):
-            return base + timedelta(days=offset_days)
-    return None
-
-
-def is_stale(
-    *,
-    topic: str,
-    updated_at: str,
-    tz_name: str,
-    as_of: date,
-    include_today: bool,
-) -> date | None:
-    """If stale, return the resolved date; else None."""
-    resolved = resolve_relative_date(topic=topic, updated_at=updated_at, tz_name=tz_name)
-    if resolved is None:
-        return None
-    if resolved < as_of or (include_today and resolved == as_of):
-        return resolved
-    return None
 
 
 def main() -> int:
@@ -93,8 +49,10 @@ def main() -> int:
 
     if args.as_of:
         as_of = date.fromisoformat(args.as_of)
+        as_of_ts = datetime.combine(as_of, datetime.min.time(), tzinfo=ZoneInfo(args.timezone))
     else:
-        as_of = datetime.now(ZoneInfo(args.timezone)).date()
+        as_of_ts = datetime.now(ZoneInfo(args.timezone))
+        as_of = as_of_date(as_of_ts=as_of_ts.isoformat(), tz_name=args.timezone)
 
     store = RelationshipStore()
     try:
@@ -108,7 +66,7 @@ def main() -> int:
             (args.person_id,),
         )
         stale: list[tuple[str, str, date]] = []
-        for loop_id, topic, updated_at, detail_json in rows:
+        for loop_id, topic, updated_at, _detail_json in rows:
             passed = is_stale(
                 topic=str(topic),
                 updated_at=str(updated_at),
@@ -135,23 +93,13 @@ def main() -> int:
             print("(dry-run - no changes)")
             return 0
 
-        with store.db.transaction() as conn:
-            for loop_id, topic, resolved in stale:
-                detail = {
-                    "kind": "stale",
-                    "reason": "relative_date_passed",
-                    "resolved_date": resolved.isoformat(),
-                    "source_topic": topic[:200],
-                }
-                conn.execute(
-                    """
-                    UPDATE open_loops
-                    SET status = 'closed', detail_json = ?
-                    WHERE loop_id = ?
-                    """,
-                    (json.dumps(detail, ensure_ascii=False), loop_id),
-                )
-        print(f"Closed {len(stale)} stale loop(s).")
+        closed = store.close_stale_open_loops(
+            person_id=args.person_id,
+            as_of=as_of_ts.isoformat(),
+            timezone=args.timezone,
+            include_today=args.include_today,
+        )
+        print(f"Closed {len(closed)} stale loop(s).")
         return 0
     finally:
         store.close()

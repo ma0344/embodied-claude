@@ -16,6 +16,7 @@ from social_core import (
     parse_timestamp,
 )
 
+from .date_resolution import DEFAULT_TIMEZONE, as_of_date, is_stale, resolve_relative_date
 from .inference import (
     FUTURE_MARKERS,
     STRESS_KEYWORDS,
@@ -27,6 +28,7 @@ from .inference import (
     suggest_followup_text,
     summarize_relationship,
 )
+from .reminder_intent import extract_reminder_request
 from .schemas import (
     CommitmentRecord,
     DismissOutcome,
@@ -133,6 +135,12 @@ class RelationshipStore:
                     ts=ts,
                     direction=direction,
                 )
+                self.close_stale_open_loops(person_id=person_id, as_of=ts)
+                self._maybe_create_reminder_commitment(
+                    person_id=person_id,
+                    text=text,
+                    ts=ts,
+                )
         else:
             self._update_open_loops(
                 person_id=person_id,
@@ -143,6 +151,54 @@ class RelationshipStore:
             )
         self.refresh_snapshot(person_id)
         return {"event_id": event.event_id}
+
+    def close_stale_open_loops(
+        self,
+        *,
+        person_id: str,
+        as_of: str,
+        timezone: str = DEFAULT_TIMEZONE,
+        include_today: bool = False,
+    ) -> list[str]:
+        """Close open loops whose relative-date topic is past due."""
+        as_of_day = as_of_date(as_of_ts=as_of, tz_name=timezone)
+        rows = self.db.fetchall(
+            """
+            SELECT loop_id, topic, updated_at
+            FROM open_loops
+            WHERE person_id = ? AND status = 'open'
+            ORDER BY updated_at DESC
+            """,
+            (person_id,),
+        )
+        closed_topics: list[str] = []
+        for loop_id, topic, updated_at in rows:
+            passed = is_stale(
+                topic=str(topic),
+                updated_at=str(updated_at),
+                tz_name=timezone,
+                as_of=as_of_day,
+                include_today=include_today,
+            )
+            if passed is None:
+                continue
+            detail = {
+                "kind": "stale",
+                "reason": "relative_date_passed",
+                "resolved_date": passed.isoformat(),
+                "source_topic": str(topic)[:200],
+            }
+            with self.db.transaction() as connection:
+                connection.execute(
+                    """
+                    UPDATE open_loops
+                    SET status = 'closed', updated_at = ?, detail_json = ?
+                    WHERE loop_id = ?
+                    """,
+                    (as_of, json.dumps(detail, ensure_ascii=False), loop_id),
+                )
+            closed_topics.append(str(topic))
+        return closed_topics
 
     def note_human_utterance_for_loops(
         self,
@@ -182,6 +238,12 @@ class RelationshipStore:
             source_event_id=source_event_id,
             ts=ts,
             direction="human_to_ai",
+        )
+        self.close_stale_open_loops(person_id=person_id, as_of=ts)
+        self._maybe_create_reminder_commitment(
+            person_id=person_id,
+            text=text,
+            ts=ts,
         )
         return outcome
 
@@ -366,6 +428,60 @@ class RelationshipStore:
             )
             for row in rows
         ]
+
+    def list_due_commitments(
+        self,
+        *,
+        person_id: str,
+        as_of: str,
+        timezone: str = DEFAULT_TIMEZONE,
+        grace_minutes: int = 20,
+        catch_up_hours: int = 24,
+        limit: int = 5,
+    ) -> list[CommitmentRecord]:
+        """Active commitments whose due_at fell within the catch-up window ending at as_of."""
+        from zoneinfo import ZoneInfo
+
+        now = parse_timestamp(as_of).astimezone(ZoneInfo(timezone))
+        _ = grace_minutes
+        catch_up_start = now - timedelta(hours=catch_up_hours)
+        rows = self.db.fetchall(
+            """
+            SELECT commitment_id, text, due_at, source, metadata_json
+            FROM commitments
+            WHERE person_id = ? AND status = 'active' AND due_at IS NOT NULL
+            ORDER BY due_at
+            LIMIT ?
+            """,
+            (person_id, max(limit * 4, 20)),
+        )
+        due: list[CommitmentRecord] = []
+        for row in rows:
+            due_at_raw = row["due_at"]
+            if not due_at_raw:
+                continue
+            due_dt = parse_timestamp(str(due_at_raw)).astimezone(ZoneInfo(timezone))
+            if due_dt > now:
+                continue
+            if due_dt < catch_up_start:
+                continue
+            metadata = json.loads(row["metadata_json"] or "{}")
+            last_reminded = metadata.get("last_reminded_at")
+            if last_reminded:
+                reminded_at = parse_timestamp(str(last_reminded)).astimezone(ZoneInfo(timezone))
+                if (now - reminded_at).total_seconds() < 1800:
+                    continue
+            due.append(
+                CommitmentRecord(
+                    id=row["commitment_id"],
+                    text=row["text"],
+                    due_at=row["due_at"],
+                    source=row["source"],
+                )
+            )
+            if len(due) >= limit:
+                break
+        return due
 
     def cancel_commitment(self, commitment_id: str, *, source_text: str = "") -> dict[str, str]:
         """Mark a commitment cancelled (e.g. まー said to forget the plan)."""
@@ -618,10 +734,18 @@ class RelationshipStore:
         source_event_id: str,
         ts: str,
         direction: str = "human_to_ai",
+        timezone: str = DEFAULT_TIMEZONE,
     ) -> None:
         topic = self._extract_topic(text, direction=direction)
         if topic is None:
             return
+        today = as_of_date(as_of_ts=ts, tz_name=timezone)
+        stale_day = is_stale(
+            topic=topic,
+            updated_at=ts,
+            tz_name=timezone,
+            as_of=today,
+        )
         existing = self.db.fetchone(
             """
             SELECT loop_id FROM open_loops
@@ -629,15 +753,50 @@ class RelationshipStore:
             """,
             (person_id, topic),
         )
+        if stale_day is not None:
+            if existing is not None:
+                detail = {
+                    "kind": "stale",
+                    "reason": "relative_date_passed",
+                    "resolved_date": stale_day.isoformat(),
+                    "source_topic": topic[:200],
+                }
+                with self.db.transaction() as connection:
+                    connection.execute(
+                        """
+                        UPDATE open_loops
+                        SET status = 'closed', updated_at = ?, source_event_id = ?,
+                            detail_json = ?
+                        WHERE loop_id = ?
+                        """,
+                        (
+                            ts,
+                            source_event_id,
+                            json.dumps(detail, ensure_ascii=False),
+                            existing["loop_id"],
+                        ),
+                    )
+            return
+
+        resolved = resolve_relative_date(topic=topic, updated_at=ts, tz_name=timezone)
+        detail: dict[str, str] = {"kind": "future_task_or_question"}
+        if resolved is not None:
+            detail["resolved_date"] = resolved.isoformat()
+
         with self.db.transaction() as connection:
             if existing is not None:
                 connection.execute(
                     """
                     UPDATE open_loops
-                    SET updated_at = ?, source_event_id = ?
+                    SET updated_at = ?, source_event_id = ?, detail_json = ?
                     WHERE loop_id = ?
                     """,
-                    (ts, source_event_id, existing["loop_id"]),
+                    (
+                        ts,
+                        source_event_id,
+                        json.dumps(detail, ensure_ascii=False),
+                        existing["loop_id"],
+                    ),
                 )
                 return
             connection.execute(
@@ -659,9 +818,32 @@ class RelationshipStore:
                     topic,
                     source_event_id,
                     ts,
-                    json.dumps({"kind": "future_task_or_question"}, ensure_ascii=False),
+                    json.dumps(detail, ensure_ascii=False),
                 ),
             )
+
+    def _maybe_create_reminder_commitment(
+        self,
+        *,
+        person_id: str,
+        text: str,
+        ts: str,
+        timezone: str = DEFAULT_TIMEZONE,
+    ) -> dict[str, str] | None:
+        parsed = extract_reminder_request(text, ts=ts, tz_name=timezone)
+        if parsed is None:
+            return None
+        label, due_at = parsed
+        label_key = _commitment_label(label)
+        for commitment in self.list_active_commitments(person_id=person_id, limit=20):
+            if commitment.due_at == due_at and _commitment_label(commitment.text) == label_key:
+                return None
+        return self.create_commitment(
+            person_id=person_id,
+            text=label,
+            due_at=due_at,
+            source="reminder_request",
+        )
 
     def _extract_topic(self, text: str, *, direction: str = "human_to_ai") -> str | None:
         if direction != "human_to_ai":

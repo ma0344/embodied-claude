@@ -422,3 +422,27 @@ class TestPlan:
         assert "web_search" in plan.initiative.allowed_actions
         assert plan.followup_action is not None
         assert plan.followup_action["kind"] == "satisfy_desire"
+
+    def test_due_commitments_prioritize_autonomous_reminder(self, stores, monkeypatch):
+        monkeypatch.setattr(
+            "interaction_orchestrator_mcp.compose.utc_now",
+            lambda: "2026-06-10T09:05:00+09:00",
+        )
+        stores["relationship"].upsert_person(
+            person_id="ma", canonical_name="まー", aliases=[], role="companion"
+        )
+        stores["relationship"].create_commitment(
+            person_id="ma",
+            text="薬を飲む",
+            due_at="2026-06-10T09:00:00+09:00",
+            source="test",
+        )
+        ctx = _compose(stores, user_text=None, channel="autonomous")
+        assert len(ctx.commitments_due) == 1
+        assert "[commitments_due]" in ctx.compact_prompt_block
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text=None)
+        )
+        assert plan.primary_move == "act_autonomously"
+        assert "remind_commitment" in plan.initiative.allowed_actions
+        assert "commitment" in plan.why_this_move.lower()

@@ -2,6 +2,7 @@ const REFRESH_MS = 7000;
 const OUTBOUND_POLL_MS_DEFAULT = 3000;
 const OUTBOUND_SINCE_KEY = "koyori-outbound-since";
 const OUTBOUND_CLIENT_ID_KEY = "koyori-outbound-client-id";
+const OUTBOUND_BROWSER_NOTIFIED_KEY = "koyori-outbound-browser-notified";
 const SCROLL_PIN_THRESHOLD = 56;
 /** Local LLM + MCP can be slow; beyond this, unlock compose and abort upstream. */
 const CHAT_SEND_TIMEOUT_MS = 180_000;
@@ -1980,9 +1981,75 @@ function setupRoomInbound() {
   }
 }
 
+function browserNotificationsEnabled() {
+  return typeof Notification !== "undefined" && Notification.permission === "granted";
+}
+
+async function requestBrowserNotificationPermission() {
+  if (typeof Notification === "undefined") return false;
+  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "denied") return false;
+  try {
+    const result = await Notification.requestPermission();
+    return result === "granted";
+  } catch {
+    return false;
+  }
+}
+
+function browserNotificationSeen(nudgeId) {
+  if (!nudgeId) return false;
+  try {
+    const raw = sessionStorage.getItem(OUTBOUND_BROWSER_NOTIFIED_KEY) || "[]";
+    const ids = JSON.parse(raw);
+    return Array.isArray(ids) && ids.includes(nudgeId);
+  } catch {
+    return false;
+  }
+}
+
+function markBrowserNotificationSeen(nudgeId) {
+  if (!nudgeId) return;
+  try {
+    const raw = sessionStorage.getItem(OUTBOUND_BROWSER_NOTIFIED_KEY) || "[]";
+    const ids = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+    if (!ids.includes(nudgeId)) ids.push(nudgeId);
+    sessionStorage.setItem(OUTBOUND_BROWSER_NOTIFIED_KEY, JSON.stringify(ids.slice(-50)));
+  } catch {
+    /* ignore */
+  }
+}
+
+async function showBrowserOutboundNotification(item) {
+  if (!item?.nudge_id || !item.text || !browserNotificationsEnabled()) return;
+  if (browserNotificationSeen(item.nudge_id)) return;
+  markBrowserNotificationSeen(item.nudge_id);
+  try {
+    const toast = new Notification("Koyori", {
+      body: item.text,
+      tag: item.nudge_id,
+    });
+    toast.onclick = () => {
+      window.focus();
+      toast.close();
+      enqueueRoomInbound(item);
+    };
+    await ackOutboundNudge(item.nudge_id, ["browser_notification"]);
+    if (item.ts) {
+      const since = sessionStorage.getItem(OUTBOUND_SINCE_KEY) || "";
+      if (!since || item.ts > since) {
+        sessionStorage.setItem(OUTBOUND_SINCE_KEY, item.ts);
+      }
+    }
+  } catch (err) {
+    console.warn("browser notification failed:", err.message);
+  }
+}
+
 async function pollOutboundNudges() {
-  if (!isKioskLayout()) return;
-  if (document.hidden) return;
+  const kiosk = isKioskLayout();
+  if (kiosk && document.hidden) return;
+  if (!kiosk && document.hidden && !browserNotificationsEnabled()) return;
   const since = sessionStorage.getItem(OUTBOUND_SINCE_KEY) || "";
   const params = new URLSearchParams({ client_id: outboundClientId() });
   if (since) params.set("since", since);
@@ -1990,7 +2057,13 @@ async function pollOutboundNudges() {
     const data = await fetchJson(`${outboundPendingPath()}?${params.toString()}`);
     const items = data.items || [];
     for (const item of items) {
-      enqueueRoomInbound(item);
+      if (kiosk) {
+        enqueueRoomInbound(item);
+      } else if (document.hidden) {
+        void showBrowserOutboundNotification(item);
+      } else {
+        enqueueRoomInbound(item);
+      }
     }
   } catch (err) {
     console.warn("outbound poll failed:", err.message);
@@ -2002,9 +2075,17 @@ function setupOutboundPoll() {
     clearInterval(outboundPollTimer);
     outboundPollTimer = null;
   }
-  if (!isKioskLayout()) return;
   document.addEventListener("click", unlockSpeechOnce, { once: true, passive: true });
   document.addEventListener("touchstart", unlockSpeechOnce, { once: true, passive: true });
+  if (!isKioskLayout()) {
+    document.addEventListener(
+      "click",
+      () => {
+        void requestBrowserNotificationPermission();
+      },
+      { once: true, passive: true },
+    );
+  }
   outboundPollTimer = setInterval(() => void pollOutboundNudges(), outboundPollMs());
   void pollOutboundNudges();
 }

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
+import sys
+from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -41,19 +44,94 @@ def _post_json(url: str, payload: dict[str, Any], *, timeout: float = 8.0) -> No
             raise HTTPError(url, response.status, response.reason, response.headers, None)
 
 
-def _post_ntfy(url: str, *, title: str, message: str, timeout: float = 8.0) -> None:
+def _ntfy_click_url() -> str:
+    explicit = os.getenv("PRESENCE_OUTBOUND_NTFY_CLICK_URL", "").strip()
+    if explicit:
+        return explicit
+    base = os.getenv("PRESENCE_BASE_URL", "http://127.0.0.1:8090").strip().rstrip("/")
+    if not base:
+        return "http://127.0.0.1:8090/"
+    return f"{base}/"
+
+
+def _win_toast_enabled() -> bool:
+    """Optional fallback when 8090 is closed. Default off — PC uses browser notifications."""
+    val = os.getenv("PRESENCE_OUTBOUND_WIN_TOAST", "0").strip().lower()
+    if val in {"0", "false", "no"}:
+        return False
+    return val in {"1", "true", "yes"} and sys.platform == "win32"
+
+
+def _win_toast_script() -> Path | None:
+    explicit = os.getenv("PRESENCE_OUTBOUND_WIN_TOAST_SCRIPT", "").strip()
+    if explicit:
+        path = Path(explicit)
+        return path if path.is_file() else None
+    for root in (
+        os.getenv("EMBODIED_CLAUDE_ROOT", "").strip(),
+        os.getenv("PRESENCE_PROJECT_PATH", "").strip(),
+    ):
+        if not root:
+            continue
+        path = Path(root) / "scripts" / "show-koyori-win-toast.ps1"
+        if path.is_file():
+            return path
+    path = Path(__file__).resolve().parents[4] / "scripts" / "show-koyori-win-toast.ps1"
+    return path if path.is_file() else None
+
+
+def _show_win_toast(*, title: str, message: str, click_url: str) -> None:
+    script = _win_toast_script()
+    if not script:
+        raise FileNotFoundError("show-koyori-win-toast.ps1 not found")
+    completed = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(script),
+            "-Title",
+            title,
+            "-Message",
+            message,
+            "-ClickUrl",
+            click_url,
+        ],
+        check=False,
+        timeout=15,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip() or f"exit {completed.returncode}"
+        raise RuntimeError(detail)
+
+
+def _post_ntfy(
+    url: str,
+    *,
+    title: str,
+    message: str,
+    click_url: str | None = None,
+    timeout: float = 8.0,
+) -> None:
     body = message.encode("utf-8")
     # HTTP header values must be ASCII for urllib; ntfy title supports UTF-8 via body fallback.
     safe_title = title.encode("ascii", "backslashreplace").decode("ascii")
+    headers = {
+        "Title": safe_title,
+        "Priority": "3",
+        "Tags": "koyori,outbound",
+        "Content-Type": "text/plain; charset=utf-8",
+    }
+    if click_url:
+        headers["Click"] = click_url
     request = Request(
         url,
         data=body,
-        headers={
-            "Title": safe_title,
-            "Priority": "3",
-            "Tags": "koyori,outbound",
-            "Content-Type": "text/plain; charset=utf-8",
-        },
+        headers=headers,
         method="POST",
     )
     with urlopen(request, timeout=timeout) as response:
@@ -72,15 +150,26 @@ def send_outbound_push(*, text: str, title: str = "Koyori") -> tuple[bool, str]:
 
     ntfy = _ntfy_url()
     pushover_token, pushover_user = _pushover_credentials()
-    if not ntfy and not (pushover_token and pushover_user):
+    win_toast = _win_toast_enabled() and _win_toast_script() is not None
+    if not ntfy and not (pushover_token and pushover_user) and not win_toast:
         return False, "no push targets configured"
 
     results: list[str] = []
     ok_any = False
+    click_url = _ntfy_click_url()
+
+    if win_toast:
+        try:
+            _show_win_toast(title=title, message=line, click_url=click_url)
+            ok_any = True
+            results.append("win-toast:ok")
+        except (TimeoutError, OSError, RuntimeError, FileNotFoundError) as exc:
+            logger.warning("outbound win toast failed: %s", exc)
+            results.append(f"win-toast:{exc}")
 
     if ntfy:
         try:
-            _post_ntfy(ntfy, title=title, message=line)
+            _post_ntfy(ntfy, title=title, message=line, click_url=click_url)
             ok_any = True
             results.append("ntfy:ok")
         except (HTTPError, URLError, TimeoutError, OSError) as exc:
@@ -89,15 +178,20 @@ def send_outbound_push(*, text: str, title: str = "Koyori") -> tuple[bool, str]:
 
     if pushover_token and pushover_user:
         try:
+            payload: dict[str, Any] = {
+                "token": pushover_token,
+                "user": pushover_user,
+                "title": title,
+                "message": line,
+                "priority": 0,
+            }
+            click_url = _ntfy_click_url()
+            if click_url:
+                payload["url"] = click_url
+                payload["url_title"] = "Koyori room"
             _post_json(
                 "https://api.pushover.net/1/messages.json",
-                {
-                    "token": pushover_token,
-                    "user": pushover_user,
-                    "title": title,
-                    "message": line,
-                    "priority": 0,
-                },
+                payload,
             )
             ok_any = True
             results.append("pushover:ok")

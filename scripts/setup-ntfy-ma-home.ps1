@@ -97,12 +97,14 @@ function Send-NtfyTest {
     param(
         [string]$Url,
         [string]$Message,
-        [string]$Title = "Koyori"
+        [string]$Title = "Koyori",
+        [string]$ClickUrl = "http://127.0.0.1:8090/"
     )
     $headers = @{
         Title    = $Title
         Priority = "3"
         Tags     = "koyori,setup"
+        Click    = $ClickUrl
     }
     Invoke-RestMethod -Method POST -Uri $Url -Headers $headers -Body ([System.Text.Encoding]::UTF8.GetBytes($Message)) -ContentType "text/plain; charset=utf-8" -TimeoutSec 20
 }
@@ -119,7 +121,7 @@ if ($TestOnly) {
     }
     Send-NtfyTest -Url $existingUrl -Message "ntfy テスト — $(Get-Date -Format 'HH:mm:ss')"
     Write-Host "OK: test message sent to $existingUrl"
-    Write-Host "Check ntfy app / browser subscription."
+    Write-Host "Check ntfy-desktop (native toast) or phone. Browser tab alone is not enough on PC."
     exit 0
 }
 
@@ -166,8 +168,11 @@ Write-Host ""
 Write-Host "  [B] Android/iOS: Play/App Store で「ntfy」→ Default server = ntfy.sh"
 Write-Host "      → + → Subscribe to topic → $topicName"
 Write-Host ""
-Write-Host "  [D] Windows ntfy-desktop — ZIP 展開後: .\scripts\fix-ntfy-desktop-toast.ps1（トースト無音対策）"
 Write-Host ""
+Write-Host "PC toast (recommended): browser notifications at http://127.0.0.1:8090/"
+Write-Host "  Allow notifications on first click in the room tab (title: Koyori)"
+Write-Host "  Optional fallback: .\scripts\show-koyori-win-toast.ps1 -TestOnly"
+Write-Host "  (set PRESENCE_OUTBOUND_WIN_TOAST=1 only if you need toast with 8090 closed)"
 Write-Host "  Subscribe URL (ブラウザで開く): $ntfyUrl"
 Write-Host ""
 
@@ -176,9 +181,9 @@ if ($OpenSubscribePage) {
 }
 
 Write-Host "Next:"
-Write-Host "  1. 上の手順で subscribe（通知が1件来てるはず）"
+Write-Host "  1. Open http://127.0.0.1:8090/ and allow browser notifications"
 Write-Host "  2. .\scripts\restart-presence-ui.ps1"
-Write-Host "  3. .\scripts\setup-ntfy-ma-home.ps1 -TestOnly"
+Write-Host "  3. .\scripts\setup-ntfy-ma-home.ps1 -TestOnly  (ntfy.sh — phone/Android)"
 Write-Host ""
 Write-Host "Optional — ntfy Pro で topic 予約 + ACL: https://ntfy.sh (有料)"
 Write-Host ""

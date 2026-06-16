@@ -135,6 +135,12 @@ function Initialize-PresenceUiEnv {
         $env:CLAUDE_CODE_BACKEND_URL = "http://127.0.0.1:$BackendPort"
     }
     if (-not $env:PRESENCE_PROJECT_PATH) { $env:PRESENCE_PROJECT_PATH = $Repo }
+    if (-not $env:EMBODIED_CLAUDE_ROOT) { $env:EMBODIED_CLAUDE_ROOT = $Repo }
+    if (-not $env:PRESENCE_OUTBOUND_WIN_TOAST) { $env:PRESENCE_OUTBOUND_WIN_TOAST = "0" }
+    $WinToast = Join-Path $Repo "scripts\show-koyori-win-toast.ps1"
+    if ((Test-Path $WinToast) -and -not $env:PRESENCE_OUTBOUND_WIN_TOAST_SCRIPT) {
+        $env:PRESENCE_OUTBOUND_WIN_TOAST_SCRIPT = $WinToast
+    }
     if (-not $env:CAPTURE_DIR) {
         $env:CAPTURE_DIR = Join-Path $env:TEMP "wifi-cam-mcp"
     }

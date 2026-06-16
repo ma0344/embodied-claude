@@ -169,10 +169,9 @@ Write-Host "  [B] Android/iOS: Play/App Store で「ntfy」→ Default server = 
 Write-Host "      → + → Subscribe to topic → $topicName"
 Write-Host ""
 Write-Host ""
-Write-Host "PC toast (recommended): browser notifications at http://127.0.0.1:8090/"
-Write-Host "  Allow notifications on first click in the room tab (title: Koyori)"
-Write-Host "  Optional fallback: .\scripts\show-koyori-win-toast.ps1 -TestOnly"
-Write-Host "  (set PRESENCE_OUTBOUND_WIN_TOAST=1 only if you need toast with 8090 closed)"
+Write-Host "PC push: browser notification (Koyori) when 8090 tab open + Win toast when tab closed."
+Write-Host "  Both may fire briefly if tab is open in background — set PRESENCE_OUTBOUND_WIN_TOAST=0 to disable Win toast."
+Write-Host "  Allow notifications: open http://127.0.0.1:8090/ and click Allow on first visit."
 Write-Host "  Subscribe URL (ブラウザで開く): $ntfyUrl"
 Write-Host ""
 

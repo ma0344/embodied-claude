@@ -55,11 +55,13 @@ def _ntfy_click_url() -> str:
 
 
 def _win_toast_enabled() -> bool:
-    """Optional fallback when 8090 is closed. Default off — PC uses browser notifications."""
-    val = os.getenv("PRESENCE_OUTBOUND_WIN_TOAST", "0").strip().lower()
+    """Win toast when 8090 tab is closed. Default on for Windows (may duplicate browser toast)."""
+    val = os.getenv("PRESENCE_OUTBOUND_WIN_TOAST", "auto").strip().lower()
     if val in {"0", "false", "no"}:
         return False
-    return val in {"1", "true", "yes"} and sys.platform == "win32"
+    if val in {"1", "true", "yes", "auto"}:
+        return sys.platform == "win32"
+    return sys.platform == "win32"
 
 
 def _win_toast_script() -> Path | None:

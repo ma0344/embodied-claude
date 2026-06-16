@@ -2049,7 +2049,6 @@ async function showBrowserOutboundNotification(item) {
 async function pollOutboundNudges() {
   const kiosk = isKioskLayout();
   if (kiosk && document.hidden) return;
-  if (!kiosk && document.hidden && !browserNotificationsEnabled()) return;
   const since = sessionStorage.getItem(OUTBOUND_SINCE_KEY) || "";
   const params = new URLSearchParams({ client_id: outboundClientId() });
   if (since) params.set("since", since);
@@ -2059,9 +2058,9 @@ async function pollOutboundNudges() {
     for (const item of items) {
       if (kiosk) {
         enqueueRoomInbound(item);
-      } else if (document.hidden) {
+      } else if (browserNotificationsEnabled()) {
         void showBrowserOutboundNotification(item);
-      } else {
+      } else if (!document.hidden) {
         enqueueRoomInbound(item);
       }
     }
@@ -2081,13 +2080,23 @@ function setupOutboundPoll() {
     document.addEventListener(
       "click",
       () => {
-        void requestBrowserNotificationPermission();
+        void requestBrowserNotificationPermission().then((ok) => {
+          if (ok) void pollOutboundNudges();
+        });
       },
       { once: true, passive: true },
     );
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      console.info(
+        "[koyori] Allow browser notifications on this page for outbound toasts (title: Koyori).",
+      );
+    }
   }
   outboundPollTimer = setInterval(() => void pollOutboundNudges(), outboundPollMs());
   void pollOutboundNudges();
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) void pollOutboundNudges();
+  });
 }
 
 function setupKioskLayout() {

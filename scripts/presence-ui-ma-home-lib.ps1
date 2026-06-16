@@ -136,7 +136,7 @@ function Initialize-PresenceUiEnv {
     }
     if (-not $env:PRESENCE_PROJECT_PATH) { $env:PRESENCE_PROJECT_PATH = $Repo }
     if (-not $env:EMBODIED_CLAUDE_ROOT) { $env:EMBODIED_CLAUDE_ROOT = $Repo }
-    if (-not $env:PRESENCE_OUTBOUND_WIN_TOAST) { $env:PRESENCE_OUTBOUND_WIN_TOAST = "0" }
+    if (-not $env:PRESENCE_OUTBOUND_WIN_TOAST) { $env:PRESENCE_OUTBOUND_WIN_TOAST = "1" }
     $WinToast = Join-Path $Repo "scripts\show-koyori-win-toast.ps1"
     if ((Test-Path $WinToast) -and -not $env:PRESENCE_OUTBOUND_WIN_TOAST_SCRIPT) {
         $env:PRESENCE_OUTBOUND_WIN_TOAST_SCRIPT = $WinToast

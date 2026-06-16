@@ -23,6 +23,9 @@ from presence_ui.schemas import (
     NativeHideSessionResponse,
     NativeSessionListResponse,
     NativeSessionMessagesResponse,
+    OutboundAckRequest,
+    OutboundAckResponse,
+    OutboundPendingResponse,
 )
 from presence_ui.services.camera import fetch_camera_snapshot
 from presence_ui.services.display_time import display_timezone
@@ -87,6 +90,8 @@ def create_app() -> FastAPI:
     @app.get("/api/v1/ui-config")
     def ui_config() -> JSONResponse:
         """Frontend routing: native SSE vs legacy 8080 proxy chat."""
+        from presence_ui.services.outbound import outbound_web_speech_suppress_on_localhost
+
         return utf8_json(
             {
                 "chat_backend": "native" if native_chat else "proxy8080",
@@ -96,8 +101,68 @@ def create_app() -> FastAPI:
                 "native_sessions_path": "/api/v1/native/sessions" if native_chat else None,
                 "display_timezone": display_timezone(),
                 "legacy_chat_path": "/api/chat",
+                "outbound_pending_path": "/api/v1/outbound/pending",
+                "outbound_ack_path": "/api/v1/outbound/ack",
+                "outbound_poll_ms": int(os.getenv("PRESENCE_OUTBOUND_POLL_MS", "3000")),
+                "outbound_web_speech_suppress_on_localhost": (
+                    outbound_web_speech_suppress_on_localhost()
+                ),
             },
         )
+
+    @app.get("/api/v1/outbound/pending", response_model=OutboundPendingResponse)
+    def get_outbound_pending(
+        person_id: str = DEFAULT_PERSON_ID,
+        client_id: str = "",
+        since: str | None = None,
+        limit: int = 20,
+    ) -> OutboundPendingResponse:
+        from social_core import utc_now
+
+        from presence_ui.deps import get_stores
+        from presence_ui.services.outbound import list_pending_outbound
+
+        if not client_id.strip():
+            raise HTTPException(status_code=400, detail="client_id is required")
+
+        stores = get_stores()
+        items = list_pending_outbound(
+            stores,
+            person_id=person_id,
+            client_id=client_id.strip(),
+            since=since,
+            limit=limit,
+        )
+        return OutboundPendingResponse(
+            items=[
+                {
+                    "nudge_id": item.nudge_id,
+                    "ts": item.ts,
+                    "text": item.text,
+                    "speak": item.speak,
+                    "channels": item.channels,
+                    "desire": item.desire,
+                }
+                for item in items
+            ],
+            server_ts=utc_now(),
+        )
+
+    @app.post("/api/v1/outbound/ack", response_model=OutboundAckResponse)
+    async def post_outbound_ack(body: OutboundAckRequest) -> OutboundAckResponse:
+        from presence_ui.deps import get_stores
+        from presence_ui.services.outbound import ack_outbound_delivery
+
+        stores = get_stores()
+        ok = ack_outbound_delivery(
+            stores,
+            nudge_id=body.nudge_id,
+            client_id=body.client_id,
+            channels=body.channels,
+        )
+        if not ok:
+            raise HTTPException(status_code=404, detail="nudge not found")
+        return OutboundAckResponse(ok=True, nudge_id=body.nudge_id)
 
     @app.get("/api/v1/native/sessions", response_model=NativeSessionListResponse)
     def get_native_sessions(limit: int = 40) -> NativeSessionListResponse:

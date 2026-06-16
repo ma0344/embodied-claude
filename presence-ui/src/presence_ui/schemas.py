@@ -255,3 +255,28 @@ class NativeHideSessionResponse(BaseModel):
     ok: bool = True
     session_id: str
     hidden_count: int = 0
+
+
+class OutboundPendingItem(BaseModel):
+    nudge_id: str
+    ts: str
+    text: str
+    speak: bool = False
+    channels: list[str] = Field(default_factory=list)
+    desire: str | None = None
+
+
+class OutboundPendingResponse(BaseModel):
+    items: list[OutboundPendingItem] = Field(default_factory=list)
+    server_ts: str
+
+
+class OutboundAckRequest(BaseModel):
+    nudge_id: str = Field(min_length=1, max_length=64)
+    client_id: str = Field(min_length=1, max_length=64)
+    channels: list[str] = Field(default_factory=list, max_length=8)
+
+
+class OutboundAckResponse(BaseModel):
+    ok: bool
+    nudge_id: str

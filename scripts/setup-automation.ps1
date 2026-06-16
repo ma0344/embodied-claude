@@ -48,4 +48,6 @@ Write-Host "  1. Add desire-system (+ optional usb-webcam) to .mcp.json — see 
 Write-Host "  2. Copy SOUL.md.example -> SOUL.md and edit"
 Write-Host "  3. Restart Claude Code"
 Write-Host "  4. User messages: /talk  or ask agent to follow talk.md flow"
-Write-Host "  5. Periodic: cd desire-system; uv run desire-updater  (or Task Scheduler)"
+Write-Host "  5. Periodic autonomous tick:"
+Write-Host "       .\scripts\install-autonomous-tick-task.ps1"
+Write-Host "     (desire-updater + POST /api/v1/autonomous-tick every 15m)"

@@ -117,6 +117,8 @@ class EventStore:
         if since:
             clauses.append("ts >= ?")
             params.append(since)
+        clauses.append("source != ?")
+        params.append("presence_outbound")
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         rows = self.db.fetchall(
             f"""
@@ -135,14 +137,22 @@ class EventStore:
                 """
                 SELECT ts
                 FROM events
-                WHERE person_id = ? OR person_id IS NULL
+                WHERE (person_id = ? OR person_id IS NULL)
+                  AND source != 'presence_outbound'
                 ORDER BY ts DESC, event_seq DESC
                 LIMIT 1
                 """,
                 (person_id,),
             )
         else:
-            row = self.db.fetchone("SELECT ts FROM events ORDER BY ts DESC, event_seq DESC LIMIT 1")
+            row = self.db.fetchone(
+                """
+                SELECT ts FROM events
+                WHERE source != 'presence_outbound'
+                ORDER BY ts DESC, event_seq DESC
+                LIMIT 1
+                """
+            )
         return None if row is None else str(row["ts"])
 
     def replay(self, events: Iterable[SocialEventCreate | dict[str, Any]]) -> list[SocialEvent]:

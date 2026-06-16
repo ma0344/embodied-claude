@@ -1,4 +1,7 @@
 const REFRESH_MS = 7000;
+const OUTBOUND_POLL_MS_DEFAULT = 3000;
+const OUTBOUND_SINCE_KEY = "koyori-outbound-since";
+const OUTBOUND_CLIENT_ID_KEY = "koyori-outbound-client-id";
 const SCROLL_PIN_THRESHOLD = 56;
 /** Local LLM + MCP can be slow; beyond this, unlock compose and abort upstream. */
 const CHAT_SEND_TIMEOUT_MS = 180_000;
@@ -34,6 +37,10 @@ let nativeSessionList = [];
 let showDebugInjection = localStorage.getItem(SHOW_DEBUG_INJECTION_KEY) === "1";
 let roomDrawerOpen = false;
 let contextRailPins = loadContextRailPins();
+let outboundPollTimer = null;
+let speechUnlocked = false;
+let roomInboundQueue = [];
+let roomInboundCurrent = null;
 
 function loadContextRailPins() {
   const defaults = { vision: true, status: false };
@@ -252,6 +259,12 @@ async function loadUiConfig() {
     native_chat_path: data.native_chat_path || "/api/native/chat",
     native_sessions_path: data.native_sessions_path || NATIVE_SESSIONS_API,
     display_timezone: data.display_timezone || "Asia/Tokyo",
+    outbound_pending_path: data.outbound_pending_path || "/api/v1/outbound/pending",
+    outbound_ack_path: data.outbound_ack_path || "/api/v1/outbound/ack",
+    outbound_poll_ms: Number(data.outbound_poll_ms) || OUTBOUND_POLL_MS_DEFAULT,
+    outbound_web_speech_suppress_on_localhost: Boolean(
+      data.outbound_web_speech_suppress_on_localhost,
+    ),
   };
 }
 
@@ -787,6 +800,7 @@ async function selectSession(sessionId, { force = false } = {}) {
 
 async function initSessions() {
   await loadUiConfig();
+  setupOutboundPoll();
   if (isNativeChat()) {
     await initNativeSessions();
     return;
@@ -928,6 +942,7 @@ function setupDebugInjectionToggle() {
 }
 
 function messageKey(msg) {
+  if (msg.nudge_id) return `outbound|${msg.nudge_id}`;
   const body = CcMessages.sanitizeDisplayText(msg.message || "");
   return `${msg.sender}|${body}`;
 }
@@ -1775,6 +1790,225 @@ async function refreshAll() {
   void refreshCamera();
 }
 
+function outboundClientId() {
+  let id = localStorage.getItem(OUTBOUND_CLIENT_ID_KEY);
+  if (!id) {
+    id = isKioskLayout() ? "kiosk" : `web-${crypto.randomUUID().slice(0, 12)}`;
+    localStorage.setItem(OUTBOUND_CLIENT_ID_KEY, id);
+  }
+  return id;
+}
+
+function outboundPendingPath() {
+  return uiConfig.outbound_pending_path || "/api/v1/outbound/pending";
+}
+
+function outboundAckPath() {
+  return uiConfig.outbound_ack_path || "/api/v1/outbound/ack";
+}
+
+function outboundPollMs() {
+  const ms = Number(uiConfig.outbound_poll_ms);
+  return Number.isFinite(ms) && ms >= 1000 ? ms : OUTBOUND_POLL_MS_DEFAULT;
+}
+
+function unlockSpeechOnce() {
+  if (speechUnlocked) return;
+  speechUnlocked = true;
+  if (typeof speechSynthesis === "undefined") return;
+  try {
+    const warmup = new SpeechSynthesisUtterance("");
+    warmup.volume = 0;
+    speechSynthesis.speak(warmup);
+  } catch {
+    /* ignore autoplay policy */
+  }
+}
+
+function shouldOutboundWebSpeech() {
+  if (!uiConfig.outbound_web_speech_suppress_on_localhost) return true;
+  const host = location.hostname;
+  return host !== "localhost" && host !== "127.0.0.1";
+}
+
+function speakOutboundNudge(text) {
+  if (!text || typeof speechSynthesis === "undefined") return;
+  if (!shouldOutboundWebSpeech()) return;
+  unlockSpeechOnce();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = "ja-JP";
+  utter.rate = 1.02;
+  const voices = speechSynthesis.getVoices?.() || [];
+  const jaVoice = voices.find((voice) => voice.lang && voice.lang.startsWith("ja"));
+  if (jaVoice) utter.voice = jaVoice;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(utter);
+}
+
+async function ackOutboundNudge(nudgeId, channels) {
+  await fetch(outboundAckPath(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify({
+      nudge_id: nudgeId,
+      client_id: outboundClientId(),
+      channels: channels || [],
+    }),
+  });
+}
+
+function roomInboundRoot() {
+  return document.getElementById("room-inbound");
+}
+
+function showRoomInboundModal(item) {
+  const root = roomInboundRoot();
+  const messageEl = document.getElementById("room-inbound-message");
+  if (!root || !messageEl) return;
+  messageEl.textContent = item.text || "";
+  root.hidden = false;
+  root.classList.add("is-open");
+  root.setAttribute("aria-hidden", "false");
+  document.body.classList.add("room-inbound-body-lock");
+  const replyBtn = document.getElementById("room-inbound-reply");
+  replyBtn?.focus();
+}
+
+function hideRoomInboundModal() {
+  const root = roomInboundRoot();
+  if (!root) return;
+  root.classList.remove("is-open");
+  root.hidden = true;
+  root.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("room-inbound-body-lock");
+}
+
+function enqueueRoomInbound(item) {
+  if (!item?.nudge_id || !item.text) return;
+  if (roomInboundCurrent?.nudge_id === item.nudge_id) return;
+  if (roomInboundQueue.some((row) => row.nudge_id === item.nudge_id)) return;
+  roomInboundQueue.push(item);
+  void pumpRoomInbound();
+}
+
+async function pumpRoomInbound() {
+  if (roomInboundCurrent || !roomInboundQueue.length) return;
+  roomInboundCurrent = roomInboundQueue.shift();
+  showRoomInboundModal(roomInboundCurrent);
+  if (roomInboundCurrent.speak) {
+    speakOutboundNudge(roomInboundCurrent.text);
+  }
+}
+
+function suggestInboundReplyText(nudgeText) {
+  const t = (nudgeText || "").trim();
+  if (!t) return "うん。";
+  if (/おる[？?]?$|いる[？?]?$/.test(t)) return "おるよ。";
+  if (/元気|調子|大丈夫/.test(t)) return "まあまあやで。";
+  if (/[？?]$/.test(t)) return "うん。";
+  return "聞こえてるよ。";
+}
+
+function buildInboundReplyPrompt(nudgeText, draft) {
+  const line = (nudgeText || "").trim();
+  const reply = (draft || "").trim() || "うん。";
+  if (!line) return reply;
+  return `[こよりからの着信への返事]\nこより: 「${line}」\n\nまー: ${reply}`;
+}
+
+async function beginInboundReply(item) {
+  unlockSpeechOnce();
+  if (isKioskLayout()) setRoomDrawerOpen(false);
+  if (isNativeChat()) {
+    startNewNativeSession();
+  }
+  const draft = suggestInboundReplyText(item?.text);
+  const prompt = buildInboundReplyPrompt(item?.text, draft);
+  const input = document.getElementById("chat-input");
+  if (input) {
+    input.placeholder = "こよりに話しかける...";
+  }
+  chatPinnedToBottom = true;
+  scrollChatToBottom();
+
+  try {
+    await sendChatMessage(prompt);
+  } catch (err) {
+    console.error("inbound reply send failed", err);
+    if (input) {
+      input.value = draft;
+      input.focus();
+    }
+  }
+}
+
+async function closeRoomInbound({ reply = false } = {}) {
+  const current = roomInboundCurrent;
+  if (!current) return;
+  hideRoomInboundModal();
+  roomInboundCurrent = null;
+  const channels = ["room_inbound"];
+  if (reply) channels.push("chat_compose");
+  if (current.speak) channels.push("voice_surface");
+  try {
+    await ackOutboundNudge(current.nudge_id, channels);
+    if (current.ts) {
+      const since = sessionStorage.getItem(OUTBOUND_SINCE_KEY) || "";
+      if (!since || current.ts > since) {
+        sessionStorage.setItem(OUTBOUND_SINCE_KEY, current.ts);
+      }
+    }
+  } catch (err) {
+    console.warn("outbound ack failed:", err.message);
+  }
+  if (reply) await beginInboundReply(current);
+  void pumpRoomInbound();
+}
+
+function setupRoomInbound() {
+  const replyBtn = document.getElementById("room-inbound-reply");
+  const laterBtn = document.getElementById("room-inbound-later");
+  if (replyBtn) {
+    replyBtn.addEventListener("click", () => {
+      void closeRoomInbound({ reply: true });
+    });
+  }
+  if (laterBtn) {
+    laterBtn.addEventListener("click", () => {
+      void closeRoomInbound({ reply: false });
+    });
+  }
+}
+
+async function pollOutboundNudges() {
+  if (!isKioskLayout()) return;
+  if (document.hidden) return;
+  const since = sessionStorage.getItem(OUTBOUND_SINCE_KEY) || "";
+  const params = new URLSearchParams({ client_id: outboundClientId() });
+  if (since) params.set("since", since);
+  try {
+    const data = await fetchJson(`${outboundPendingPath()}?${params.toString()}`);
+    const items = data.items || [];
+    for (const item of items) {
+      enqueueRoomInbound(item);
+    }
+  } catch (err) {
+    console.warn("outbound poll failed:", err.message);
+  }
+}
+
+function setupOutboundPoll() {
+  if (outboundPollTimer) {
+    clearInterval(outboundPollTimer);
+    outboundPollTimer = null;
+  }
+  if (!isKioskLayout()) return;
+  document.addEventListener("click", unlockSpeechOnce, { once: true, passive: true });
+  document.addEventListener("touchstart", unlockSpeechOnce, { once: true, passive: true });
+  outboundPollTimer = setInterval(() => void pollOutboundNudges(), outboundPollMs());
+  void pollOutboundNudges();
+}
+
 function setupKioskLayout() {
   const room = document.querySelector(".room");
   if (!room) return;
@@ -1793,8 +2027,10 @@ function setupKioskLayout() {
   applyDebugInjectionVisibility();
   setupRoomDrawer();
   setupContextRail();
+  setupOutboundPoll();
 }
 
+setupRoomInbound();
 setupKioskLayout();
 setupStatusCardExpand();
 setupChatScroll();

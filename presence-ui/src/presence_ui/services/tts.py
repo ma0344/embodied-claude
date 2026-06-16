@@ -21,13 +21,12 @@ async def speak_text(text: str, *, speaker: str = "local") -> tuple[bool, str]:
         load_repo_env(force=True)
         try:
             from tts_mcp import playback
-            from tts_mcp.config import ServerConfig, TTSConfig
+            from tts_mcp.config import TTSConfig
             from tts_mcp.engines.elevenlabs import ElevenLabsEngine
         except ImportError as exc:
             return False, f"tts-mcp not available: {exc}"
 
         config = TTSConfig.from_env()
-        server_config = ServerConfig.from_env()
         if not config.elevenlabs and not config.voicevox:
             hint = repo_root() / "tts-mcp" / ".env"
             return (
@@ -54,7 +53,7 @@ async def speak_text(text: str, *, speaker: str = "local") -> tuple[bool, str]:
             return False, f"engine {engine_name!r} unavailable"
 
         audio_bytes, audio_format = engine.synthesize(line)
-        file_path = playback.save_audio(audio_bytes, audio_format, server_config.save_dir)
+        file_path = playback.save_audio(audio_bytes, audio_format, config.playback.save_dir)
         pb = config.playback
         use_local = speaker in {"local", "both"}
         use_camera = speaker in {"camera", "both"} and pb.go2rtc_url

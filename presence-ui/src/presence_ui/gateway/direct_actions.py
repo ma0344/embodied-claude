@@ -22,6 +22,12 @@ from social_core import utc_now
 from presence_ui.deps import PresenceStores
 from presence_ui.gateway.room_events import activity_event, progress_event
 from presence_ui.services.camera_locations import CAMERA_LOCATIONS, PresetLocation
+from presence_ui.services.outbound import (
+    default_surface_channels,
+    enqueue_outbound_nudge,
+    outbound_delivery_artifacts,
+    voice_local_enabled,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -233,6 +239,7 @@ async def talk_to_companion_direct(
     ctx: InteractionContext,
     plan: ResponsePlan,
     text: str | None = None,
+    skip_cooldown: bool = False,
 ) -> DirectActionOutcome:
     """Speak to まー when boundary allows (miss_companion)."""
     allowed, reasons = boundary_allows(
@@ -265,9 +272,39 @@ async def talk_to_companion_direct(
             max_tokens=120,
         )
 
+    channels = default_surface_channels()
+    enqueue = enqueue_outbound_nudge(
+        stores,
+        person_id=person_id,
+        text=line,
+        speak=True,
+        channels=channels,
+        desire="miss_companion",
+        skip_cooldown=skip_cooldown,
+    )
+    if not enqueue.ok:
+        return DirectActionOutcome(
+            ok=False,
+            action="talk_to_companion",
+            summary=enqueue.reason or "Outbound enqueue failed.",
+            detail=enqueue.reason,
+            events=[
+                activity_event(
+                    kind="say",
+                    label="声をかけられなかった",
+                    detail=(enqueue.reason or "cooldown")[:200],
+                    ok=False,
+                )
+            ],
+        )
+
     from presence_ui.services.tts import speak_text
 
-    spoke, speak_detail = await speak_text(line, speaker="local")
+    spoke_local = False
+    speak_detail = ""
+    if voice_local_enabled():
+        spoke_local, speak_detail = await speak_text(line, speaker="local")
+
     stores.orchestrator.record_agent_experience(
         RecordAgentExperienceInput(
             ts=utc_now(),
@@ -278,6 +315,12 @@ async def talk_to_companion_direct(
             importance=3,
             privacy_level="relationship",
             related_event_ids=[],
+            artifacts=outbound_delivery_artifacts(
+                nudge_id=enqueue.nudge_id or "",
+                channels=list(enqueue.channels),
+                speak=True,
+                delivered_local=spoke_local,
+            ),
         )
     )
     stores.social_state.ingest_social_event(
@@ -287,7 +330,13 @@ async def talk_to_companion_direct(
             "kind": "agent_utterance",
             "person_id": person_id,
             "confidence": 1.0,
-            "payload": {"text": line, "channel": "voice", "via": "gateway_tts"},
+            "payload": {
+                "text": line,
+                "channel": "outbound",
+                "via": "presence_outbound",
+                "nudge_id": enqueue.nudge_id,
+                "channels": list(enqueue.channels),
+            },
         }
     )
     events = [
@@ -296,16 +345,16 @@ async def talk_to_companion_direct(
             kind="say",
             label="声を出した",
             detail=line[:120],
-            ok=spoke,
+            ok=True,
         ),
     ]
     return DirectActionOutcome(
-        ok=spoke,
+        ok=True,
         action="talk_to_companion",
         summary=line,
-        detail=speak_detail,
+        detail=speak_detail or enqueue.nudge_id or "",
         events=events,
-        desire_satisfied="miss_companion" if spoke else None,
+        desire_satisfied="miss_companion",
     )
 
 
@@ -483,6 +532,7 @@ async def execute_smoke_action(
             ctx=ctx,
             plan=plan,
             text=speech_text,
+            skip_cooldown=True,
         )
     else:
         outcome = write_private_reflection_direct(

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>こよりの部屋</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260615-status-expand" />
+  <link rel="stylesheet" href="/static/style.css?v=20260616-room-inbound" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500&family=Cormorant+Garamond:wght@400;500&display=swap" rel="stylesheet" />
@@ -152,11 +152,32 @@
     </label>
   </div>
 
+  <div id="room-inbound" class="room-inbound" hidden aria-hidden="true">
+    <div class="room-inbound__backdrop" aria-hidden="true"></div>
+    <div
+      class="room-inbound__panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="room-inbound-title"
+    >
+      <p class="room-inbound__eyebrow" id="room-inbound-title">こよりから</p>
+      <p class="room-inbound__message" id="room-inbound-message"></p>
+      <div class="room-inbound__actions">
+        <button type="button" id="room-inbound-reply" class="room-inbound__btn room-inbound__btn--primary">
+          返事する
+        </button>
+        <button type="button" id="room-inbound-later" class="room-inbound__btn room-inbound__btn--ghost">
+          あとで
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script src="/static/vendor/marked.min.js"></script>
   <script src="/static/vendor/purify.min.js"></script>
   <script src="/static/chat-markdown.js?v=20260610-md-both"></script>
   <script src="/static/cc-messages.js?v=20260615-memory-inject"></script>
   <script src="/static/koyori-voice.js?v=20260615-social-ja"></script>
-  <script src="/static/app.js?v=20260615-status-expand"></script>
+  <script src="/static/app.js?v=20260610-a4j-inbound-context"></script>
 </body>
 </html>

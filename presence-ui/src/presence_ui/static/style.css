@@ -1446,7 +1446,8 @@ body {
   background: rgba(138, 154, 140, 0.12);
 }
 
-body.room-drawer-body-lock {
+body.room-drawer-body-lock,
+body.room-inbound-body-lock {
   overflow: hidden;
 }
 
@@ -1522,4 +1523,97 @@ body.room-drawer-body-lock {
   .brand h1 {
     font-size: 1.5rem;
   }
+}
+
+/* A4i: room inbound — kiosk center dialog (session-independent) */
+.room-inbound {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.room-inbound.is-open {
+  pointer-events: auto;
+  opacity: 1;
+  visibility: visible;
+}
+
+.room-inbound__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(44, 42, 38, 0.38);
+  backdrop-filter: blur(2px);
+}
+
+.room-inbound__panel {
+  position: relative;
+  width: min(22rem, calc(100vw - 2.5rem));
+  padding: 1.35rem 1.4rem 1.2rem;
+  border-radius: 1.1rem;
+  border: 1px solid var(--border);
+  background: var(--bg-room);
+  box-shadow: 0 20px 56px rgba(44, 42, 38, 0.18);
+  text-align: center;
+}
+
+.room-inbound__eyebrow {
+  margin: 0 0 0.65rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--koyori);
+  font-family: "Cormorant Garamond", serif;
+}
+
+.room-inbound__message {
+  margin: 0 0 1.15rem;
+  font-size: 1.15rem;
+  line-height: 1.55;
+  color: var(--text);
+  font-weight: 400;
+}
+
+.room-inbound__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: center;
+}
+
+.room-inbound__btn {
+  min-height: 48px;
+  min-width: 7.5rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-soft);
+  font-family: inherit;
+  font-size: 0.92rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.room-inbound__btn--primary {
+  border-color: rgba(138, 154, 140, 0.55);
+  background: rgba(138, 154, 140, 0.16);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.room-inbound__btn--ghost {
+  background: transparent;
+}
+
+.room--kiosk .room-inbound__btn {
+  min-height: 52px;
+  font-size: 1rem;
 }

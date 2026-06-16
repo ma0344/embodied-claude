@@ -322,6 +322,47 @@ MIGRATIONS = [
             ON session_pointers(active_session_id, activated_at DESC);
         """,
     ),
+    Migration(
+        name="004_outbound_nudges",
+        sql="""
+        CREATE TABLE IF NOT EXISTS outbound_nudges (
+            nudge_id TEXT PRIMARY KEY,
+            ts TEXT NOT NULL,
+            person_id TEXT,
+            text TEXT NOT NULL,
+            speak INTEGER NOT NULL DEFAULT 1,
+            channels_json TEXT NOT NULL DEFAULT '[]',
+            desire TEXT,
+            text_fingerprint TEXT NOT NULL,
+            experience_id TEXT,
+            delivered_at TEXT,
+            delivered_channels_json TEXT,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_outbound_nudges_pending
+            ON outbound_nudges(person_id, delivered_at, ts);
+
+        CREATE INDEX IF NOT EXISTS idx_outbound_nudges_cooldown
+            ON outbound_nudges(person_id, ts DESC);
+        """,
+    ),
+    Migration(
+        name="005_outbound_client_acks",
+        sql="""
+        CREATE TABLE IF NOT EXISTS outbound_nudge_client_acks (
+            nudge_id TEXT NOT NULL,
+            client_id TEXT NOT NULL,
+            channels_json TEXT NOT NULL DEFAULT '[]',
+            acked_at TEXT NOT NULL,
+            PRIMARY KEY (nudge_id, client_id),
+            FOREIGN KEY (nudge_id) REFERENCES outbound_nudges(nudge_id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_outbound_client_acks_client
+            ON outbound_nudge_client_acks(client_id, acked_at DESC);
+        """,
+    ),
 ]
 
 

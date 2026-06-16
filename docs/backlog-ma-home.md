@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ
 
-**最終更新**: 2026-06-15（A4 Outbound + 優先順更新）  
+**最終更新**: 2026-06-10（A4j 文脈同梱 + A4f/g 実装）  
 **方針**: こより本体（記憶・gateway 身体）は **様子見**。部屋 UI は **Native 会話エンジン + `/` の殻** を育てる（8080 プロキシ UI は投資しない）。
 
 **実行方針（合意 2026-06-14）**: 判断は compose/plan/stores のまま。**身体・自律の実行**は MCP に頼らず gateway 直実行へ（remember 直実行と同型）。詳細 → [gateway-direct-actions.md](./gateway-direct-actions.md)
@@ -13,48 +13,47 @@
 
 | 順 | トラック | 内容 | 状態 |
 |----|---------|------|------|
-| **D** | Backlog 最新化 | このファイルを現実に合わせる | **完了** |
+| **D** | Backlog 最新化 | このファイルを現実に合わせる | **随時** |
 | **B** | 運用自動化 | ログオン常駐・手起動を減らす | **ほぼ完了**（B2 LM Studio 手動のみ） |
 | **C** | **部屋 UI（Native + Surface）** | `/` 殻 + キオスク UX | **C11 実戦 OK** → 磨きは任意 |
-| **A4** | **能動届け（Outbound）** | experience≠届け。Surface に話しかける | **次の主作業** |
+| **A4** | **能動届け（Outbound）** | A4f/g 実装済み → SSE/TTS 磨き | **A4b+ / OL2** |
 | **OL** | Open Loops / リマインド | 日付解決 + commitment + 発火 | A4b/f とセット |
 | **A** | 記憶・gateway 身体 | compose / see / dismiss | **様子見**（大きな追加は止める） |
 | **C12** | intent router | 曖昧な「見て」分類 | 会話快適化（後） |
 
-### 次の一手 — 優先度案（2026-06-15）
+### 次の一手 — 優先度案（2026-06-10 更新）
 
-**いまのボトルネック**: Surface で部屋は使えるが、**こよりからの能動届けが experience に留まる**。Open Loops は「聞けば答える」までで **鳴らない**。
+**いまのボトルネック**: 自律 tick（A4f）と PC Push（A4g）の **Task 登録 + ntfy URL 設定** が運用面の残り。Open Loops は **OL1/OL2** で「鳴らす」配線が未完。
 
-|  tier | 順 | 項目 | 理由 |
+| tier | 順 | 項目 | 理由 |
 |------|----|------|------|
-| **1** | ① | **A4a** Outbound モデル | 届いた/届いてないを記録しないと改善不能 |
-| **1** | ② | **A4b** chat_push | Surface キオスクの本命（bubble + SSE） |
-| **1** | ③ | **A4c** voice_surface | 同じ端末のスピーカー。PC 音声は Surface に届かない |
-| **1** | ④ | **A4e** nudge クールダウン | 実装前に連打再発を防ぐ（6/14 の教訓） |
-| **2** | ⑤ | **OL1** 日付解決 | 「明日」stale を構造で直す（OL0 は応急） |
-| **2** | ⑥ | **A4f + OL2** スケジューラ + リマインド | commitment → tick → **A4b/c** で鳴らす |
-| **3** | ⑦ | **C12** intent router | カメラ指示の取りこぼし減。日常の blocker ではない |
-| **3** | ⑧ | **A4d** チャネル選択 | b/c 動いてから「どこに届けるか」 |
-| **4** | ⑨ | **A4g/h** Win/Android Push | 外出先・別端末。ntfy 等 + 専用アカウント |
-| **4** | ⑩ | **A3c 運用** TTS ma-home | `tts-mcp/.env`。Surface 日常より後 |
-| **—** | — | C11c/d、体温 LHM | 任意の磨き |
+| **1** | ① | **A4f 運用** | `install-autonomous-tick-task.ps1` 登録（15m + desire-updater） |
+| **1** | ② | **A4g 運用** | `PRESENCE_OUTBOUND_NTFY_URL` を presence-ui.local.env に設定 |
+| **2** | ③ | **OL1 + OL2** | 日付解決 + commitment → tick でリマインド |
+| **2** | ④ | **A4b+** SSE `room_inbound` | poll 3s → 即時着信 |
+| **2** | ⑤ | **A4c+** Server TTS URL | キオスク Web Speech → 8090 合成音声 |
+| **3** | ⑥ | **A4j+** 着信返信 UX | 下書き編集可・ヒューリスティック拡充（任意） |
+| **3** | ⑦ | **C12** intent router | カメラ指示の取りこぼし減 |
+| **—** | — | C11c/d、体温 LHM、Irodori TTS | 任意の磨き |
 
-**やらない順**: C12 だけ先にやっても「こよりが話しかけてこない」は解決しない。**A4b+c が Surface 体験の芯**。
+**やらない順**: C12 だけ先にやっても「自律で話しかけてこない」は **A4f** 待ち。
 
-**フェーズ判断（2026-06-14）**: 記憶 compose / vision prefetch / open loop dismiss / desire 注入は **8090 で実戦 OK**。大きな本体機能追加は止め、日常利用＋`verify-mission-a.ps1` で様子を見る。**TTS（`tts-mcp/.env`）は後回し**（Surface は **A4c voice_surface** を優先）。
+**フェーズ判断（2026-06-10）**: A4a/e/i + `voice_local`（Aivis **るな**）は **運用中**。localhost では `voice_local` 時 Web Speech 二重再生を抑制済み。Surface 音声は引き続き **A4c+**（Server TTS）が目標。
 
 **UI と本体の兼ね合い**: ミッションA の「人間1ターン」は **CLI でも `:8090/` でも可**。本体変更時は `restart-presence-ui.ps1`（内部で `sync-presence-deps`）。
 
 ---
 
-## 今どこにいるか（2026-06-14）
+## 今どこにいるか（2026-06-10）
 
 | 層 | 状態 |
 |----|------|
 | **記憶インフラ** | HTTP daemon `:18900` 常駐。compose recall・gateway remember **OK** |
-| **Gateway `:8090`** | compose/plan + KV 安定注入。**身体は gateway 直実行済み**（see / observe / reflect / autonomous-tick）。vision prefetch + remember **実戦 OK**（窓・デスク・ダイニング） |
+| **Gateway `:8090`** | compose/plan + KV 安定注入。**身体は gateway 直実行済み**（see / observe / reflect / autonomous-tick）。vision prefetch + remember **実戦 OK** |
 | **関係性** | open loop dismiss + commitment cancel。「覚えてる？」recall 誤 loop 抑制 |
-| **表面 UI** | **Native 本線**（JSONL 正本・8090 API 同期 **C10** / 8080 取込 **完了 2026-06**） |
+| **表面 UI** | **Native 本線** + キオスク着信（A4i）。**A4j** 着信返信は native chat 自動送信 |
+| **TTS（ma-home）** | **AivisSpeech** `:10101`（`scripts/start-aivis-tts.ps1`）。声 **るな**（style `345585728`）。`voice_local` 運用中。Irodori は参照声待ちで保留 |
+| **Outbound** | A4i/j + **A4f**（15m tick Task）+ **A4g**（enqueue → ntfy/Pushover）。PC `voice_local` |
 | **運用** | Task×3〜4（memory / presence / watchdog。**webui 任意**）+ post-logon-smoke **Native 対応** |
 
 参照: [gateway-direct-actions.md](./gateway-direct-actions.md)、[mission-A_Investigation-Report.md](./mission-A_Investigation-Report.md)
@@ -177,7 +176,7 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 - [x] **A3f/g** vision prefetch（会話 A）+ desire see caption（B）+ 窓/デスク/ダイニング preset
 - [x] **A3 実戦** — 窓景色 recall（vision_prefetch + VISION_CAPTION 返答）、会議 open loop、desire 注入確認（2026-06-14）
 - [x] **A3h** open loop dismiss + commitment cancel + recall 誤 loop 抑制（2026-06-14）
-- [ ] **A3c 運用** — `miss_companion` / natural tick TTS — **`tts-mcp/.env` 後回し**（合意 2026-06-14）
+- [x] **A3c 運用** — `miss_companion` / tick → **Aivis るな** + `voice_local`（`tts-mcp/.env` + `mcpBehavior.toml` + `scripts/start-aivis-tts.ps1`）。Irodori はベンチ済み・参照声待ちで保留
 - [ ] **保存と想起の一貫性** — 窓・会議は spot check PASS 済み。「さっき見た」だけ memory 想起（再撮影なし）は任意改善
 - [ ] **save_visual_memory HTTP** — MCP 完全 parity。急がない
 - [ ] **Gemma `remember` 信頼性** — 観察のみ
@@ -192,13 +191,13 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 
 | チャネル | 出力先 | 状態 |
 |----------|--------|------|
-| `chat_push` | 8090 bubble（**MVP: poll** → **目標: SSE**） | 未実装 |
-| `voice_local` | ma-home PC スピーカー（`services/tts.py` local） | 実装済み（TTS 設定要） |
-| `voice_surface` | Surface スピーカー（**MVP: Web Speech** → **目標: 8090 TTS URL**） | 未実装 |
+| `room_inbound` | キオスク中央ダイアログ（poll → 目標 SSE） | **実装済み（A4i）** |
+| `chat_compose` | 着信「返事する」→ 新規 native 会話 + 送信 | **実装済み（A4j）** |
+| `voice_local` | ma-home PC スピーカー（Aivis via `services/tts.py`） | **運用中** |
+| `voice_surface` | Surface スピーカー（**MVP: Web Speech** → **目標: 8090 TTS URL**） | MVP（キオスク着信時）。localhost + `voice_local` 時は Web Speech 抑制 |
 | `voice_camera` | Tapo / go2rtc カメラ側スピーカー | 設定時のみ |
 | `kiosk_banner` | Surface 部屋 UI ヘッダー／トースト（視覚のみ） | 未実装 |
-| `push_windows` | Windows トースト／Action Center（**受信側アプリ or ブリッジ要**） | 未実装 |
-| `push_android` | Android 通知（**受信側アプリ or ブリッジ要**） | 未実装 |
+| `push_windows` / `push_android` | ntfy / Pushover 等（**A4g**） | **実装済み**（env 要） |
 | `silent` | private reflection のみ（届けない） | 実装済み |
 
 **外部 Push サービス（検討）**: 自前 FCM/APNs より、**他との関係を閉じた専用アカウント**で API 叩けるものを優先検討。
@@ -212,36 +211,68 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 
 | 優先 | 項目 | メモ |
 |------|------|------|
-| 高 | **A4a** Outbound モデル | `OutboundChannel` enum、`record_agent_experience` に `channel` + `delivered`、gateway 直実行の戻り値と一致 |
-| 高 | **A4b** `chat_push` | **MVP**: room event + 3s poll。**目標**: SSE room stream |
-| 中 | **A4c** `voice_surface` | **MVP**: Web Speech。**目標**: 8090 TTS audio URL |
-| 中 | **A4d** チャネル選択 | Surface 接続中 → chat_push + voice_surface 優先、ma-home のみ → voice_local |
-| 中 | **A4e** nudge クールダウン | 同一 desire / 同一文面の連打防止（6/14 `まー、おる？` 4連発） |
-| 中 | **A4f** tick スケジューラ | desire-updater / Task と `autonomous-tick` 定期実行（OL2 リマインドと共用可） |
-| 低 | **A4g** `push_windows` | WinRT toast または ntfy/Pushover ブリッジ + 専用アカウント |
-| 低 | **A4h** `push_android` | ntfy / FCM 等 + 専用受信（部屋アプリ or 既存クライアント） |
-| 低 | **A4i** `kiosk_banner` | チャットを開いてなくても見える短い着信 UI |
+| 高 | **A4a** Outbound モデル | **済** — `channel` + `delivered`、gateway 直実行と一致 |
+| 高 | **A4b** `chat_push` | **MVP 済**（bubble）。**目標**: SSE `room_inbound` |
+| 中 | **A4c** `voice_surface` | **MVP 済**（Web Speech）。**目標**: 8090 TTS audio URL |
+| 中 | **A4d** チャネル fan-out | enqueue → kiosk + push（A4g） |
+| 中 | **A4e** nudge クールダウン | **済** |
+| 中 | **A4f** tick スケジューラ | **済** — `run-autonomous-tick.ps1` + `install-autonomous-tick-task.ps1`（15m） |
+| 中 | **A4g** `push_*`（**PC 本線**） | **済** — `outbound_push.py`（`PRESENCE_OUTBOUND_NTFY_URL` / Pushover） |
+| 低 | **A4h** `push_android` | 同上（外出先） |
+| 高 | **A4i** `room_inbound`（**キオスク本線**） | **済** — 中央ダイアログ着信 |
+| 中 | **A4j** 着信 → 新規会話 + 送信 | **済** — 「返事する」で native chat |
 
-**実装順（案）**: A4a → **A4b + A4c**（Surface 日常）→ A4d/e → OL2（リマインド）→ A4g/h（外出先）
+**実装順（案）**: ~~A4i~~ → **A4j** → **A4f** → **A4g** → A4b+ SSE → A4c+ TTS → OL2
 
 **段階（合意 2026-06-15）** — 目標は **SSE + Server TTS**。まず MVP で「届く」を証明する。
 
+**配信モデル（合意 2026-06-16）— 選択肢 A: 部屋着信**
+
+- nudge は **会話セッションに属さない**。`session_id` 未知でも届く
+- **Surface（キオスク）** = 8090 部屋ページの **中央ダイアログ着信**（A4i）+ Web Speech / 将来 TTS
+- **PC（ma-home デスク）** = **部屋 UI では届けない**。外部 Push（A4g: ntfy / Pushover 等）— 8090 を開いてなくても通知
+- 着信から **新しい会話**（A4j）は **キオスク側のみ**。「返事する」→ 新規 `session_id` + **下書き返信を native chat 送信**（compose/plan 経由）
+- JSONL には nudge 自体は書かない
+- enqueue 時に **チャネル fan-out**（例: `kiosk` + `push_ntfy`）。PC 用 per-client poll は本線にしない（MVP の `web-*` ack は暫定・廃止予定）
+
+**なぜ PC は外部 Push か**: 部屋に二重 UI（modal + toast）を載せない / PC は常時 8090 を見てない / gateway から HTTP 1 発で済む（WinRT 自前より ntfy 等が安い）
+
+| 届け先 | 手段 | 実装 |
+|--------|------|------|
+| Surface キオスク | poll → **中央ダイアログ** | A4i + A4j |
+| ma-home PC | **ntfy / Pushover / Telegram** 等 | A4g（enqueue フックで POST） |
+| 外出先 Android | 同上クライアント | A4g/h |
+| ma-home スピーカー only | `voice_local` | 既存 TTS |
+
+| 段 | 見た目 | 音声 | 備考 |
+|----|--------|------|------|
+| **MVP（済）** | チャット bubble + per-client poll | Web Speech（kiosk） | 検証用。A4i で置き換え、PC poll はやめる |
+| **A4i 本線** | キオスク **中央ダイアログ**（返事する／あとで） | Web Speech → TTS URL | **実装済み**（PC poll 廃止） |
+| **A4j** | ダイアログ CTA → 新規会話 | — | **実装済み**（ヒューリスティック下書き + 自動送信） |
+| **A4g** | OS / ntfy 通知 | 任意 | PC 本線。部屋を開いたら通常チャット |
+| **目標** | kiosk: SSE `room_inbound` | Server TTS | push は従来どおり HTTP |
+
 | 段 | A4b chat_push | A4c voice_surface | 備考 |
 |----|---------------|-------------------|------|
-| **MVP** | room event 保存 + **3s poll** → 既存 bubble 描画 | ブラウザ **`speechSynthesis`**（Web Speech） | JSONL を汚さない。autoplay は初回タップで unlock |
-| **目標** | 常時 **`EventSource /api/v1/room/stream`** | ma-home 合成 → **`GET …/outbound/audio/{id}`** + `Audio.play()` | VOICEVOX/ElevenLabs 声。bubble と同一 SSE イベント |
+| **MVP** | outbound poll + **暫定** bubble | ブラウザ **`speechSynthesis`** | JSONL を汚さない |
+| **目標** | **`room_inbound`** on SSE / 着信バナー | ma-home 合成 → audio URL | セッション非依存 |
 
 MVP チェックリスト:
 
-- [ ] **A4a** Outbound モデル + experience に `channel` / `delivered`
-- [ ] **A4e** nudge クールダウン（MVP 前に必須）
-- [ ] **A4b-mvp** `GET /api/v1/outbound/pending` + poll → bubble（`talk_to_companion` / tick から enqueue）
-- [ ] **A4c-mvp** 同上 payload の `speak` → Web Speech（`?kiosk=1`）
-- [ ] **A4b+** SSE room stream + 即時 bubble
+- [x] **A4a** Outbound モデル + experience に `channel` / `delivered`
+- [x] **A4e** nudge クールダウン（MVP 前に必須）
+- [x] **A4b-mvp** `GET /api/v1/outbound/pending` + poll → bubble（暫定。A4i で着信 UI へ）
+- [x] **A4c-mvp** 同上 payload の `speak` → Web Speech（`?kiosk=1`）
+- [x] **A4b-mvp+** per-client ack（PC と Surface 両方に届く）
+- [x] **A4i** 部屋着信バナー（キオスク中央ダイアログ。bubble / PC poll 廃止）
+- [x] **A4j** 着信から新規会話 + 送信（着信文を compose プロンプトに同梱）
+- [ ] **A4j+** 着信返信 UX — 下書き編集可（自動送信オプション）、`suggestInboundReplyText` 拡充
+- [ ] **A4b+** SSE `room_inbound` + 着信即時
 - [ ] **A4c+** Server TTS URL + Web Audio
 - [ ] **A4d** チャネル選択（MVP 後）
-- [ ] **A4f** tick スケジューラ（OL2 と共用）
-- [ ] **A4g/h** Win/Android Push（外出先）
+- [x] **A4f** tick スケジューラ（desire-updater + `POST /api/v1/autonomous-tick`、Task 15m）
+- [x] **A4g** Win Push（enqueue → ntfy / Pushover HTTP）
+- [ ] **A4h** Android Push（ntfy クライアント共用で可）
 
 ---
 
@@ -340,9 +371,40 @@ MVP チェックリスト:
 | `sync-presence-deps.ps1` | presence-ui .venv へ orchestrator / relationship / **wifi-cam-mcp** 再ビルド |
 | `c1-native-poc.ps1` | C1 Native PoC の ON/OFF + restart（`-Enable` / `-Disable` / `-Status`） |
 | `run-webui-ma-home.ps1` | :8080 起動 |
-
 | `test-gateway-direct-actions.ps1` | A3 gateway 直実行スモーク（observe / say / reflect） |
+| `install-autonomous-tick-task.ps1` | A4f — 15m で desire-updater + autonomous-tick |
+| `run-autonomous-tick.ps1` | A4f — 手動 1 回 tick（ログ付き） |
+| `setup-ntfy-ma-home.ps1` | A4g — ntfy topic 生成 + `presence-ui.local.env` + テスト POST |
+| `start-irodori-tts.ps1` | Irodori TTS Server `:8088`（参照声待ち・任意） |
+| `tts_benchmark.py` | TTS コールド/ウォーム計測（`scripts/tts-samples/`） |
 
-**自律 tick**: `POST http://127.0.0.1:8090/api/v1/autonomous-tick` → [gateway-direct-actions.md](./gateway-direct-actions.md)
+**Outbound スモーク**（PC `voice_local` + キオスク着信）:
+
+```powershell
+curl -X POST http://localhost:8090/api/v1/autonomous-tick `
+  -H "Content-Type: application/json" `
+  -d '{"smoke_action":"miss_companion","speech_text":"まー、おる？"}'
+```
+
+Surface `?kiosk=1` で着信 →「返事する」→ 新規会話に下書き返信が送られ、こよりが応答する。
+
+**A4f 登録**（presence-ui 常駐が前提）:
+
+```powershell
+.\scripts\install-autonomous-tick-task.ps1
+Start-ScheduledTask -TaskName EmbodiedClaude-AutonomousTick
+Get-Content $env:USERPROFILE\.config\embodied-claude\logs\autonomous-tick.log -Tail 5
+```
+
+**A4g Push** — 初回セットアップ:
+
+```powershell
+.\scripts\setup-ntfy-ma-home.ps1 -Topic koyori-ma-home
+# subscribe 後:
+.\scripts\restart-presence-ui.ps1
+.\scripts\setup-ntfy-ma-home.ps1 -TestOnly
+```
+
+`presence-ui.local.env` に `PRESENCE_OUTBOUND_NTFY_URL` が書かれる（**コミットしない**）。ntfy.sh 無料枠は**アカウント不要**（topic 名＝秘密）。Pro で topic 予約可。
 
 **前提**: LM Studio、`.claude/settings.local.json`、`.mcp.json`（memory は `uv run --no-sync`）

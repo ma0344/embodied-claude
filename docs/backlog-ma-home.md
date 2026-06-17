@@ -9,6 +9,13 @@
 
 あとでやること。完了したら `[x]` にするか「完了」セクションへ移す。
 
+### 運用・体感の残り（まーメモ）
+
+| 項目 | トラック | 状態 |
+|------|---------|------|
+| **Windows キーボードをキオスク（Surface）で共有** — PC の KB/マウスを Surface 入力に（BT 切替は避けたい） | [V5](#v--ビジョン--未実装docsweb_ui_designmdexported-sessionmd-より) | 未 |
+| **サーバー用ターミナルウィンドウの非表示** — ログオン時 Task 起動の cmd/PowerShell を隠す | [B4](#b--運用自動化) | 未・後回し可 |
+
 ---
 
 ## 優先順（合意 2026-06-13 → **2026-06-15 更新**）
@@ -143,7 +150,7 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 - [x] **B1** Scheduled Task 3つ登録（`EmbodiedClaude-MemoryHTTP` / `WebUI` / `PresenceUI`）— 2026-06-13 実施
 - [x] **B3** Watchdog Task 登録（`EmbodiedClaude-Watchdog`）— 2026-06-14 実施
 - [ ] **B2** LM Studio ロードは別途（現状手動 or 既存習慣）
-- [ ] **B4** ログオン時ターミナル非表示（VBS ランチャー×3）— **後回し可**。Watchdog 済み。daemon 障害はログ + smoke で検知
+- [ ] **B4** **サーバー用ターミナルウィンドウの非表示** — ログオン時 Task（MemoryHTTP / WebUI / PresenceUI）の cmd・PowerShell を出さない（VBS ランチャー×3 想定）。**後回し可**。Watchdog 済み。daemon 障害はログ + smoke で検知
 
 **メモ**: Claude Code の stdio MCP（memory/sociality 等）は **セッションごとに spawn** される。daemon は **HTTP 記憶の本店** だけ常駐。診断: `check-mcp-processes.ps1`。
 
@@ -419,7 +426,7 @@ MVP チェックリスト:
 | 低 | **V2 イントロ演出** | Embodied LLM スプラッシュ → こより顕在化（GIF/イラスト切替。朝=起きる/昼=歩く・伸び/終了=別演出）。表示中に status/camera ウォームアップ |
 | 低 | **V3 発話ビジュアル** | るな再生中の波形 or 軽い動き（`web_ui_design` Task 6） |
 | 中 | **V4 see_near（近目）** | Surface 内蔵カメラ → ma-home caption / 記憶。遠目=Tapo。→ [koyori-near-eye.md](./koyori-near-eye.md) |
-| **高** | **V5 PC↔Surface 入力共有** | キオスクはタッチ+簡易KB。まー要望: **PC のキーボード・マウスを Surface 入力に**（BT キーボード切替は信用できずワンステップ余計）。Barrier / Input Leap / 有線・LAN 系を調査。ブラウザ内 KB 共有はハードル高（過去トライ） |
+| **高** | **V5 Windows キーボードをキオスクで共有** | **PC↔Surface 入力共有**。キオスクはタッチ+簡易KB。まー要望: **ma-home の Windows キーボード・マウスを Surface キオスク入力に**（BT キーボード切替は信用できずワンステップ余計）。Barrier / Input Leap / 有線・LAN 系を調査。ブラウザ内 KB 共有はハードル高（過去トライ） |
 | 低 | **V6 家族・関係サイドバー** | ゴンザ・千ちゃん等の常時リスト（PoC では後回しと合意） |
 | 低 | **V7 Phase 2 掃除** | `user_prompt.py` / `stripEnrichedUserPrompt` 削除（JSONL 履歴が純発話のみになった後） |
 | 中 | **V8 room_say poll フォールバック** | SSE 未接続でも `room-say` 届く（`room_say_pending.py` WIP） |
@@ -429,7 +436,7 @@ MVP チェックリスト:
 - [ ] **V2** イントロ / スプラッシュ
 - [ ] **V3** 発話インジケーター
 - [ ] **V4** see_near
-- [ ] **V5** PC キーボード・マウス → Surface（入力ストレス解消）
+- [ ] **V5** **Windows キーボードをキオスク（Surface）で共有** — PC キーボード・マウス → Surface（入力ストレス解消）
 - [ ] **V6** 家族リスト UI
 - [ ] **V7** enriched user 履歴後処理の削除
 - [ ] **V8** room_say オフライン配信

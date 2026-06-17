@@ -64,23 +64,47 @@ if [[ -d "$PKGROOT/share" ]]; then
   cp -a "$PKGROOT/share/." /usr/local/share/
 fi
 
-# Qt6 runtime (GUI optional; CLI client needs libs)
-MISSING=()
-for lib in libQt6Core.so.6 libssl.so.3 libcrypto.so.3; do
-  if ! ldconfig -p 2>/dev/null | grep -q "$lib"; then
-    MISSING+=("$lib")
-  fi
-done
-if ((${#MISSING[@]})); then
-  echo "Installing Qt6 / SSL runtime packages ..."
-  apt-get update
-  apt-get install -y libqt6core6t64 libqt6gui6t64 libqt6widgets6t64 libssl3t64 2>/dev/null \
-    || apt-get install -y libqt6core6 libqt6gui6 libqt6widgets6 libssl3
+if [[ -d "$PKGROOT/lib" ]]; then
+  echo "Installing bundled libs to /usr/local/lib ..."
+  cp -a "$PKGROOT/lib/." /usr/local/lib/
+  ldconfig
 fi
+
+echo "Installing Input Leap runtime dependencies (libei, Qt6, SSL) ..."
+apt-get update
+apt-get install -y \
+  libei1 \
+  libportal1 \
+  libxkbcommon0 \
+  libxtst6 \
+  libxinerama1 \
+  libxrandr2 \
+  libxi6 \
+  libqt6core6t64 \
+  libqt6gui6t64 \
+  libqt6widgets6t64 \
+  libssl3t64 \
+  2>/dev/null \
+  || apt-get install -y \
+    libei1 \
+    libportal1 \
+    libxkbcommon0 \
+    libxtst6 \
+    libxinerama1 \
+    libxrandr2 \
+    libxi6 \
+    libqt6core6 \
+    libqt6gui6 \
+    libqt6widgets6 \
+    libssl3
 
 echo ""
 echo "Installed:"
-/usr/local/bin/input-leapc --help 2>&1 | head -3 || true
+if ! /usr/local/bin/input-leapc --help 2>&1 | head -3; then
+  echo "ERROR: input-leapc still fails — check: ldd /usr/local/bin/input-leapc | grep 'not found'" >&2
+  ldd /usr/local/bin/input-leapc 2>&1 | grep 'not found' || true
+  exit 1
+fi
 echo ""
 echo "Next:"
 echo "  1. Set KOYORI_INPUT_LEAP_SERVER in /etc/default/koyori-kiosk"

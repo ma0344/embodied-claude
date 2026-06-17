@@ -1,0 +1,4 @@
+config {
+  preedit_method: ROMAN
+  session_keymap: MSIME
+}

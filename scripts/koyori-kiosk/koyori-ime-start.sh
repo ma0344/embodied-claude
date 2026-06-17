@@ -11,6 +11,40 @@ koyori_ime_log() {
 
 koyori_ime_log "start DISPLAY=${DISPLAY:-unset} uid=$(id -u)"
 
+xkb_layout="${KOYORI_XKB_LAYOUT:-}"
+if [[ -z "$xkb_layout" && -n "${KOYORI_INPUT_LEAP_SERVER:-}" ]]; then
+  xkb_layout=jp
+fi
+if [[ -n "$xkb_layout" ]] && command -v setxkbmap >/dev/null 2>&1 && [[ -n "${DISPLAY:-}" ]]; then
+  if setxkbmap -layout "$xkb_layout" 2>/dev/null; then
+    koyori_ime_log "xkb layout=$xkb_layout"
+  else
+    koyori_ime_log "WARN setxkbmap layout=$xkb_layout failed"
+  fi
+fi
+
+mozc_config_dir="${HOME}/.config/mozc"
+koyori_ime_install_mozc_configs() {
+  install -d -m 700 "$mozc_config_dir"
+  if [[ -f /usr/local/share/koyori-kiosk/mozc-kiosk-config.textproto ]]; then
+    if [[ ! -f "${mozc_config_dir}/config.textproto" ]]; then
+      cp /usr/local/share/koyori-kiosk/mozc-kiosk-config.textproto "${mozc_config_dir}/config.textproto"
+      koyori_ime_log "installed mozc config.textproto (ROMAN / MS-IME)"
+    fi
+  fi
+  # Input Leap or KOYORI_MOZC_ALWAYS_JP=1: hiragana on launch (no hotkey toggle).
+  if [[ -n "${KOYORI_INPUT_LEAP_SERVER:-}" || "${KOYORI_MOZC_ALWAYS_JP:-0}" == "1" ]]; then
+    if [[ -f /usr/local/share/koyori-kiosk/mozc-ibus-kiosk.textproto ]]; then
+      cp /usr/local/share/koyori-kiosk/mozc-ibus-kiosk.textproto "${mozc_config_dir}/ibus_config.textproto"
+      koyori_ime_log "ibus_config: active_on_launch + HIRAGANA (Input Leap / always-jp)"
+    fi
+  elif [[ -f /usr/local/share/koyori-kiosk/mozc-ibus-kiosk.textproto && ! -f "${mozc_config_dir}/ibus_config.textproto" ]]; then
+    cp /usr/local/share/koyori-kiosk/mozc-ibus-kiosk.textproto "${mozc_config_dir}/ibus_config.textproto"
+    koyori_ime_log "installed default ibus_config.textproto"
+  fi
+}
+koyori_ime_install_mozc_configs
+
 export GTK_IM_MODULE=ibus
 export QT_IM_MODULE=ibus
 export XMODIFIERS=@im=ibus
@@ -53,7 +87,13 @@ koyori_ime_wait_mozc() {
 
 koyori_ime_try_activate() {
   local engine err current
-  for engine in mozc-jp mozc-jp-ro mozc-on mozc; do
+  local -a engines
+  if [[ -n "${KOYORI_INPUT_LEAP_SERVER:-}" ]]; then
+    engines=(mozc-on mozc-jp mozc-jp-ro mozc)
+  else
+    engines=(mozc-jp mozc-on mozc-jp-ro mozc)
+  fi
+  for engine in "${engines[@]}"; do
     if err=$(ibus engine "$engine" 2>&1); then
       current=$(ibus engine 2>/dev/null || echo "$engine")
       koyori_ime_log "engine=$current"
@@ -67,22 +107,44 @@ koyori_ime_try_activate() {
 }
 
 if command -v gsettings >/dev/null 2>&1; then
-  gsettings set org.freedesktop.ibus.general preload-engines "['mozc-jp']" 2>/dev/null || true
-  gsettings set org.freedesktop.ibus.general engines-order "['mozc-jp']" 2>/dev/null || true
+  if [[ -n "${KOYORI_INPUT_LEAP_SERVER:-}" ]]; then
+    gsettings set org.freedesktop.ibus.general preload-engines "['mozc-on', 'mozc-jp']" 2>/dev/null || true
+    gsettings set org.freedesktop.ibus.general engines-order "['mozc-on', 'mozc-jp']" 2>/dev/null || true
+    # 1 = show panel always (ibus-setup: Show property panel → Always)
+    gsettings set org.freedesktop.ibus.panel show 1 2>/dev/null || true
+  else
+    gsettings set org.freedesktop.ibus.general preload-engines "['mozc-jp']" 2>/dev/null || true
+    gsettings set org.freedesktop.ibus.general engines-order "['mozc-jp']" 2>/dev/null || true
+  fi
   gsettings set org.freedesktop.ibus.general use-global-engine true 2>/dev/null || true
+  gsettings set org.freedesktop.ibus.general.hotkey triggers "['Control+space', 'Zenkaku_Hankaku', 'Hangul']" 2>/dev/null || true
+  gsettings set org.freedesktop.ibus.general use-system-keyboard-layout false 2>/dev/null || true
 fi
 
 if ! pgrep -u "$(id -u)" -x ibus-daemon >/dev/null 2>&1; then
   koyori_ime_log "starting ibus-daemon"
   ibus-daemon -drx --xim &
+  sleep 2
 fi
 
 if koyori_ime_wait_mozc 60; then
-  if koyori_ime_try_activate; then
-    koyori_ime_log "toggle: 半/全 key (JIS) in text fields"
-    return 0
+  if command -v ibus >/dev/null 2>&1; then
+    ibus write-cache 2>/dev/null || true
   fi
-  koyori_ime_log "mozc registered; ibus engine CLI skipped — use 半/全 to toggle"
+  attempt=0
+  while (( attempt < 30 )); do
+    if koyori_ime_try_activate; then
+      if [[ -n "${KOYORI_INPUT_LEAP_SERVER:-}" ]]; then
+        koyori_ime_log "Input Leap: Mozc toggle Ctrl+Shift+Space (or IBUS panel あ/A)"
+      else
+        koyori_ime_log "toggle: 半/全; romaji input (konnichiwa)"
+      fi
+      return 0
+    fi
+    sleep 1
+    ((attempt++)) || true
+  done
+  koyori_ime_log "mozc registered; manual: koyori-mozc-on; Input Leap needs mozc-ibus-kiosk.textproto"
   return 0
 fi
 

@@ -25,10 +25,24 @@ sudo ./install-koyori-kiosk.sh
 
 repo 更新後は `sudo ./install-koyori-kiosk.sh` で `/usr/local/bin/koyori-kiosk` を再配置してから reboot。
 
-## Input Leap — 見送り
+## Input Leap — 済（V5, 2026-06-17）
 
-tar.gz インストール・接続がうまくいかず諦め。コードは残す（`koyori-input-leap-start.sh`）。
-`/etc/default/koyori-kiosk` で `KOYORI_INPUT_LEAP_SERVER` を未設定のまま = 無効。
+ma-home KB/マウス → koyori キオスク。**動作確認済み。**
+
+| 側 | 起動 |
+|----|------|
+| **ma-home** | `Get-Process input-leaps -EA 0 \| Stop-Process -Force` のあと `input-leaps.exe -c default.sgc --disable-client-cert-checking --disable-crypto` |
+| **koyori** | `/etc/default/koyori-kiosk`: `KOYORI_INPUT_LEAP_SERVER`, `KOYORI_INPUT_LEAP_CRYPTO=0` → キオスク起動 + **watch**（client 落ちたら再起動） |
+
+Surface だけ再起動した直後は ma-home Server がまだなら client が待つ/リトライ。`koyori-diagnose-input-leap` で確認。
+
+手順・トラブル: `docs/koyori-input-sharing.md`（`libei1`、fingerprint、**Server 二重起動**に注意）。
+
+診断: `koyori-diagnose-input-leap` / ma-home: `scripts/ma-home-input-leap-server.ps1`
+
+ログオン自動起動: `.\scripts\install-input-leap-task.ps1`  
+
+**日本語（Input Leap）**: 半/全 → **`'` リピート**の既知症状あり（使わない）。**Ctrl+Shift+Space**（Mozc）が本番。BT なら半/全可。
 
 ## タッチキーボード（onboard）— 保留
 

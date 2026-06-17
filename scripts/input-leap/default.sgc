@@ -1,0 +1,39 @@
+section: screens
+	MA-HOME:
+		halfDuplexCapsLock = false
+		halfDuplexNumLock = false
+		halfDuplexScrollLock = false
+		xtestIsXineramaUnaware = false
+		preserveFocus = false
+		switchCorners = none 
+		switchCornerSize = 0
+	koyori:
+		halfDuplexCapsLock = false
+		halfDuplexNumLock = false
+		halfDuplexScrollLock = false
+		xtestIsXineramaUnaware = false
+		preserveFocus = false
+		switchCorners = none 
+		switchCornerSize = 0
+end
+
+section: aliases
+end
+
+section: links
+	MA-HOME:
+		right = koyori
+	koyori:
+		left = MA-HOME
+end
+
+section: options
+	heartbeat = 5000
+	relativeMouseMoves = false
+	screenSaverSync = true
+	win32KeepForeground = false
+	clipboardSharing = true
+	clipboardSharingSize = 100000000
+	switchCorners = none 
+	switchCornerSize = 0
+end

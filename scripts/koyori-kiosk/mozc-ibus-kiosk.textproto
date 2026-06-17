@@ -1,0 +1,26 @@
+# Koyori kiosk — Mozc hiragana for Input Leap (no keyboard hotkey).
+# BT dongle: 半/全 still works. Input Leap: click IBUS panel あ or use mozc-on engine.
+
+engines {
+  name : "mozc-on"
+  longname : "Mozc:あ"
+  layout : "jp"
+  layout_variant : ""
+  layout_option : ""
+  rank : 20
+  symbol : "あ"
+  composition_mode : HIRAGANA
+}
+
+engines {
+  name : "mozc-jp"
+  longname : "Mozc"
+  layout : "jp"
+  layout_variant : ""
+  layout_option : ""
+  rank : 25
+  symbol : "あ"
+  composition_mode : HIRAGANA
+}
+
+active_on_launch: True

@@ -67,7 +67,9 @@ if [[ -n "$CH" ]]; then
 fi
 
 echo ""
-echo "Toggle in Firefox: 半/全 (JIS Hankaku/Zenkaku). Ctrl+Space often does nothing here."
+echo "Toggle in Firefox: 半/全 (JIS) or Ctrl+Space. Romaji: konnichiwa → こんにちは"
+echo "Input Leap: Mozc → Ctrl+Shift+Space toggle (see docs/koyori-kiosk-ime.md)"
+echo "  half/full key arrives as backtick via Leap (US routing)"
 echo "If mozc-jp is listed above, IME is ready even when ibus engine shows xkb:*."
 echo ""
 echo "Fix:"

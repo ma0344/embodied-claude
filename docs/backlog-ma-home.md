@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ
 
-**最終更新**: 2026-06-17（**HeartbeatLoop / 生物らしい振る舞い** 合意・着手）  
+**最終更新**: 2026-06-17（HeartbeatLoop 済・**次: B4 デプロイ → V5 入力共有**）  
 **方針**: こより本体（記憶・gateway 身体）は **様子見**。部屋 UI は **Native 会話エンジン + `/` の殻** を育てる（8080 プロキシ UI は投資しない）。
 
 **実行方針（合意 2026-06-14）**: 判断は compose/plan/stores のまま。**身体・自律の実行**は MCP に頼らず gateway 直実行へ（remember 直実行と同型）。詳細 → [gateway-direct-actions.md](./gateway-direct-actions.md)
@@ -15,8 +15,15 @@
 
 | 項目 | トラック | 状態 |
 |------|---------|------|
-| **Windows キーボードをキオスク（Surface）で共有** — PC の KB/マウスを Surface 入力に（BT 切替は避けたい） | [V5](#v--ビジョン--未実装docsweb_ui_designmdexported-sessionmd-より) | 未 |
-| **サーバー用ターミナルウィンドウの非表示** — ログオン時 Task 起動の cmd/PowerShell を隠す | [B4](#b--運用自動化) | **着手** — VBS ランチャー横展開済み。Task 再インストール要 |
+| **こよりが自分で使うコードを書けるようにしたい** — 身体・ループ・小さな改修を自分の判断で（安全な経路・テスト・SOUL/設備マニュアルとの分離） | [K1](#k--こより自身のコード) | 未（方針メモのみ） |
+| **Windows キーボードをキオスク（Surface）で共有** — PC の KB/マウスを Surface 入力に（BT 切替は避けたい） | [V5](#v--ビジョン--未実装docsweb_ui_designmdexported-sessionmd-より) | **次** — B4 反映後に再挑戦 |
+| **サーバー用ターミナルウィンドウの非表示** — ログオン時 Task 起動の cmd/PowerShell を隠す | [B4](#b--運用自動化) | **コード済 → Task 再インストールで実機反映** |
+
+### 次の順（合意 2026-06-17・まー）
+
+1. **B4** — 各 `install-*-task.ps1` を再実行して VBS ランチャーを Task に載せる（ログオン時の一瞬ターミナルを消す）
+2. **V5** — PC↔Surface キーボード・マウス共有を再調査・再挑戦（Barrier / Input Leap / LAN 系）
+3. **K1** — こより自身が使うコードを書ける経路を設計（急がないがバックログに置く）
 
 ---
 
@@ -32,7 +39,8 @@
 | **A** | 記憶・gateway 身体 | compose / see / dismiss | **様子見**（大きな追加は止める） |
 | **IBF** | **Intent→Bucket→Flow** | LLM にツール名を選ばせない | **計画済** → [intent-bucket-flow.md](./intent-bucket-flow.md) |
 | **C12** | intent router | 曖昧な「見て」分類 | **済** — `hybrid_intent.py` |
-| **BIO** | **HeartbeatLoop** | 経験→行動→次の wake。MCP 不要 | **着手** → [heartbeat-loop.md](./heartbeat-loop.md) |
+| **BIO** | **HeartbeatLoop** | 経験→行動→次の wake。MCP 不要 | **済**（BIO-0〜7）→ [heartbeat-loop.md](./heartbeat-loop.md) |
+| **K** | **こより自身のコード** | 自分用の改修・小さな実装を自分で | **未** → [K1](#k--こより自身のコード) |
 
 ### 次の一手 — 優先度案（2026-06-10 → **まー合意: 1→3→2→C11g → Desire**）
 
@@ -153,7 +161,19 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 - [x] **B1** Scheduled Task 3つ登録（`EmbodiedClaude-MemoryHTTP` / `WebUI` / `PresenceUI`）— 2026-06-13 実施
 - [x] **B3** Watchdog Task 登録（`EmbodiedClaude-Watchdog`）— 2026-06-14 実施
 - [ ] **B2** LM Studio ロードは別途（現状手動 or 既存習慣）
-- [x] **B4** **サーバー用ターミナルウィンドウの非表示** — `embodied-hidden-launcher.ps1` + VBS（AutonomousTick / MemoryHTTP / PresenceUI / WebUI / AivisTTS）。Win toast は `CREATE_NO_WINDOW`。**既存 Task は各 `install-*-task.ps1` の再実行で反映**
+- [x] **B4** **サーバー用ターミナルウィンドウの非表示** — `embodied-hidden-launcher.ps1` + VBS（AutonomousTick / MemoryHTTP / PresenceUI / WebUI / AivisTTS）。Win toast は `CREATE_NO_WINDOW`。**実機反映**: 下記コマンドで Task 再登録（まー合意 2026-06-17・様子見終了）
+
+```powershell
+cd C:\Users\ma\src\embodied-claude
+.\scripts\install-memory-daemon-task.ps1
+.\scripts\install-presence-ui-task.ps1
+.\scripts\install-autonomous-tick-task.ps1
+# 使っている場合のみ:
+.\scripts\install-webui-task.ps1
+.\scripts\install-aivis-tts-task.ps1
+```
+
+再起動 or ログオフ後、一瞬のコンソールが消えたか確認。残る場合は Watchdog 修復連鎖・`run_auto_context.cmd` hook を疑う。
 
 **メモ**: Claude Code の stdio MCP（memory/sociality 等）は **セッションごとに spawn** される。daemon は **HTTP 記憶の本店** だけ常駐。診断: `check-mcp-processes.ps1`。
 
@@ -438,6 +458,20 @@ MVP チェックリスト:
 
 ---
 
+## K — こより自身のコード
+
+**やりたいこと（まー合意 2026-06-17）**: **こよりが自分で使うコードを書ける**ようにする。設備マニュアル（`CLAUDE.md`）や憲法（`SOUL.md`）は人間側。こよりが触るのは **自分のループ・身体・小さなスクリプト**（pulse 調整、自律行動の枝、private ツール等）に限定したい。
+
+| ID | 内容 | 状態 |
+|----|------|------|
+| K1 | 方針メモ — 何を自分で書いてよいか / 何は gateway 固定か | **未** |
+| K2 | 安全な編集経路（ブランチ・テスト・ロールバック・まーへの見える diff） | 未 |
+| K3 | 「使うコード」の例 — pulse ヒューリスティック、desire 反応、小さな gateway 拡張 | 未 |
+
+**急がない**。HeartbeatLoop が閉じたあと、**K2 の経路**がなければ自己改修は危ない。
+
+---
+
 ## V — ビジョン / 未実装（`docs/web_ui_design.md`・`exported-session.md` より）
 
 **注**: 8080 プロキシ本線・Native chat・キオスク着信・Tapo 視界・るな TTS 等は **実装済み**。以下は会話時点の**最終イメージ**でまだ残っているもの。
@@ -458,7 +492,7 @@ MVP チェックリスト:
 - [ ] **V2** イントロ / スプラッシュ
 - [ ] **V3** 発話インジケーター
 - [ ] **V4** see_near
-- [ ] **V5** **Windows キーボードをキオスク（Surface）で共有** — PC キーボード・マウス → Surface（入力ストレス解消）
+- [ ] **V5** **Windows キーボードをキオスク（Surface）で共有** — PC キーボード・マウス → Surface（入力ストレス解消）。**B4 デプロイ後に再挑戦**（2026-06-17）
 - [ ] **V6** 家族リスト UI
 - [ ] **V7** enriched user 履歴後処理の削除
 - [ ] **V8** room_say オフライン配信

@@ -47,6 +47,10 @@ install -m 755 "$SCRIPT_DIR/koyori-kiosk.sh" /usr/local/bin/koyori-kiosk
 install -m 755 "$SCRIPT_DIR/koyori-ime-start.sh" /usr/local/bin/koyori-ime-start
 install -m 755 "$SCRIPT_DIR/koyori-display-setup.sh" /usr/local/bin/koyori-display-setup
 install -m 755 "$SCRIPT_DIR/koyori-input-leap-start.sh" /usr/local/bin/koyori-input-leap-start
+install -m 755 "$SCRIPT_DIR/koyori-keyboard-layout.sh" /usr/local/bin/koyori-keyboard-layout
+install -d -m 755 /usr/local/share/koyori-kiosk
+install -m 644 "$SCRIPT_DIR/mozc-kiosk-config.textproto" /usr/local/share/koyori-kiosk/mozc-kiosk-config.textproto
+install -m 644 "$SCRIPT_DIR/mozc-ibus-kiosk.textproto" /usr/local/share/koyori-kiosk/mozc-ibus-kiosk.textproto
 install -m 755 "$SCRIPT_DIR/koyori-onboard-start.sh" /usr/local/bin/koyori-onboard-start
 install -m 755 "$SCRIPT_DIR/koyori-onboard-preseed.sh" /usr/local/bin/koyori-onboard-preseed
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-ime.sh" /usr/local/bin/koyori-diagnose-ime
@@ -116,6 +120,22 @@ else
   echo "WARN: user ma or $MA_HOME not found; create ~/.xsession manually" >&2
 fi
 
+SAVE_INPUT_LEAP_SERVER=""
+SAVE_INPUT_LEAP_NAME=""
+SAVE_INPUT_LEAP_CRYPTO=""
+SAVE_WEBUI_URL=""
+if [[ -f "$KIOSK_ENV" ]]; then
+  # shellcheck disable=SC1091
+  source "$KIOSK_ENV" 2>/dev/null || true
+  SAVE_INPUT_LEAP_SERVER="${KOYORI_INPUT_LEAP_SERVER:-}"
+  SAVE_INPUT_LEAP_NAME="${KOYORI_INPUT_LEAP_NAME:-}"
+  SAVE_INPUT_LEAP_CRYPTO="${KOYORI_INPUT_LEAP_CRYPTO:-}"
+  SAVE_WEBUI_URL="${KOYORI_WEBUI_URL:-}"
+fi
+if [[ -n "$SAVE_WEBUI_URL" ]]; then
+  WEBUI_URL="$SAVE_WEBUI_URL"
+fi
+
 cat >"$KIOSK_ENV" <<EOF
 # Koyori kiosk target (ma-home presence-ui / こよりの部屋 :8090)
 #
@@ -133,9 +153,31 @@ KOYORI_BROWSER=firefox
 # KOYORI_USE_WM=1
 # Touch keyboard: deferred (docs/backlog-koyori.md). Enable: KOYORI_ONBOARD=1
 KOYORI_ONBOARD=0
-# Input Leap client — ma-home Windows Server (Tailscale IP recommended):
-# KOYORI_INPUT_LEAP_SERVER='100.64.x.x'
+EOF
+
+if [[ -n "$SAVE_INPUT_LEAP_SERVER" ]]; then
+  cat >>"$KIOSK_ENV" <<EOF
+# Input Leap client — preserved from previous install
+KOYORI_INPUT_LEAP_SERVER='$SAVE_INPUT_LEAP_SERVER'
+KOYORI_INPUT_LEAP_NAME='${SAVE_INPUT_LEAP_NAME:-koyori}'
+KOYORI_INPUT_LEAP_CRYPTO=${SAVE_INPUT_LEAP_CRYPTO:-0}
+KOYORI_INPUT_LEAP_WATCH=1
+KOYORI_INPUT_LEAP_SERVER_WAIT_SEC=120
+EOF
+else
+  cat >>"$KIOSK_ENV" <<'EOF'
+# Input Leap client — ma-home Windows Server (uncomment to enable):
+# KOYORI_INPUT_LEAP_SERVER='192.168.10.100'
 # KOYORI_INPUT_LEAP_NAME='koyori'
+# KOYORI_INPUT_LEAP_CRYPTO=0
+# KOYORI_INPUT_LEAP_WATCH=1
+# KOYORI_INPUT_LEAP_SERVER_WAIT_SEC=120
+EOF
+fi
+
+cat >>"$KIOSK_ENV" <<EOF
+# ma-home が日本語配列なら jp（Input Leap 有効時は未設定でも jp になる）
+KOYORI_XKB_LAYOUT=jp
 # Keychron BT auto-reconnect in kiosk (background watch)
 KOYORI_BT_AUTOCONNECT=1
 KOYORI_BT_RECONNECT_INTERVAL=30

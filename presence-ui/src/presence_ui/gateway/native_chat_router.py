@@ -23,6 +23,7 @@ from presence_ui.gateway.deterministic_memory import (
     fetch_memory_list,
     format_memory_list_reply,
 )
+from presence_ui.gateway.hybrid_intent import resolve_hybrid_intent
 from presence_ui.gateway.see_prefetch import prefetch_camera_for_message
 from presence_ui.gateway.social_chat import ChatInterceptResult, intercept_chat_request_async
 
@@ -179,9 +180,14 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
             )
             return StreamingResponse(stream, media_type="text/event-stream")
 
+        hybrid = resolve_hybrid_intent(req.prompt)
         vision_note: str | None = None
         try:
-            vision_note, _prefetch_events = await prefetch_camera_for_message(req.prompt)
+            vision_note, _prefetch_events = await prefetch_camera_for_message(
+                req.prompt,
+                see_intent=hybrid.see_intent,
+                ptz_intent=hybrid.ptz_intent,
+            )
             if vision_note:
                 logger.info("native chat camera prefetch ok (%d chars)", len(vision_note))
         except Exception as exc:
@@ -193,6 +199,7 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
             person_id=person_id,
             lite=True,
             vision_prefetch=vision_note,
+            hybrid=hybrid,
         )
         if not intercept.forward:
             async def silent_stream() -> AsyncIterator[str]:

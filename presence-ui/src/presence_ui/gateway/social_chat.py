@@ -30,6 +30,7 @@ from presence_ui.gateway.direct_actions import (
     direct_actions_enabled,
     write_private_reflection_direct,
 )
+from presence_ui.gateway.hybrid_intent import HybridBodyIntent, resolve_hybrid_intent
 from presence_ui.gateway.open_loop_dismiss import dismiss_note, dismiss_progress_label
 from presence_ui.gateway.prompt_injection import apply_gateway_prompt_injection
 from presence_ui.gateway.room_events import progress_event
@@ -37,7 +38,6 @@ from presence_ui.gateway.room_ingest import ingest_human_turn_async
 from presence_ui.gateway.user_intent import (
     ibf_gateway_speak_enabled,
     merge_intent_with_plan,
-    resolve_user_intent,
 )
 from presence_ui.services.llm import build_social_turn_delta
 
@@ -91,6 +91,7 @@ def intercept_chat_request(
     person_id: str = "ma",
     lite: bool = False,
     vision_prefetch: str | None = None,
+    hybrid: HybridBodyIntent | None = None,
 ) -> ChatInterceptResult:
     """Sync wrapper (tests / thread offload). Native chat uses async variant."""
     import asyncio
@@ -104,6 +105,7 @@ def intercept_chat_request(
                 person_id=person_id,
                 lite=lite,
                 vision_prefetch=vision_prefetch,
+                hybrid=hybrid,
             )
         )
     message = str(payload.get("message") or "").strip()
@@ -122,6 +124,7 @@ def intercept_chat_request(
         message=message,
         session_key=session_key,
         dismiss_outcome=dismiss_outcome,
+        hybrid=hybrid,
     )
 
 
@@ -131,6 +134,7 @@ async def intercept_chat_request_async(
     person_id: str = "ma",
     lite: bool = False,
     vision_prefetch: str | None = None,
+    hybrid: HybridBodyIntent | None = None,
 ) -> ChatInterceptResult:
     """Run compose/plan; enrich message or block forward on silent moves."""
     message = str(payload.get("message") or "").strip()
@@ -152,6 +156,7 @@ async def intercept_chat_request_async(
         message=message,
         session_key=session_key,
         dismiss_outcome=dismiss_outcome,
+        hybrid=hybrid,
     )
 
 
@@ -164,6 +169,7 @@ def _finish_intercept_chat_request(
     message: str,
     session_key: str | None,
     dismiss_outcome,
+    hybrid: HybridBodyIntent | None = None,
 ) -> ChatInterceptResult:
     compose_max_chars = (
         int(os.getenv("PRESENCE_LITE_COMPOSE_MAX_CHARS", "1200"))
@@ -189,7 +195,8 @@ def _finish_intercept_chat_request(
                 ),
             )
         )
-    user_intent = resolve_user_intent(message)
+    resolved = hybrid or resolve_hybrid_intent(message)
+    user_intent = resolved.user_intent
     remember_intent = None
     remember_saved = False
     if user_intent.wants_remember:

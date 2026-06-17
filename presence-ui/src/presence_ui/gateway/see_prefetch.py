@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from presence_ui.gateway.direct_actions import direct_actions_enabled
 from presence_ui.gateway.room_events import activity_event
 from presence_ui.gateway.see_intent import (
     PtzIntent,
@@ -11,7 +12,6 @@ from presence_ui.gateway.see_intent import (
     detect_ptz_intent,
     detect_see_intent,
 )
-from presence_ui.gateway.direct_actions import direct_actions_enabled
 from presence_ui.services.camera import camera_move
 from presence_ui.services.vision_capture import prefetch_vision_for_chat, vision_prefetch_enabled
 
@@ -39,22 +39,25 @@ def ptz_prefetch_note(*, intent: PtzIntent, ok: bool, detail: str) -> str:
 
 async def prefetch_camera_for_message(
     message: str,
+    *,
+    see_intent: SeeIntent | None = None,
+    ptz_intent: PtzIntent | None = None,
 ) -> tuple[str | None, list[dict[str, Any]]]:
     """Run PTZ and/or vision prefetch when the user message implies camera motion or seeing."""
     text = (message or "").strip()
     if not text or not direct_actions_enabled():
         return None, []
 
-    ptz_intent = detect_ptz_intent(text)
-    see_intent: SeeIntent | None = detect_see_intent(text)
-    if not ptz_intent and not (see_intent and vision_prefetch_enabled()):
+    ptz = ptz_intent or detect_ptz_intent(text)
+    see: SeeIntent | None = see_intent or detect_see_intent(text)
+    if not ptz and not (see and vision_prefetch_enabled()):
         return None, []
 
     gateway_events: list[dict[str, Any]] = []
     notes: list[str] = []
 
-    if ptz_intent:
-        ok, detail = await camera_move(ptz_intent.direction, ptz_intent.degrees)
+    if ptz:
+        ok, detail = await camera_move(ptz.direction, ptz.degrees)
         gateway_events.append(
             activity_event(
                 kind="ptz",
@@ -63,24 +66,24 @@ async def prefetch_camera_for_message(
                 ok=ok,
             )
         )
-        notes.append(ptz_prefetch_note(intent=ptz_intent, ok=ok, detail=detail))
+        notes.append(ptz_prefetch_note(intent=ptz, ok=ok, detail=detail))
 
-    if see_intent and vision_prefetch_enabled():
+    if see and vision_prefetch_enabled():
         try:
             result, vision_note = await prefetch_vision_for_chat(
-                intent=see_intent,
+                intent=see,
                 user_text=text,
                 remember=True,
             )
             detail = result.caption or result.error or result.label
             activity_label = "見た"
-            if see_intent.mode == "window":
+            if see.mode == "window":
                 activity_label = "外を見た"
-            elif see_intent.mode == "desk":
+            elif see.mode == "desk":
                 activity_label = "まーのデスクを見た"
-            elif see_intent.mode == "dining":
+            elif see.mode == "dining":
                 activity_label = "ダイニングを見た"
-            elif see_intent.mode == "look_around":
+            elif see.mode == "look_around":
                 activity_label = "部屋を見た"
             if not result.ok:
                 activity_label = "見られなかった"

@@ -7,6 +7,7 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 
+from presence_ui.gateway.hybrid_intent import resolve_hybrid_intent
 from presence_ui.gateway.room_events import activity_event, encode_event, progress_event
 from presence_ui.gateway.room_ingest import ingest_agent_turn
 from presence_ui.gateway.see_intent import SEE_PROGRESS_LABELS, detect_see_intent
@@ -31,14 +32,19 @@ async def stream_gateway_chat(
     message = str(payload.get("message") or "").strip()
     vision_note: str | None = None
     gateway_events: list[dict[str, Any]] = []
+    hybrid = resolve_hybrid_intent(message) if message else None
 
     if message and vision_prefetch_enabled():
-        see_intent = detect_see_intent(message)
+        see_intent = (hybrid.see_intent if hybrid else None) or detect_see_intent(message)
         if see_intent:
             progress_label = SEE_PROGRESS_LABELS.get(see_intent.mode, "見てる…")
             yield encode_event(progress_event(phase="see", label=progress_label))
         try:
-            vision_note, prefetch_events = await prefetch_camera_for_message(message)
+            vision_note, prefetch_events = await prefetch_camera_for_message(
+                message,
+                see_intent=hybrid.see_intent if hybrid else None,
+                ptz_intent=hybrid.ptz_intent if hybrid else None,
+            )
             gateway_events.extend(prefetch_events)
         except Exception as exc:  # noqa: BLE001
             vision_note = (
@@ -58,6 +64,7 @@ async def stream_gateway_chat(
             payload=payload,
             person_id=person_id,
             vision_prefetch=vision_note,
+            hybrid=hybrid,
         )
     except ValueError as exc:
         err = {"type": "error", "error": str(exc)}

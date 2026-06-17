@@ -1,0 +1,7 @@
+{
+  "id": "01_explicit_say",
+  "description": "Explicit say keyword (IBF speak regression)",
+  "category": "explicit",
+  "user_text": "何か say でしゃべって",
+  "expected_labels": ["speech"]
+}

@@ -218,10 +218,10 @@ Plan の**前または直後**に置く薄い層。
 
 例: 「何か say でしゃべって」→ `{ wants: ["speech"], explicit_how: "say" }` — **子供でも一発でわかる要求**。
 
-### 7.2 LLM フォールバック（任意・C12 接続）
+### 7.2 LLM フォールバック（C12 — gateway 実装済み）
 
-**曖昧な一文だけ** JSON 分類（`desk|see|speech|chat` 等）。  
-本番の主経路にはしない。taxonomy 設計・ログ diff 用。
+**曖昧な一文だけ** JSON 分類。`resolve_hybrid_intent` — rules が body なし & 曖昧キュー時のみ LM Studio。  
+`PRESENCE_LLM_INTENT_FALLBACK=1`（既定 ON）、`PRESENCE_LLM_INTENT_MIN_CONF=0.55`。
 
 ### 7.3 Plan との合成
 
@@ -267,7 +267,7 @@ effective_buckets = merge(intent, plan)
 | **IBF-4** | `enabledMcpjsonServers` 日常 = `system-temperature` 固定の確認 | **済** — `kiosk_mcp.py` 起動時検証 + `PRESENCE_KIOSK_MCP_SERVERS` |
 | **IBF-5** | observe / remember を同一パイプラインに統合（既存 deterministic を `merge` 経由に） | **済** |
 | **IBF-6** | 用語統一 | **6a 済** — §5.1 / §6 対応表（正規名 = `allowed_action`）。**6b/c 任意** — gateway 翻訳層 or 会話側を plan 語彙に寄せる |
-| **IBF-7** | LLM intent 実験（オフライン diff） | plan vs LLM の一致率メモ |
+| **IBF-7** | LLM intent 実験（オフライン diff） | **済** — `benchmarks/intent_router/`（rules 100% explicit + `--llm` diff） |
 
 **最初の一本**: **IBF-1 → IBF-2 → IBF-3**（speak だけで Surface 問題を閉じる）。
 
@@ -289,6 +289,8 @@ effective_buckets = merge(intent, plan)
 | Surface 发声 | キオスク「音声テスト」+ 会話「say で」 |
 | LLM がツールを選んでない | LM Studio log: `tools` 配列が小さい / `mcp__*` tool_use なし |
 | Plan 回帰 | `uv run pytest` orchestrator + `benchmarks/human_response` |
+| Intent ルール回帰 | `uv run --directory presence-ui pytest benchmarks/intent_router/test_suite.py` |
+| Intent LLM diff | `uv run --directory presence-ui python benchmarks/intent_router/run_suite.py --llm` |
 | Gateway 回帰 | `presence-ui` tests + `test-gateway-direct-actions.ps1` |
 
 ---
@@ -311,4 +313,5 @@ effective_buckets = merge(intent, plan)
 | 日付 | 内容 |
 |------|------|
 | 2026-06-17 | 初版 — ma-home 会話ログ分析・5W1H/Plan 議論を反映 |
-| 2026-06-17 | IBF-6a — §5.1 正規名ポリシー、§6 allowed_action↔バケツ↔Flow 対応表（リネームは plan 語彙に寄せる方針） |
+| 2026-06-17 | IBF-6a — §5.1 正規名ポリシー、§6 allowed_action↔バケツ↔Flow 対応表 |
+| 2026-06-17 | IBF-7 — `benchmarks/intent_router` offline rules vs LLM intent diff |

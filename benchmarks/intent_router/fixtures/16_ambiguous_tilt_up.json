@@ -1,0 +1,7 @@
+{
+  "id": "16_ambiguous_tilt_up",
+  "description": "Colloquial tilt up without を/に particle",
+  "category": "ambiguous",
+  "user_text": "上向いて",
+  "expected_labels": ["ptz_up"]
+}

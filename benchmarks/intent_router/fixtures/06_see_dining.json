@@ -1,0 +1,7 @@
+{
+  "id": "06_see_dining",
+  "description": "Dining area check",
+  "category": "explicit",
+  "user_text": "ダイニングの様子どう？",
+  "expected_labels": ["observe_dining"]
+}

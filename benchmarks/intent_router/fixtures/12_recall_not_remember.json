@@ -1,0 +1,7 @@
+{
+  "id": "12_recall_not_remember",
+  "description": "Recall question must not trigger remember bucket",
+  "category": "explicit",
+  "user_text": "前に見たやつ覚えてる？",
+  "expected_labels": ["chat"]
+}

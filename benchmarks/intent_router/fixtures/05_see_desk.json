@@ -1,0 +1,7 @@
+{
+  "id": "05_see_desk",
+  "description": "Ma desk camera preset",
+  "category": "explicit",
+  "user_text": "まーのデスク見て",
+  "expected_labels": ["observe_desk"]
+}

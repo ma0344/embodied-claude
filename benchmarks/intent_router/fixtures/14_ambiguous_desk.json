@@ -1,0 +1,7 @@
+{
+  "id": "14_ambiguous_desk",
+  "description": "Vague desk mention, human wants observe_desk, rules may stay chat",
+  "category": "ambiguous",
+  "user_text": "デスク周りどう？",
+  "expected_labels": ["observe_desk"]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "02_shaberu",
+  "description": "Japanese speech request without say keyword",
+  "category": "explicit",
+  "user_text": "ちょっと喋ってみて",
+  "expected_labels": ["speech"]
+}

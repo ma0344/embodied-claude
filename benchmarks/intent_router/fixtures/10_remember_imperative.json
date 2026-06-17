@@ -1,0 +1,7 @@
+{
+  "id": "10_remember_imperative",
+  "description": "Remember trigger without extractable content (gateway still flags remember)",
+  "category": "explicit",
+  "user_text": "これ覚えておいて",
+  "expected_labels": ["remember"]
+}

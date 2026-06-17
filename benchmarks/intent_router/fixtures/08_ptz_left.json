@@ -1,0 +1,7 @@
+{
+  "id": "08_ptz_left",
+  "description": "Pan left without scene description",
+  "category": "explicit",
+  "user_text": "左を向いて",
+  "expected_labels": ["ptz_left"]
+}

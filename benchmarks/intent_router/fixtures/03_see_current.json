@@ -1,0 +1,7 @@
+{
+  "id": "03_see_current",
+  "description": "What is visible now",
+  "category": "explicit",
+  "user_text": "何が見える？",
+  "expected_labels": ["observe_current"]
+}

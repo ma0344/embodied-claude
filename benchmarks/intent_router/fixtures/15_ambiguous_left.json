@@ -1,0 +1,7 @@
+{
+  "id": "15_ambiguous_left",
+  "description": "Short left cue, human wants ptz, rules often miss",
+  "category": "ambiguous",
+  "user_text": "ちょっと左",
+  "expected_labels": ["ptz_left"]
+}

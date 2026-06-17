@@ -1,0 +1,7 @@
+{
+  "id": "09_remember_fact",
+  "description": "Save new fact to memory",
+  "category": "explicit",
+  "user_text": "明日会議あると覚えておいて",
+  "expected_labels": ["remember"]
+}

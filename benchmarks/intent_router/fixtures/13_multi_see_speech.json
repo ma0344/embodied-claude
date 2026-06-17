@@ -1,0 +1,7 @@
+{
+  "id": "13_multi_see_speech",
+  "description": "See then speak, both labels",
+  "category": "explicit",
+  "user_text": "見てから say で言って",
+  "expected_labels": ["observe_current", "speech"]
+}

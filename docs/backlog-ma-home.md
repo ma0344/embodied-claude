@@ -22,7 +22,7 @@
 | **OL** | Open Loops / リマインド | OL1+OL2 実装済み（→ [open-loops-reminders.md](./open-loops-reminders.md)） | **運用確認** |
 | **A** | 記憶・gateway 身体 | compose / see / dismiss | **様子見**（大きな追加は止める） |
 | **IBF** | **Intent→Bucket→Flow** | LLM にツール名を選ばせない | **計画済** → [intent-bucket-flow.md](./intent-bucket-flow.md) |
-| **C12** | intent router | 曖昧な「見て」分類 | IBF-7 / 会話快適化（後） |
+| **C12** | intent router | 曖昧な「見て」分類 | **済** — `hybrid_intent.py` |
 
 ### 次の一手 — 優先度案（2026-06-10 → **まー合意: 1→3→2→C11g → Desire**）
 
@@ -228,7 +228,7 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 | IBF-4 | 日常 MCP 最小化の確認 | **済** |
 | IBF-5 | observe/remember を同一パイプライン統合 | **済** |
 | IBF-6 | 用語統一 — **6a 済**（§5.1/§6 対応表、正規名=`allowed_action`）。6b/c コード寄せは任意 | **6a 済** |
-| IBF-7 | LLM intent オフライン実験（C12 接続） | 未 |
+| IBF-7 | LLM intent オフライン実験（C12 接続） | **済** — `benchmarks/intent_router/` |
 
 ### A4 — こよりからの能動届け（Outbound）
 
@@ -392,7 +392,7 @@ MVP チェックリスト:
 | 優先 | 項目 | メモ |
 |------|------|------|
 | 中 | **IBF Intent→Bucket→Flow** | LLM ツール選定廃止・会話 speak 先通し — [intent-bucket-flow.md](./intent-bucket-flow.md) |
-| 中 | **C12 Gateway + LLM ハイブリッド intent** | regex 即応 + ローカル LLM ルーター（曖昧な一文だけ分類）— IBF-7 |
+| 中 | **C12 Gateway + LLM ハイブリッド intent** | **済** — `resolve_hybrid_intent` + IBF-7 benchmark |
 | 低 | **体温センサー（ma-home）** | WSL ではない → **LibreHardwareMonitor** 常駐で WMI 経由読取。未導入時は「センサーなし」 |
 | 低 | **OL3** リマインド改善 | 固定テンプレ → LLM 文面、`grace_minutes` 厳密化 — [open-loops-reminders.md](./open-loops-reminders.md) |
 | 低 | **OL4** ノイズ loop 運用 | `purge-noise-open-loops.py` |
@@ -403,7 +403,7 @@ MVP チェックリスト:
 
 - [x] **C11f** 部屋の空気 日本語化（`summary_for_prompt` + UI タグの availability/phase マップ）
 
-- [ ] **C12** intent router（送信前に LM Studio で `desk|left|see|window|chat` 等を JSON 分類。regex 未検出 or 低 confidence 時のみ。Gateway 即実行 → 足りなければ compose/plan）
+- [x] **C12** intent router — `hybrid_intent.py`（rules 優先、曖昧時のみ LM Studio）。IBF-7 計測 → `benchmarks/intent_router/README.md`
 
 **実装順**: C0 → … → C10 → **C11** → **A4f → OL → A4g → C11g** → **Desire ⑤a→d**（まー合意）→ **C12** / ビジョン（V）
 

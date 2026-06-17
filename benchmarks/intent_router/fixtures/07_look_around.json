@@ -1,0 +1,7 @@
+{
+  "id": "07_look_around",
+  "description": "Room scan",
+  "category": "explicit",
+  "user_text": "部屋見渡して",
+  "expected_labels": ["observe_look_around"]
+}

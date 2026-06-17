@@ -1,0 +1,7 @@
+{
+  "id": "11_chat_greeting",
+  "description": "Plain greeting, no body",
+  "category": "explicit",
+  "user_text": "おはよう",
+  "expected_labels": ["chat"]
+}

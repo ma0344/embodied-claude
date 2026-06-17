@@ -1,0 +1,7 @@
+{
+  "id": "04_see_window",
+  "description": "Outside / window view",
+  "category": "explicit",
+  "user_text": "窓の外どう？",
+  "expected_labels": ["observe_window"]
+}

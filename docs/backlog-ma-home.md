@@ -1,9 +1,11 @@
 # ma-home / koyori バックログ
 
-**最終更新**: 2026-06-16（C11g 済・次は **Desire 自律** ⑤a→d）  
+**最終更新**: 2026-06-17（**Intent→Bucket→Flow** 計画確立・Desire ⑤ 済）  
 **方針**: こより本体（記憶・gateway 身体）は **様子見**。部屋 UI は **Native 会話エンジン + `/` の殻** を育てる（8080 プロキシ UI は投資しない）。
 
 **実行方針（合意 2026-06-14）**: 判断は compose/plan/stores のまま。**身体・自律の実行**は MCP に頼らず gateway 直実行へ（remember 直実行と同型）。詳細 → [gateway-direct-actions.md](./gateway-direct-actions.md)
+
+**ツール選定（合意 2026-06-17）**: LLM に MCP ツール名を選ばせない。**Intent → Bucket → Flow** のマッピングで身体を動かす。詳細 → [intent-bucket-flow.md](./intent-bucket-flow.md)
 
 あとでやること。完了したら `[x]` にするか「完了」セクションへ移す。
 
@@ -19,11 +21,12 @@
 | **A4** | **能動届け（Outbound）** | A4b+/c+/f/g 実装・運用済み | **運用中** |
 | **OL** | Open Loops / リマインド | OL1+OL2 実装済み（→ [open-loops-reminders.md](./open-loops-reminders.md)） | **運用確認** |
 | **A** | 記憶・gateway 身体 | compose / see / dismiss | **様子見**（大きな追加は止める） |
-| **C12** | intent router | 曖昧な「見て」分類 | 会話快適化（後） |
+| **IBF** | **Intent→Bucket→Flow** | LLM にツール名を選ばせない | **計画済** → [intent-bucket-flow.md](./intent-bucket-flow.md) |
+| **C12** | intent router | 曖昧な「見て」分類 | IBF-7 / 会話快適化（後） |
 
 ### 次の一手 — 優先度案（2026-06-10 → **まー合意: 1→3→2→C11g → Desire**）
 
-**いまのボトルネック**: **Desire 自律ループ**（tick 実行穴・旧 conf 整理）と **OL 実戦確認**（リマインド発火・reinstall 手順）。詳細 → [open-loops-reminders.md](./open-loops-reminders.md) / [gateway-direct-actions.md](./gateway-direct-actions.md)
+**いまのボトルネック**: **Intent→Bucket→Flow**（キオスク会話で LLM がツール選定して迷子）と **OL 実戦確認**。詳細 → [intent-bucket-flow.md](./intent-bucket-flow.md) / [open-loops-reminders.md](./open-loops-reminders.md) / [gateway-direct-actions.md](./gateway-direct-actions.md)
 
 | tier | 順 | 項目 | 状態 |
 |------|----|------|------|
@@ -36,7 +39,8 @@
 | **5b** | ⑤-2 | **cognitive_load** | **済** — `think_or_discuss_topic_direct` |
 | **5c** | ⑤-3 | **identity_coherence** | **済** — `:18900/recall` + private note |
 | **5d** | ⑤-4 | **旧 `desires.conf`** | **済** — v2 一本化・setup-automation 更新 |
-| **—** | ⑥ | **A4j+** / **C12** | 着信返信 UX・intent router（任意） |
+| **6** | **IBF** | **Intent→Bucket→Flow** | **計画済** — speak 先通し IBF-1〜3 |
+| **—** | ⑦ | **A4j+** / **C12** | 着信返信 UX・曖昧 intent LLM（IBF-7） |
 | **—** | — | C11c/d、体温 LHM、Irodori TTS | 任意の磨き |
 
 **やらない順**: C12 だけ先にやっても「リマインドが鳴らない」は **OL デプロイ忘れ**（`relationship-mcp` reinstall）を疑う — [open-loops-reminders.md](./open-loops-reminders.md)
@@ -207,7 +211,24 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 - [x] **⑤c** `identity_coherence` — 自律 tick で `:18900/recall` + private note
 - [x] **⑤d** 旧 `desires.conf` 系の整理（v2 一本化・setup-automation 更新）
 
-**運用確認（随時）**: `EmbodiedClaude-AutonomousTick` / `autonomous-tick.log` / 状態カードの dominant desire。⑤a 前に 1〜2 日ログを見て tick が `act_autonomously` まで届いているか確認してよい。
+**運用確認（随時）**: `EmbodiedClaude-AutonomousTick` / `autonomous-tick.log` / 状態カードの dominant desire。
+
+### IBF — Intent→Bucket→Flow（ツール選定強化、合意 2026-06-17）
+
+**問題**: キオスク会話で Gemma が `mcp__*` ツール名を選び迷子。curl 自律 tick は gateway Flow で发声 OK。  
+**方針**: LLM にツール名を選ばせない。Intent（何を）→ Bucket（どう）→ Flow（何を動かす）の表引き。  
+**全文**: [intent-bucket-flow.md](./intent-bucket-flow.md)
+
+| Phase | 内容 | 状態 |
+|-------|------|------|
+| IBF-0 | 計画ドキュメント + backlog リンク | **済** |
+| IBF-1 | `resolve_user_intent`（ルール） | 未 |
+| IBF-2 | plan 合成 + `voice.speak` / `[Action]` | 未 |
+| IBF-3 | 会話返答後 `room-say` 自動（speak 先通し） | 未 |
+| IBF-4 | 日常 MCP 最小化の確認 | 未 |
+| IBF-5 | observe/remember を同一パイプライン統合 | 未 |
+| IBF-6 | allowed_action ↔ バケツ用語統一（任意） | 未 |
+| IBF-7 | LLM intent オフライン実験（C12 接続） | 未 |
 
 ### A4 — こよりからの能動届け（Outbound）
 
@@ -370,7 +391,8 @@ MVP チェックリスト:
 
 | 優先 | 項目 | メモ |
 |------|------|------|
-| 中 | **C12 Gateway + LLM ハイブリッド intent** | regex 即応 + ローカル LLM ルーター（曖昧な一文だけ分類） |
+| 中 | **IBF Intent→Bucket→Flow** | LLM ツール選定廃止・会話 speak 先通し — [intent-bucket-flow.md](./intent-bucket-flow.md) |
+| 中 | **C12 Gateway + LLM ハイブリッド intent** | regex 即応 + ローカル LLM ルーター（曖昧な一文だけ分類）— IBF-7 |
 | 低 | **体温センサー（ma-home）** | WSL ではない → **LibreHardwareMonitor** 常駐で WMI 経由読取。未導入時は「センサーなし」 |
 | 低 | **OL3** リマインド改善 | 固定テンプレ → LLM 文面、`grace_minutes` 厳密化 — [open-loops-reminders.md](./open-loops-reminders.md) |
 | 低 | **OL4** ノイズ loop 運用 | `purge-noise-open-loops.py` |

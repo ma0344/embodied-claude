@@ -37,6 +37,8 @@ plan の `initiative.allowed_actions`（`plan.py`）を gateway が解釈し、*
 
 **触らない**: compose / plan のルール本体。MCP サーバー実装も `.mcp.json` からは削除しない（CLI `/talk` 用に残す）。
 
+**次の方針（2026-06-17）**: キオスク会話では LLM にツール名を選ばせない。**Intent → Bucket → Flow** — [intent-bucket-flow.md](./intent-bucket-flow.md)
+
 ---
 
 ## フロー（自律 tick / act_autonomously）

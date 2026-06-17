@@ -91,6 +91,10 @@ def create_app() -> FastAPI:
         start_reminder_watchdog()
         start_tts_health_watchdog()
 
+        from presence_ui.gateway.kiosk_mcp import log_kiosk_mcp_status
+
+        await asyncio.to_thread(log_kiosk_mcp_status)
+
     @app.on_event("shutdown")
     async def _stop_background_tasks() -> None:
         from presence_ui.gateway.reminder_watchdog import stop_reminder_watchdog

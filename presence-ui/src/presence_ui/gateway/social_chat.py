@@ -189,10 +189,15 @@ def _finish_intercept_chat_request(
                 ),
             )
         )
-    remember_intent = detect_remember_intent(message) or detect_personal_fact_intent(message)
+    user_intent = resolve_user_intent(message)
+    remember_intent = None
+    remember_saved = False
+    if user_intent.wants_remember:
+        remember_intent = detect_remember_intent(message) or detect_personal_fact_intent(message)
     if remember_intent:
         outcome = persist_remember_intent(remember_intent)
         if outcome.ok:
+            remember_saved = True
             label = "もう覚えてある" if outcome.duplicate else "記憶に保存した"
             gateway_events.append(
                 progress_event(phase="remember", label=label)
@@ -301,8 +306,12 @@ def _finish_intercept_chat_request(
         )
 
     turn_delta = build_social_turn_delta(ctx=ctx, plan=plan)
-    intent = resolve_user_intent(message)
-    effective = merge_intent_with_plan(intent=intent, plan=plan)
+    effective = merge_intent_with_plan(
+        intent=user_intent,
+        plan=plan,
+        vision_prefetch_done=bool(vision_prefetch),
+        remember_saved=remember_saved,
+    )
     gateway_speak = ibf_gateway_speak_enabled() and effective.gateway_speak_after_reply
     if effective.speak_action_note:
         turn_delta = (

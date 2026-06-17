@@ -79,3 +79,39 @@ def test_merge_blocks_speak_on_stay_silent() -> None:
     plan = _plan(move="stay_silent")
     body = merge_intent_with_plan(intent=intent, plan=plan)
     assert body.gateway_speak_after_reply is False
+
+
+def test_resolve_observe_from_mite() -> None:
+    intent = resolve_user_intent("何が見える？")
+    assert intent.wants_observe is True
+    assert intent.wants_remember is False
+
+
+def test_resolve_remember_from_oboete() -> None:
+    intent = resolve_user_intent("これ覚えておいて")
+    assert intent.wants_remember is True
+
+
+def test_merge_observe_note_when_prefetch_done() -> None:
+    intent = resolve_user_intent("見て")
+    plan = _plan()
+    body = merge_intent_with_plan(
+        intent=intent,
+        plan=plan,
+        vision_prefetch_done=True,
+    )
+    assert body.speak_action_note
+    assert "vision_prefetch" in body.speak_action_note
+    assert "mcp__wifi-cam__see" in body.speak_action_note
+
+
+def test_merge_remember_note_when_saved() -> None:
+    intent = resolve_user_intent("覚えて")
+    plan = _plan()
+    body = merge_intent_with_plan(
+        intent=intent,
+        plan=plan,
+        remember_saved=True,
+    )
+    assert body.speak_action_note
+    assert "mcp__memory__remember" in body.speak_action_note

@@ -222,9 +222,9 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 | Phase | 内容 | 状態 |
 |-------|------|------|
 | IBF-0 | 計画ドキュメント + backlog リンク | **済** |
-| IBF-1 | `resolve_user_intent`（ルール） | 未 |
-| IBF-2 | plan 合成 + `voice.speak` / `[Action]` | 未 |
-| IBF-3 | 会話返答後 `room-say` 自動（speak 先通し） | 未 |
+| IBF-1 | `resolve_user_intent`（ルール） | **済** |
+| IBF-2 | plan 合成 + `voice.speak` / `[Action]` | **済** |
+| IBF-3 | 会話返答後 `room-say` 自動（speak 先通し） | **済** |
 | IBF-4 | 日常 MCP 最小化の確認 | 未 |
 | IBF-5 | observe/remember を同一パイプライン統合 | 未 |
 | IBF-6 | allowed_action ↔ バケツ用語統一（任意） | 未 |

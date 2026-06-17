@@ -9,8 +9,8 @@ from typing import Any
 
 from presence_ui.gateway.room_events import activity_event, encode_event, progress_event
 from presence_ui.gateway.room_ingest import ingest_agent_turn
-from presence_ui.gateway.see_prefetch import prefetch_camera_for_message
 from presence_ui.gateway.see_intent import SEE_PROGRESS_LABELS, detect_see_intent
+from presence_ui.gateway.see_prefetch import prefetch_camera_for_message
 from presence_ui.gateway.social_chat import (
     ChatInterceptResult,
     intercept_chat_request_async,
@@ -116,3 +116,28 @@ async def stream_gateway_chat(
             session_id=session_key,
             text=reply,
         )
+    if result.gateway_speak_after_reply and reply:
+        from presence_ui.gateway.gateway_speak import deliver_gateway_speak_after_reply
+
+        ok, detail = await deliver_gateway_speak_after_reply(
+            text=reply,
+            person_id=person_id,
+        )
+        if ok:
+            yield encode_event(
+                activity_event(
+                    kind="say",
+                    label="Surface で話した",
+                    detail=detail[:120],
+                    ok=True,
+                )
+            )
+        else:
+            yield encode_event(
+                activity_event(
+                    kind="say",
+                    label="声を届けられなかった",
+                    detail=detail[:120],
+                    ok=False,
+                )
+            )

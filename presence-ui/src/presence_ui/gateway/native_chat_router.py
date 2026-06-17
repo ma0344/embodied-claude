@@ -81,12 +81,14 @@ async def _stream_agent_chat(
     req: ChatRequest,
     intercept: ChatInterceptResult,
     base_config: AgentConfig,
+    person_id: str,
 ) -> AsyncIterator[str]:
     cfg = agent_config_from_intercept(intercept, base_config)
     enriched = intercept.payload or {}
     prompt = str(enriched.get("message") or req.prompt).strip()
     sid = req.session_id or str(uuid.uuid4())
     is_new = req.session_id is None or req.session_id not in _CLAUDE_SESSION_IDS
+    reply_parts: list[str] = []
     # Tell the browser the session id immediately (CLI init can arrive much later).
     yield _sse("session", {"session_id": sid, "claude_session": True})
     agent = ClaudeAgent()
@@ -103,11 +105,33 @@ async def _stream_agent_chat(
                 registered = evt_data.get("session_id")
                 if isinstance(registered, str) and registered:
                     _CLAUDE_SESSION_IDS.add(registered)
+            if evt_type == "text":
+                content = evt_data.get("content")
+                if content:
+                    reply_parts.append(str(content))
             yield _sse(evt_type, evt_data)
     except Exception as exc:
         yield _sse("error", {"message": str(exc)})
     finally:
         await agent.cancel()
+
+    reply = "".join(reply_parts).strip()
+    if intercept.gateway_speak_after_reply and reply:
+        from presence_ui.gateway.gateway_speak import deliver_gateway_speak_after_reply
+
+        ok, detail = await deliver_gateway_speak_after_reply(
+            text=reply,
+            person_id=person_id,
+        )
+        yield _sse(
+            "room_activity",
+            {
+                "kind": "say",
+                "label": "Surface で話した" if ok else "声を届けられなかった",
+                "detail": detail[:120],
+                "ok": ok,
+            },
+        )
 
 
 def create_native_chat_router(*, person_id: str) -> APIRouter:
@@ -177,7 +201,9 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
 
             return StreamingResponse(silent_stream(), media_type="text/event-stream")
 
-        stream = _stream_agent_chat(req=req, intercept=intercept, base_config=base)
+        stream = _stream_agent_chat(
+            req=req, intercept=intercept, base_config=base, person_id=person_id
+        )
         return StreamingResponse(stream, media_type="text/event-stream")
 
     return router

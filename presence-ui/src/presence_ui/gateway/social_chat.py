@@ -30,10 +30,15 @@ from presence_ui.gateway.direct_actions import (
     direct_actions_enabled,
     write_private_reflection_direct,
 )
-from presence_ui.gateway.room_events import progress_event
-from presence_ui.gateway.room_ingest import ingest_human_turn_async
 from presence_ui.gateway.open_loop_dismiss import dismiss_note, dismiss_progress_label
 from presence_ui.gateway.prompt_injection import apply_gateway_prompt_injection
+from presence_ui.gateway.room_events import progress_event
+from presence_ui.gateway.room_ingest import ingest_human_turn_async
+from presence_ui.gateway.user_intent import (
+    ibf_gateway_speak_enabled,
+    merge_intent_with_plan,
+    resolve_user_intent,
+)
 from presence_ui.services.llm import build_social_turn_delta
 
 # write_private_reflection must still reach Claude Code so it can call
@@ -52,6 +57,7 @@ class ChatInterceptResult:
     user_text: str | None = None
     gateway_events: list[dict[str, Any]] = field(default_factory=list)
     direct_action_summary: str | None = None
+    gateway_speak_after_reply: bool = False
 
 
 def _ingest_human_sync(*, person_id: str, session_id: str | None, text: str):
@@ -295,6 +301,15 @@ def _finish_intercept_chat_request(
         )
 
     turn_delta = build_social_turn_delta(ctx=ctx, plan=plan)
+    intent = resolve_user_intent(message)
+    effective = merge_intent_with_plan(intent=intent, plan=plan)
+    gateway_speak = ibf_gateway_speak_enabled() and effective.gateway_speak_after_reply
+    if effective.speak_action_note:
+        turn_delta = (
+            f"{turn_delta}\n\n{effective.speak_action_note}"
+            if turn_delta
+            else effective.speak_action_note
+        )
     if memory_notes:
         note = "\n\n".join(memory_notes)
         turn_delta = f"{turn_delta}\n\n{note}" if turn_delta else note
@@ -329,6 +344,7 @@ def _finish_intercept_chat_request(
         plan_move=plan.primary_move,
         user_text=message,
         gateway_events=gateway_events,
+        gateway_speak_after_reply=gateway_speak,
     )
 
 

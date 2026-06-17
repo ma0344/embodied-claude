@@ -195,10 +195,10 @@ effective_buckets = merge(intent, plan)
 
 | Phase | 内容 | 受け入れ条件 |
 |-------|------|----------------|
-| **IBF-0** | 本ドキュメント + backlog リンク | まー合意 |
-| **IBF-1** | `resolve_user_intent`（ルールのみ）+ 単体テスト | 「say で」→ `wants_speech` |
-| **IBF-2** | compose/plan 合成: `voice.speak` 上書き + `[Action]` 注入 | plan が speak=false でも注入に speak 必須 |
-| **IBF-3** | 会話ターン: 返答後 `deliver_speak_to_kiosk`（Gemma が say 呼ばなくてよい） | キオスクで「喋って」実戦 OK |
+| **IBF-0** | 本ドキュメント + backlog リンク | **済** |
+| **IBF-1** | `resolve_user_intent`（ルール） | **済** |
+| **IBF-2** | plan 合成 + `[Action]` 注入 | **済** |
+| **IBF-3** | 会話返答後 `room-say` 自動 | **済** |
 | **IBF-4** | `enabledMcpjsonServers` 日常 = `system-temperature` 固定の確認 | LM Studio ログに MCP 山が出ない |
 | **IBF-5** | observe / remember を同一パイプラインに統合（既存 deterministic を `merge` 経由に） | バケツ表と実装一致 |
 | **IBF-6** | 自律 tick: `allowed_action` をバケツ名にリネーム整理（任意） | ドキュメント・コード用語統一 |

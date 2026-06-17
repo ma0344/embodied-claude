@@ -85,6 +85,18 @@ def default_agent_config(*, working_dir: Path | None = None) -> AgentConfig:
         if k.startswith("ANTHROPIC_") or k.startswith("CLAUDE_")
     }
     merged_env = {**extra, **base_env}
+
+    mcp_config_path: str | None = None
+    strict_mcp = False
+    from presence_ui.gateway.kiosk_mcp import build_strict_mcp_config_file, strict_mcp_config_enabled
+
+    if strict_mcp_config_enabled():
+        try:
+            mcp_config_path = str(build_strict_mcp_config_file())
+            strict_mcp = True
+        except (OSError, ValueError, json.JSONDecodeError):
+            strict_mcp = False
+
     return AgentConfig(
         working_dir=str(working_dir or embodied_repo_root()),
         permission_mode=os.getenv("PRESENCE_CCS_PERMISSION_MODE", _DEFAULT_PERMISSION_MODE),
@@ -92,6 +104,8 @@ def default_agent_config(*, working_dir: Path | None = None) -> AgentConfig:
         max_turns=int(os.getenv("PRESENCE_CCS_MAX_TURNS", "20")),
         model=model,
         env=merged_env,
+        mcp_config_path=mcp_config_path,
+        strict_mcp_config=strict_mcp,
     )
 
 

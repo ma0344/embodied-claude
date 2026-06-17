@@ -1865,6 +1865,60 @@ class MemoryMCPServer:
             )
         return {"ok": True, "id": memory.id, "duplicate": False}
 
+    async def _http_recall_divergent(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        if not self._memory_store:
+            return {"ok": False, "items": [], "error": "memory store not connected"}
+        context = str(arguments.get("context") or "").strip()
+        if not context:
+            return {"ok": False, "items": [], "error": "context is required"}
+        try:
+            async with self._http_recall_sem:
+                results, diagnostics = await asyncio.wait_for(
+                    self._memory_store.recall_divergent(
+                        context=context,
+                        n_results=int(arguments.get("n_results", 5)),
+                        max_branches=int(arguments.get("max_branches", 3)),
+                        max_depth=int(arguments.get("max_depth", 3)),
+                        temperature=float(arguments.get("temperature", 0.7)),
+                        include_diagnostics=bool(arguments.get("include_diagnostics", False)),
+                    ),
+                    timeout=30.0,
+                )
+        except (TimeoutError, Exception) as exc:
+            return {"ok": False, "items": [], "error": str(exc)}
+        items = []
+        for r in results:
+            m = r.memory
+            items.append(
+                {
+                    "id": m.id,
+                    "content": m.content[:500],
+                    "emotion": m.emotion,
+                    "category": m.category,
+                    "score": round(max(0.0, 1.0 - min(float(r.distance), 1.0)), 3),
+                }
+            )
+        payload: dict[str, Any] = {"ok": True, "items": items}
+        if arguments.get("include_diagnostics"):
+            payload["diagnostics"] = diagnostics
+        return payload
+
+    async def _http_consolidate(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        if not self._memory_store:
+            return {"ok": False, "error": "memory store not connected"}
+        try:
+            stats = await asyncio.wait_for(
+                self._memory_store.consolidate_memories(
+                    window_hours=int(arguments.get("window_hours", 24)),
+                    max_replay_events=int(arguments.get("max_replay_events", 200)),
+                    link_update_strength=float(arguments.get("link_update_strength", 0.2)),
+                ),
+                timeout=120.0,
+            )
+        except (TimeoutError, Exception) as exc:
+            return {"ok": False, "error": str(exc)}
+        return {"ok": True, "stats": stats}
+
     async def _handle_http_request(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         """Handle a single HTTP request for /health, /recall, or /remember."""
         try:
@@ -1928,10 +1982,52 @@ class MemoryMCPServer:
                         payload = await self._http_remember(arguments)
                         status = 200 if payload.get("ok") else 503
                         response = self._http_json_response(status=status, payload=payload)
+            elif method == "POST" and " /recall/divergent" in req:
+                content_length = int(headers.get("content-length", "0"))
+                raw_body = b""
+                if content_length > 0:
+                    raw_body = await asyncio.wait_for(reader.readexactly(content_length), timeout=10)
+                try:
+                    arguments = json.loads(raw_body.decode("utf-8") if raw_body else "{}")
+                except json.JSONDecodeError:
+                    response = self._http_json_response(
+                        status=400, payload={"ok": False, "error": "invalid JSON body"}
+                    )
+                else:
+                    if not isinstance(arguments, dict):
+                        response = self._http_json_response(
+                            status=400, payload={"ok": False, "error": "body must be a JSON object"}
+                        )
+                    else:
+                        payload = await self._http_recall_divergent(arguments)
+                        status = 200 if payload.get("ok") else 503
+                        response = self._http_json_response(status=status, payload=payload)
+            elif method == "POST" and " /consolidate" in req:
+                content_length = int(headers.get("content-length", "0"))
+                raw_body = b""
+                if content_length > 0:
+                    raw_body = await asyncio.wait_for(reader.readexactly(content_length), timeout=10)
+                try:
+                    arguments = json.loads(raw_body.decode("utf-8") if raw_body else "{}")
+                except json.JSONDecodeError:
+                    response = self._http_json_response(
+                        status=400, payload={"ok": False, "error": "invalid JSON body"}
+                    )
+                else:
+                    if not isinstance(arguments, dict):
+                        arguments = {}
+                    payload = await self._http_consolidate(arguments)
+                    status = 200 if payload.get("ok") else 503
+                    response = self._http_json_response(status=status, payload=payload)
             else:
                 response = self._http_json_response(
                     status=404,
-                    payload={"error": "use GET /health, GET /recall?q=query, or POST /remember"},
+                    payload={
+                        "error": (
+                            "use GET /health, GET /recall?q=query, POST /remember, "
+                            "POST /recall/divergent, or POST /consolidate"
+                        )
+                    },
                 )
 
             writer.write(response)
@@ -1998,7 +2094,8 @@ class MemoryMCPServer:
                 if http_server is not None:
                     logger.info(
                         "HTTP memory endpoint listening on 127.0.0.1:%s "
-                        "(GET /health, GET /recall, POST /remember)",
+                        "(GET /health, GET /recall, POST /remember, "
+                        "POST /recall/divergent, POST /consolidate)",
                         http_port,
                     )
 
@@ -2020,7 +2117,8 @@ class MemoryMCPServer:
                 )
             logger.info(
                 "memory-mcp HTTP daemon on 127.0.0.1:%s "
-                "(GET /health, GET /recall, POST /remember; stdio MCP off)",
+                "(GET /health, GET /recall, POST /remember, "
+                "POST /recall/divergent, POST /consolidate; stdio MCP off)",
                 http_port,
             )
             async with http_server:

@@ -168,6 +168,24 @@ def test_default_agent_config_uses_qat_model(monkeypatch: pytest.MonkeyPatch) ->
     assert cfg.env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "google/gemma-4-12b-qat"
 
 
+def test_default_agent_config_strict_mcp_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    from presence_ui.gateway import kiosk_mcp
+
+    (tmp_path / ".mcp.json").write_text(
+        '{"mcpServers": {"system-temperature": {"command": "echo", "args": ["t"]}}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(kiosk_mcp, "embodied_repo_root", lambda: tmp_path)
+    monkeypatch.setenv("PRESENCE_STRICT_MCP_CONFIG", "1")
+    cfg = ccs_integration.default_agent_config(working_dir=tmp_path)
+    assert cfg.strict_mcp_config is True
+    assert cfg.mcp_config_path
+    assert "mcp-kiosk.runtime.json" in cfg.mcp_config_path
+
+
 def test_native_login_uses_presence_password(monkeypatch: pytest.MonkeyPatch) -> None:
     from fastapi import FastAPI
     from fastapi.testclient import TestClient

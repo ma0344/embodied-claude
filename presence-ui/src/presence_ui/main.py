@@ -91,6 +91,10 @@ def create_app() -> FastAPI:
         start_reminder_watchdog()
         start_tts_health_watchdog()
 
+        from presence_ui.heartbeat.runner import start_pulse_runner
+
+        start_pulse_runner(person_id=DEFAULT_PERSON_ID)
+
         from presence_ui.gateway.kiosk_mcp import log_kiosk_mcp_status
 
         await asyncio.to_thread(log_kiosk_mcp_status)
@@ -99,9 +103,11 @@ def create_app() -> FastAPI:
     async def _stop_background_tasks() -> None:
         from presence_ui.gateway.reminder_watchdog import stop_reminder_watchdog
         from presence_ui.gateway.tts_health_watchdog import stop_tts_health_watchdog
+        from presence_ui.heartbeat.runner import stop_pulse_runner
 
         stop_reminder_watchdog()
         stop_tts_health_watchdog()
+        stop_pulse_runner()
 
     app.add_middleware(
         CORSMiddleware,
@@ -637,6 +643,30 @@ def create_app() -> FastAPI:
     @app.get("/api/v1/camera/snapshot", response_model=CameraSnapshotResponse)
     async def get_camera_snapshot() -> CameraSnapshotResponse:
         return await fetch_camera_snapshot()
+
+    @app.post("/api/v1/heartbeat/compose-plan")
+    async def post_heartbeat_compose_plan(request: Request) -> JSONResponse:
+        """Compose + plan without MCP (CLI /talk BIO-6)."""
+        from presence_ui.gateway.heartbeat_api import ComposePlanRequest, compose_plan_body
+
+        try:
+            raw = await request.json()
+        except json.JSONDecodeError:
+            raw = {}
+        body = ComposePlanRequest.model_validate(raw if isinstance(raw, dict) else {})
+        return utf8_json(compose_plan_body(body).model_dump(mode="json"))
+
+    @app.post("/api/v1/heartbeat/finalize-turn")
+    async def post_heartbeat_finalize_turn(request: Request) -> JSONResponse:
+        """Record experience + pulse + interpretation_shift after a reply."""
+        from presence_ui.gateway.heartbeat_api import FinalizeTurnRequest, finalize_turn_body
+
+        try:
+            raw = await request.json()
+        except json.JSONDecodeError:
+            raw = {}
+        body = FinalizeTurnRequest.model_validate(raw if isinstance(raw, dict) else {})
+        return utf8_json(finalize_turn_body(body).model_dump(mode="json"))
 
     @app.post("/api/v1/autonomous-tick")
     async def post_autonomous_tick(request: Request) -> JSONResponse:

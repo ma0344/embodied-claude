@@ -10,17 +10,18 @@ from interaction_orchestrator_mcp.compose import compose_interaction_context
 from interaction_orchestrator_mcp.plan import plan_response
 from interaction_orchestrator_mcp.schemas import (
     ComposeInteractionContextInput,
+    InteractionContext,
     PlanResponseInput,
     ResponsePlan,
 )
+from social_core import utc_now
 
 from presence_ui.deps import get_stores
 from presence_ui.gateway.direct_actions import (
-    DirectActionOutcome,
     direct_actions_enabled,
     execute_autonomous_plan,
 )
-from social_core import utc_now
+from presence_ui.heartbeat.schedule import apply_pulse_schedule
 
 
 @dataclass(slots=True)
@@ -32,6 +33,8 @@ class AutonomousTickResult:
     detail: str = ""
     events: list[dict[str, Any]] = field(default_factory=list)
     plan: ResponsePlan | None = None
+    ctx: InteractionContext | None = None
+    next_wake_at: str | None = None
 
 
 async def run_autonomous_tick(
@@ -114,6 +117,14 @@ async def run_autonomous_tick(
         )
         primary = plan.primary_move
 
+    pulse = apply_pulse_schedule(
+        channel="autonomous",
+        plan=plan,
+        ctx=ctx,
+        action=outcome.action,
+        reason_suffix=(outcome.summary or "")[:60],
+    )
+
     return AutonomousTickResult(
         ok=outcome.ok,
         primary_move=primary,
@@ -122,4 +133,6 @@ async def run_autonomous_tick(
         detail=outcome.detail,
         events=outcome.events,
         plan=plan,
+        ctx=ctx,
+        next_wake_at=pulse.next_wake_at,
     )

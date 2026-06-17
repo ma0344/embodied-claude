@@ -134,16 +134,17 @@ def test_recall_memories_direct() -> None:
     ctx = _ctx(dominant="identity_coherence")
     plan = _plan(allowed=["recall_memories"])
 
-    with patch(
-        "presence_ui.gateway.direct_actions.http_recall",
-        return_value=[{"content": "昔の約束を覚えている"}],
-    ):
-        outcome = direct_actions.recall_memories_direct(
-            stores,
-            person_id="ma",
-            ctx=ctx,
-            plan=plan,
-        )
+    with patch.dict("os.environ", {"PRESENCE_PULSE_USE_DIVERGENT": "0"}):
+        with patch(
+            "presence_ui.gateway.direct_actions.http_recall",
+            return_value=[{"content": "昔の約束を覚えている"}],
+        ):
+            outcome = direct_actions.recall_memories_direct(
+                stores,
+                person_id="ma",
+                ctx=ctx,
+                plan=plan,
+            )
 
     assert outcome.ok is True
     assert outcome.action == "recall_memories"

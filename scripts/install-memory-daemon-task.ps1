@@ -31,20 +31,13 @@ if ($Uninstall) {
 
 $Shell = Get-Command pwsh -ErrorAction SilentlyContinue
 if (-not $Shell) {
-    $Shell = Get-Command powershell -ErrorAction SilentlyContinue
-}
-if (-not $Shell) {
-    Write-Error "PowerShell not found"
+    Write-Error "pwsh.exe required (install PowerShell 7)"
 }
 
-$Argument = @(
-    "-NoProfile"
-    "-ExecutionPolicy", "Bypass"
-    "-WindowStyle", "Hidden"
-    "-File", "`"$Daemon`""
-) -join " "
-
-$Action = New-ScheduledTaskAction -Execute $Shell.Source -Argument $Argument -WorkingDirectory $Repo
+. (Join-Path $PSScriptRoot "embodied-hidden-launcher.ps1")
+$Launcher = Join-Path $PSScriptRoot "run-memory-daemon-hidden.vbs"
+New-EmbodiedHiddenVbsLauncher -Repo $Repo -Ps1Path $Daemon -LauncherPath $Launcher | Out-Null
+$Action = New-EmbodiedHiddenTaskAction -Repo $Repo -LauncherPath $Launcher
 $Trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $Settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
@@ -66,6 +59,7 @@ Register-ScheduledTask `
 
 Write-Host "Installed scheduled task: $TaskName"
 Write-Host "  starts: at logon ($env:USERNAME)"
+Write-Host "  launcher: wscript (hidden, no console flash)"
 Write-Host "  repo:   $Repo"
 Write-Host "  log:    $env:USERPROFILE\.config\embodied-claude\logs\memory-daemon.log"
 Write-Host "  health: http://127.0.0.1:18900/health"

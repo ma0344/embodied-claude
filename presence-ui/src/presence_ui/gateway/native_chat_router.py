@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
@@ -117,6 +118,18 @@ async def _stream_agent_chat(
         await agent.cancel()
 
     reply = "".join(reply_parts).strip()
+    if intercept.plan and intercept.ctx:
+        from presence_ui.heartbeat.record import finalize_chat_turn
+
+        await asyncio.to_thread(
+            finalize_chat_turn,
+            person_id=person_id,
+            session_id=req.session_id or intercept.session_id,
+            user_text=req.prompt,
+            reply_text=reply,
+            plan=intercept.plan,
+            ctx=intercept.ctx,
+        )
     if intercept.gateway_speak_after_reply and reply:
         from presence_ui.gateway.gateway_speak import deliver_gateway_speak_after_reply
 

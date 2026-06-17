@@ -11,8 +11,10 @@ from interaction_orchestrator_mcp.compose import compose_interaction_context
 from interaction_orchestrator_mcp.plan import plan_response
 from interaction_orchestrator_mcp.schemas import (
     ComposeInteractionContextInput,
+    InteractionContext,
     PlanResponseInput,
     RecordAgentExperienceInput,
+    ResponsePlan,
 )
 from social_core import utc_now
 
@@ -39,6 +41,7 @@ from presence_ui.gateway.user_intent import (
     ibf_gateway_speak_enabled,
     merge_intent_with_plan,
 )
+from presence_ui.heartbeat.schedule import apply_pulse_schedule
 from presence_ui.services.llm import build_social_turn_delta
 
 # write_private_reflection must still reach Claude Code so it can call
@@ -58,6 +61,9 @@ class ChatInterceptResult:
     gateway_events: list[dict[str, Any]] = field(default_factory=list)
     direct_action_summary: str | None = None
     gateway_speak_after_reply: bool = False
+    plan: ResponsePlan | None = None
+    ctx: InteractionContext | None = None
+    session_id: str | None = None
 
 
 def _ingest_human_sync(*, person_id: str, session_id: str | None, text: str):
@@ -285,11 +291,21 @@ def _finish_intercept_chat_request(
     )
 
     if plan.primary_move in _SILENT_MOVES:
+        apply_pulse_schedule(
+            channel="chat",
+            plan=plan,
+            ctx=ctx,
+            action=plan.primary_move,
+            reason_suffix="silent",
+        )
         return ChatInterceptResult(
             forward=False,
             plan_move=plan.primary_move,
             user_text=message,
             gateway_events=gateway_events,
+            plan=plan,
+            ctx=ctx,
+            session_id=session_key,
         )
 
     if (
@@ -304,12 +320,22 @@ def _finish_intercept_chat_request(
             plan=plan,
         )
         gateway_events.extend(outcome.events)
+        apply_pulse_schedule(
+            channel="chat",
+            plan=plan,
+            ctx=ctx,
+            action="write_private_reflection",
+            reason_suffix="direct",
+        )
         return ChatInterceptResult(
             forward=False,
             plan_move=plan.primary_move,
             user_text=message,
             gateway_events=gateway_events,
             direct_action_summary=outcome.summary,
+            plan=plan,
+            ctx=ctx,
+            session_id=session_key,
         )
 
     turn_delta = build_social_turn_delta(ctx=ctx, plan=plan)
@@ -361,6 +387,9 @@ def _finish_intercept_chat_request(
         user_text=message,
         gateway_events=gateway_events,
         gateway_speak_after_reply=gateway_speak,
+        plan=plan,
+        ctx=ctx,
+        session_id=session_key,
     )
 
 

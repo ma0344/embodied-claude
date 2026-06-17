@@ -82,6 +82,15 @@ def _win_toast_script() -> Path | None:
     return path if path.is_file() else None
 
 
+def _subprocess_no_window_kwargs() -> dict[str, int]:
+    if sys.platform != "win32":
+        return {}
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    if not flags:
+        return {}
+    return {"creationflags": flags}
+
+
 def _show_win_toast(*, title: str, message: str, click_url: str) -> None:
     script = _win_toast_script()
     if not script:
@@ -105,6 +114,7 @@ def _show_win_toast(*, title: str, message: str, click_url: str) -> None:
         timeout=15,
         capture_output=True,
         text=True,
+        **_subprocess_no_window_kwargs(),
     )
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "").strip() or f"exit {completed.returncode}"

@@ -1,11 +1,13 @@
 # ma-home / koyori バックログ
 
-**最終更新**: 2026-06-17（**Intent→Bucket→Flow** 計画確立・Desire ⑤ 済）  
+**最終更新**: 2026-06-17（**HeartbeatLoop / 生物らしい振る舞い** 合意・着手）  
 **方針**: こより本体（記憶・gateway 身体）は **様子見**。部屋 UI は **Native 会話エンジン + `/` の殻** を育てる（8080 プロキシ UI は投資しない）。
 
 **実行方針（合意 2026-06-14）**: 判断は compose/plan/stores のまま。**身体・自律の実行**は MCP に頼らず gateway 直実行へ（remember 直実行と同型）。詳細 → [gateway-direct-actions.md](./gateway-direct-actions.md)
 
 **ツール選定（合意 2026-06-17）**: LLM に MCP ツール名を選ばせない。**Intent → Bucket → Flow** のマッピングで身体を動かす。詳細 → [intent-bucket-flow.md](./intent-bucket-flow.md)
+
+**Heartbeat / 生物らしさ（合意 2026-06-17）**: MCP は手段に過ぎない。**いつ・何を**は gateway/plan、**どう言うか**は LLM。Tick の「次にいつ」は `agent_pulse.json` + PulseRunner。詳細 → [heartbeat-loop.md](./heartbeat-loop.md)
 
 あとでやること。完了したら `[x]` にするか「完了」セクションへ移す。
 
@@ -14,7 +16,7 @@
 | 項目 | トラック | 状態 |
 |------|---------|------|
 | **Windows キーボードをキオスク（Surface）で共有** — PC の KB/マウスを Surface 入力に（BT 切替は避けたい） | [V5](#v--ビジョン--未実装docsweb_ui_designmdexported-sessionmd-より) | 未 |
-| **サーバー用ターミナルウィンドウの非表示** — ログオン時 Task 起動の cmd/PowerShell を隠す | [B4](#b--運用自動化) | 未・後回し可 |
+| **サーバー用ターミナルウィンドウの非表示** — ログオン時 Task 起動の cmd/PowerShell を隠す | [B4](#b--運用自動化) | **着手** — VBS ランチャー横展開済み。Task 再インストール要 |
 
 ---
 
@@ -30,6 +32,7 @@
 | **A** | 記憶・gateway 身体 | compose / see / dismiss | **様子見**（大きな追加は止める） |
 | **IBF** | **Intent→Bucket→Flow** | LLM にツール名を選ばせない | **計画済** → [intent-bucket-flow.md](./intent-bucket-flow.md) |
 | **C12** | intent router | 曖昧な「見て」分類 | **済** — `hybrid_intent.py` |
+| **BIO** | **HeartbeatLoop** | 経験→行動→次の wake。MCP 不要 | **着手** → [heartbeat-loop.md](./heartbeat-loop.md) |
 
 ### 次の一手 — 優先度案（2026-06-10 → **まー合意: 1→3→2→C11g → Desire**）
 
@@ -150,7 +153,7 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 - [x] **B1** Scheduled Task 3つ登録（`EmbodiedClaude-MemoryHTTP` / `WebUI` / `PresenceUI`）— 2026-06-13 実施
 - [x] **B3** Watchdog Task 登録（`EmbodiedClaude-Watchdog`）— 2026-06-14 実施
 - [ ] **B2** LM Studio ロードは別途（現状手動 or 既存習慣）
-- [ ] **B4** **サーバー用ターミナルウィンドウの非表示** — ログオン時 Task（MemoryHTTP / WebUI / PresenceUI）の cmd・PowerShell を出さない（VBS ランチャー×3 想定）。**後回し可**。Watchdog 済み。daemon 障害はログ + smoke で検知
+- [x] **B4** **サーバー用ターミナルウィンドウの非表示** — `embodied-hidden-launcher.ps1` + VBS（AutonomousTick / MemoryHTTP / PresenceUI / WebUI / AivisTTS）。Win toast は `CREATE_NO_WINDOW`。**既存 Task は各 `install-*-task.ps1` の再実行で反映**
 
 **メモ**: Claude Code の stdio MCP（memory/sociality 等）は **セッションごとに spawn** される。daemon は **HTTP 記憶の本店** だけ常駐。診断: `check-mcp-processes.ps1`。
 
@@ -236,6 +239,25 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 | IBF-5 | observe/remember を同一パイプライン統合 | **済** |
 | IBF-6 | 用語統一 — **6a 済**（§5.1/§6 対応表、正規名=`allowed_action`）。6b/c コード寄せは任意 | **6a 済** |
 | IBF-7 | LLM intent オフライン実験（C12 接続） | **済** — `benchmarks/intent_router/` |
+
+### BIO — HeartbeatLoop（生物らしい振る舞い、合意 2026-06-17）
+
+**問題**: gateway 寄せで「ロボット」感。`recall_divergent` / `consolidate` が HTTP 未対応。native chat が **返答後 record 未閉じ**。Tick が **Windows 15 分固定**でこよりの「次にいつ」にならない。
+
+**方針**: MCP は配線の一つ。**判断**は compose/plan/gateway、**言葉**は LLM、**次の wake** は `agent_pulse.json`。記憶の生理は HTTP。
+
+| ID | 内容 | 状態 |
+|----|------|------|
+| BIO-0 | [heartbeat-loop.md](./heartbeat-loop.md) + backlog | **済** |
+| BIO-1 | `agent_pulse.json` + `PulseRunner`（presence-ui） | **済** |
+| BIO-2 | native chat `finalize_chat_turn`（record + pulse） | **済** |
+| BIO-3 | memory HTTP `POST /recall/divergent` `POST /consolidate` | **済** |
+| BIO-4 | 自律 `recall_memories` → divergent；深夜 consolidate | **済** |
+| BIO-5 | strict MCP キオスク（`mcp-kiosk.runtime.json`） | **済** |
+| BIO-6 | `/talk` CLI → gateway compose API（MCP 回避） | **済** |
+| BIO-7 | `interpretation_shift` 返答後フック | **済** |
+
+**残存**: 15 分 Task は `PRESENCE_PULSE_MAX_SEC` 超のセーフティネットとして維持。
 
 ### A4 — こよりからの能動届け（Outbound）
 

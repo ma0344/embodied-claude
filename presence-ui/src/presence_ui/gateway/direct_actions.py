@@ -20,7 +20,7 @@ from interaction_orchestrator_mcp.schemas import (
 from social_core import utc_now
 
 from presence_ui.deps import PresenceStores
-from presence_ui.gateway.memory_http import http_recall, http_remember
+from presence_ui.gateway.memory_http import http_recall, http_recall_divergent, http_remember
 from presence_ui.gateway.room_events import activity_event, progress_event
 from presence_ui.gateway.web_search import ddg_instant_answer, pick_browse_query
 from presence_ui.services.camera_locations import CAMERA_LOCATIONS, PresetLocation
@@ -263,7 +263,16 @@ def recall_memories_direct(
     if not query:
         query = "こより 自分 アイデンティティ 関係"
 
-    items = http_recall(query=query, n=4)
+    use_divergent = os.getenv("PRESENCE_PULSE_USE_DIVERGENT", "1").lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+    if use_divergent:
+        items = http_recall_divergent(context=query, n_results=4)
+    else:
+        items = http_recall(query=query, n=4)
     if items:
         lines = []
         for item in items[:4]:

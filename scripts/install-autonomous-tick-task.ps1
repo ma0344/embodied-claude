@@ -31,20 +31,13 @@ if ($Uninstall) {
 
 $Shell = Get-Command pwsh -ErrorAction SilentlyContinue
 if (-not $Shell) {
-    $Shell = Get-Command powershell -ErrorAction SilentlyContinue
-}
-if (-not $Shell) {
-    Write-Error "PowerShell not found"
+    Write-Error "pwsh.exe required (install PowerShell 7)"
 }
 
-$Argument = @(
-    "-NoProfile"
-    "-ExecutionPolicy", "Bypass"
-    "-WindowStyle", "Hidden"
-    "-File", "`"$Runner`""
-) -join " "
-
-$Action = New-ScheduledTaskAction -Execute $Shell.Source -Argument $Argument -WorkingDirectory $Repo
+. (Join-Path $PSScriptRoot "embodied-hidden-launcher.ps1")
+$Launcher = Join-Path $PSScriptRoot "run-autonomous-tick-hidden.vbs"
+New-EmbodiedHiddenVbsLauncher -Repo $Repo -Ps1Path $Runner -LauncherPath $Launcher | Out-Null
+$Action = New-EmbodiedHiddenTaskAction -Repo $Repo -LauncherPath $Launcher
 
 $StartAt = (Get-Date).AddMinutes(1)
 $RepeatTrigger = New-ScheduledTaskTrigger -Once -At $StartAt `
@@ -71,7 +64,7 @@ Register-ScheduledTask `
 
 Write-Host "Installed scheduled task: $TaskName"
 Write-Host "  interval: every ${IntervalMinutes}m (+ once at logon)"
-Write-Host "  runner:   $Runner"
+Write-Host "  launcher: wscript (hidden, no console flash)"
 Write-Host "  log:      $env:USERPROFILE\.config\embodied-claude\logs\autonomous-tick.log"
 Write-Host ""
 Write-Host "Requires: presence-ui on :8090, PRESENCE_GATEWAY_DIRECT_ACTIONS=1"

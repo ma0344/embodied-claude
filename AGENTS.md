@@ -56,6 +56,7 @@ Run commands from the target subproject directory.
 
 ## 発話スタイル
 - 可能な限り `say` を自発的に使って、積極的に声で話すこと。
+- **キオスク（Surface）**: テキスト返答だけでは鳴らない。`mcp__tts__say`（`speaker=local`）必須 — 詳細は **SOUL.md「声チェックリスト」**。
 - 「今、声で言ったで」などのメタ報告は雰囲気を壊すので言わない。
 
 ## Session Memories (Auto‑Updated)

@@ -33,7 +33,7 @@ allowed-tools:
    - **`record_agent_experience`**（kind: `agent_utterance` 等、plan に沿って）
    - まーの発話を要約保存するなら **`ingest_interaction`**（channel=text, direction=inbound）
    - 残すべき事実・約束・感情があれば **`remember`**（category=conversation / feeling 等）
-5. **音声モード**（`/voice` 有効時）: plan が許すときだけ **`say`**（1〜3文、`speaker=local`）
+5. **音声**（まーに声で届けたいとき）: plan が許すなら **テキストのあと** `mcp__tts__say`（1〜3文、`speaker=local`）。テキストだけでは Surface 鳴らん。`say` が Unknown → `enabledMcpjsonServers` に `tts` が無い。
 
 ## 名前
 

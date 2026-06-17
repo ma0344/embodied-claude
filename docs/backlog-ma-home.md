@@ -225,9 +225,9 @@ Start-ScheduledTask -TaskName EmbodiedClaude-Watchdog
 | IBF-1 | `resolve_user_intent`（ルール） | **済** |
 | IBF-2 | plan 合成 + `voice.speak` / `[Action]` | **済** |
 | IBF-3 | 会話返答後 `room-say` 自動（speak 先通し） | **済** |
-| IBF-4 | 日常 MCP 最小化の確認 | 未 |
-| IBF-5 | observe/remember を同一パイプライン統合 | 未 |
-| IBF-6 | allowed_action ↔ バケツ用語統一（任意） | 未 |
+| IBF-4 | 日常 MCP 最小化の確認 | **済** |
+| IBF-5 | observe/remember を同一パイプライン統合 | **済** |
+| IBF-6 | 用語統一 — **6a 済**（§5.1/§6 対応表、正規名=`allowed_action`）。6b/c コード寄せは任意 | **6a 済** |
 | IBF-7 | LLM intent オフライン実験（C12 接続） | 未 |
 
 ### A4 — こよりからの能動届け（Outbound）

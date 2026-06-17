@@ -101,7 +101,8 @@ Plan を「賢くする」より、**Plan の出力の上に Intent→Bucket→F
 
 ## 5. バケツ一覧（v0）
 
-バケツ名は **ツール名ではない**。gateway 内部の enum 想定。
+バケツ名は **会話経路（IBF）専用の gateway 内部ラベル**。ツール名でも `allowed_action` でもない。  
+**正規名は §5.1 参照** — 将来コードを揃えるときはバケツを plan 語彙に寄せる（逆ではない）。
 
 | バケツ | 意味 | 典型トリガー |
 |--------|------|----------------|
@@ -117,13 +118,77 @@ Plan を「賢くする」より、**Plan の出力の上に Intent→Bucket→F
 
 複数バケツが立つ場合は **優先表**で 1 手に絞る（自律 tick と同型）。
 
+### 5.1 正規名ポリシー（IBF-6a — ドキュメントのみ）
+
+**合意（2026-06-17）**: 用語を一つにするときは **オリジナル = orchestrator / plan の出力**に揃える。
+
+| 層 | 正規？ | 定義元 | 使う場所 |
+|----|--------|--------|----------|
+| **`allowed_action` / `forbidden_action`** | **◎ 正規** | `interaction-orchestrator-mcp/plan.py` → `InitiativeHint` | 自律 tick、`act_autonomously`、`execute_autonomous_plan` |
+| **`primary_move`** | **◎ 正規** | 同上 | 全会話・自律（`stay_silent`, `answer_directly`, …） |
+| **`dominant_desire`** | 入力（正規の一つ手前） | `desires.json` → compose `agent_state` | plan が `allowed_actions` に変換 |
+| **バケツ**（§5 表） | 会話用の省略ラベル | `presence-ui/.../user_intent.py` | キオスク会話の `merge_intent_with_plan` のみ |
+| **MCP ツール名** | 実装詳細（非正規） | `.mcp.json` | CLI `/talk`・デバッグ。キオスク本線では LLM ctx に載せない |
+
+**リネーム方針（将来 IBF-6b/c）**:
+
+- `speak` → `talk_to_companion`（自律と同語彙）など、**バケツを allowed_action に寄せる**
+- `plan.py` の `allowed_actions` 文字列を **バケツ名に書き換えない**（benchmark / orchestrator テストが正規）
+- gateway は翻訳層（`allowed_action` → Flow）を 1 箇所に集約する想定
+
+**実装の入口（コードを読むとき）**:
+
+| 経路 | 分岐の起点 | ファイル |
+|------|------------|----------|
+| 会話 | `resolve_user_intent` → `merge_intent_with_plan` | `user_intent.py`, `social_chat.py` |
+| 自律 tick | `plan.initiative.allowed_actions` | `direct_actions.py` → `execute_autonomous_plan` |
+| plan 生成 | desire / commitment / quiet → allowed | `interaction-orchestrator-mcp/plan.py` → `_pick_initiative` |
+
 ---
 
-## 6. Bucket → Flow マッピング表（v0）
+## 6. 用語対応表 — allowed_action ↔ バケツ ↔ Flow（IBF-6a）
 
-| バケツ | Gateway Flow（実装） | MCP（CLI 用・表の奥） |
+**この表が IBF-6 の本体**（コード変更なし）。左列 `allowed_action` が正規。
+
+### 6.1 身体行動（自律 tick で plan が出すもの）
+
+| `allowed_action`（正規） | バケツ（会話・省略） | `dominant_desire`（典型） | Gateway Flow | 実装 |
+|--------------------------|----------------------|---------------------------|--------------|------|
+| `talk_to_companion` | `speak` | `miss_companion` | 自律: `talk_to_companion_direct` → room-say / local TTS | `direct_actions.py` |
+| | | | 会話: `deliver_gateway_speak_after_reply`（返答後） | `gateway_speak.py` |
+| `camera_look_around` | `observe` | `observe_room` | `observe_room_direct`（look_around + see + remember） | `direct_actions.py` |
+| `camera_look_outside` | `observe` | `look_outside` | `look_outside_direct`（preset + see） | `direct_actions.py` |
+| | `observe` | —（会話「見て」） | `prefetch_camera_for_message` / `see_prefetch` | `see_prefetch.py`, `vision_capture.py` |
+| `web_search` | `browse` | `browse_curiosity` | `web_search_direct` + `:18900/remember` | `direct_actions.py` |
+| `recall_memories` | `recall` | `identity_coherence` | `recall_memories_direct` + private note | `direct_actions.py` |
+| `think_or_discuss_topic` | （専用・バケツ未割当） | `cognitive_load` | `think_or_discuss_topic_direct` | `direct_actions.py` |
+| `write_private_reflection` | `reflect` | （quiet 時 `miss_companion` 代替） | `write_private_reflection_direct` | `direct_actions.py` |
+| `remind_commitment` | `remind` | —（`commitments_due`） | `remind_commitment_direct` | `direct_actions.py` |
+
+### 6.2 会話のみ（allowed_action を出さない経路）
+
+| バケツ | きっかけ | Gateway Flow | 実装 |
+|--------|----------|--------------|------|
+| `remember` | 「覚えて」、`wants_remember` | `persist_remember_intent` → `:18900` | `deterministic_memory.py` |
+| `recall` | compose 注入 | hook `:18900/recall` / `HttpMemoryAdapter` | orchestrator compose |
+| `chat_only` | デフォルト | （身体なし） | — |
+| `defer` | `stay_silent` / boundary | forward しない | `social_chat.py` |
+
+### 6.3 plan が出すが gateway 未実装・別 primary_move
+
+| 名前 | 種別 | 備考 |
+|------|------|------|
+| `compose_letter` | allowed（quiet） | 朝の手紙 — MCP / 別フロー |
+| `quietly_observe` | allowed（quiet） | 観察のみ・発話抑制 |
+| `camera_speaker_audio` | forbidden | boundary；会話 speak も veto しうる |
+| `speak_loudly` | forbidden | quiet / boundary |
+| `nudge_human` | forbidden | outbound クールダウン系 |
+
+### 6.4 Bucket → Flow（会話ドキュメント用・§5 との対応）
+
+| バケツ | Gateway Flow（実装） | MCP（CLI 用・非正規） |
 |--------|----------------------|------------------------|
-| `speak` | `deliver_speak_to_kiosk`（kiosk 優先）+ boundary | `mcp__tts__say` |
+| `speak` | `deliver_gateway_speak_after_reply` + boundary | `mcp__tts__say` |
 | `observe` | `see_prefetch` / `observe_room_direct` / preset look | `mcp__wifi-cam__see` 等 |
 | `remember` | `persist_remember_intent` → `:18900` | `mcp__memory__remember` |
 | `recall` | compose `relevant_memories` / `http_recall` | `mcp__memory__recall` |
@@ -133,7 +198,7 @@ Plan を「賢くする」より、**Plan の出力の上に Intent→Bucket→F
 | `defer` | なし | — |
 | `chat_only` | なし | — |
 
-**既存**: [gateway-direct-actions.md](./gateway-direct-actions.md) の allowed_action 表は **自律 tick 用の Bucket→Flow の部分実装**。
+**既存**: [gateway-direct-actions.md](./gateway-direct-actions.md) の allowed_action 表は §6.1 の抜粋。詳細は **本節を正**とする。
 
 ---
 
@@ -201,7 +266,7 @@ effective_buckets = merge(intent, plan)
 | **IBF-3** | 会話返答後 `room-say` 自動 | **済** |
 | **IBF-4** | `enabledMcpjsonServers` 日常 = `system-temperature` 固定の確認 | **済** — `kiosk_mcp.py` 起動時検証 + `PRESENCE_KIOSK_MCP_SERVERS` |
 | **IBF-5** | observe / remember を同一パイプラインに統合（既存 deterministic を `merge` 経由に） | **済** |
-| **IBF-6** | 自律 tick: `allowed_action` をバケツ名にリネーム整理（任意） | ドキュメント・コード用語統一 |
+| **IBF-6** | 用語統一 | **6a 済** — §5.1 / §6 対応表（正規名 = `allowed_action`）。**6b/c 任意** — gateway 翻訳層 or 会話側を plan 語彙に寄せる |
 | **IBF-7** | LLM intent 実験（オフライン diff） | plan vs LLM の一致率メモ |
 
 **最初の一本**: **IBF-1 → IBF-2 → IBF-3**（speak だけで Surface 問題を閉じる）。
@@ -232,11 +297,12 @@ effective_buckets = merge(intent, plan)
 
 | 用語 | 意味 |
 |------|------|
-| **Intent** | まー（+文脈）が求めているニーズの構造化表現 |
-| **Bucket** | モダリティ。ツールに非依存 |
+| **Intent** | まー（+文脈）が求めているニーズの構造化表現（`UserIntent`: wants_speech / wants_observe / …） |
+| **Bucket** | 会話経路のモダリティ省略ラベル。正規名ではない（§5.1） |
 | **Flow** | gateway の Python/HTTP 実行経路 |
 | **Plan** | `plan_response` の `primary_move` / initiative / voice |
-| **allowed_action** | 自律 tick 用の旧バケツ名（段階的に Bucket と対齐） |
+| **`allowed_action`** | **正規** — plan が出す自律身体の名前（`talk_to_companion`, `camera_look_around`, …） |
+| **`dominant_desire`** | `desires.json` 由来。plan が `allowed_action` に変換する入力 |
 
 ---
 
@@ -245,3 +311,4 @@ effective_buckets = merge(intent, plan)
 | 日付 | 内容 |
 |------|------|
 | 2026-06-17 | 初版 — ma-home 会話ログ分析・5W1H/Plan 議論を反映 |
+| 2026-06-17 | IBF-6a — §5.1 正規名ポリシー、§6 allowed_action↔バケツ↔Flow 対応表（リネームは plan 語彙に寄せる方針） |

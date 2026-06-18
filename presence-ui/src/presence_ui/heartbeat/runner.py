@@ -37,6 +37,14 @@ async def _maybe_consolidate() -> None:
 async def _maybe_dream(*, person_id: str) -> bool:
     if not should_run_dream_now():
         return False
+    from presence_ui.services.stm_episode import close_open_native_episodes_before_dream
+
+    try:
+        closed = await close_open_native_episodes_before_dream(person_id=person_id)
+        if closed:
+            logger.info("MEM-2b pre-dream episode close: %d session(s)", len(closed))
+    except Exception as exc:
+        logger.warning("MEM-2b pre-dream episode close failed: %s", exc)
     from presence_ui.services.dreaming import run_dreaming_job
 
     result = await asyncio.to_thread(run_dreaming_job, person_id=person_id)

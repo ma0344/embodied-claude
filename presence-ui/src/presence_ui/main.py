@@ -193,6 +193,9 @@ def create_app() -> FastAPI:
                 "outbound_web_speech_suppress_on_localhost": (
                     outbound_web_speech_suppress_on_localhost()
                 ),
+                "episode_idle_close_minutes": int(
+                    os.getenv("PRESENCE_EPISODE_IDLE_CLOSE_MINUTES", "20")
+                ),
             },
         )
 

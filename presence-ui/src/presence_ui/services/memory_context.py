@@ -9,6 +9,7 @@ from interaction_orchestrator_mcp.schemas import InteractionContext
 from social_core.stm import StmStore, build_stm_prompt_block
 
 from presence_ui.deps import get_stores
+from presence_ui.gateway.prompt_block_safe import truncate_prompt_text
 from presence_ui.services.dream_digest import load_dream_digest
 from presence_ui.services.somatic_context import is_morning_digest_window
 
@@ -79,4 +80,4 @@ def enrich_memory_context(
     extra = "\n\n".join(blocks)
     compact = ctx.compact_prompt_block.strip()
     compact = f"{compact}\n\n{extra}" if compact else extra
-    return ctx.model_copy(update={"compact_prompt_block": compact[:12000]})
+    return ctx.model_copy(update={"compact_prompt_block": truncate_prompt_text(compact, 12000)})

@@ -12,8 +12,9 @@ from social_core import utc_now
 from social_core.stm import StmStore
 from social_core.stm_dreaming import (
     build_dream_digest,
+    emotion_for_ltm,
+    entries_to_promote,
     memory_category_for_stm,
-    should_promote_stm_to_ltm,
 )
 
 from presence_ui.deps import get_stores
@@ -81,13 +82,13 @@ def run_dreaming_job(
     if not entries:
         return DreamingResult(ok=True, skipped=True, reason="no_undreamed_stm")
 
-    promote = [entry for entry in entries if should_promote_stm_to_ltm(entry)]
+    promote = entries_to_promote(entries)
     remembered = 0
     for entry in promote:
         result = http_remember(
             content=entry.summary,
             category=memory_category_for_stm(entry),
-            emotion="nostalgic" if entry.source == "episode_summary" else "neutral",
+            emotion=emotion_for_ltm(entry),
             importance=max(2, min(entry.importance, 5)),
         )
         if result.get("ok") is True or result.get("memory_id"):
@@ -113,7 +114,7 @@ def run_dreaming_job(
     except Exception as exc:
         logger.warning("Dreaming daybook failed: %s", exc)
 
-    digest_entries = promote or entries
+    digest_entries = entries
     digest_summary = build_dream_digest(digest_entries)
     dreamed_at = utc_now()
     marked = stm.mark_dreamed([entry.entry_id for entry in entries], dreamed_at=dreamed_at)

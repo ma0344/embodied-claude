@@ -22,6 +22,41 @@ from presence_ui.deps import get_stores
 from presence_ui.services.llm import _lm_studio_settings, _parse_openai_chat_content
 
 
+def _episode_salience_metadata(
+    *,
+    person_id: str,
+    summary: str,
+) -> dict[str, object]:
+    """MEM-5b: enrich episode_close with desires + open-loop overlap."""
+    from interaction_orchestrator_mcp.desire_source import load_desire_snapshot
+    from social_core.stm_salience import build_stm_salience_metadata, match_open_loop_ids
+
+    stores = get_stores()
+    loops = [
+        (loop.id, loop.topic)
+        for loop in stores.relationship.list_open_loops(person_id=person_id, limit=20)
+    ]
+    matched = match_open_loop_ids(summary, loops)
+    dominant: str | None = None
+    level: float | None = None
+    snap = load_desire_snapshot() or {}
+    dominant = snap.get("dominant")
+    if dominant:
+        try:
+            level = float((snap.get("desires") or {}).get(dominant) or 0.0)
+        except (TypeError, ValueError):
+            level = None
+    return build_stm_salience_metadata(
+        summary=summary,
+        kind="episode_close",
+        source="episode_summary",
+        importance=3,
+        dominant_desire=str(dominant) if dominant else None,
+        desire_level=level,
+        open_loop_ids=matched or None,
+    )
+
+
 def _episode_llm_enabled() -> bool:
     return os.environ.get("PRESENCE_STM_EPISODE_LLM", "").strip().lower() in {
         "1",
@@ -142,6 +177,7 @@ async def close_episode_for_session(
         turn_count=len(turns),
         ts=_episode_ts_from_turns(turns),
         timezone=tz,
+        salience=_episode_salience_metadata(person_id=person_id, summary=summary),
     )
     return {
         "ok": True,
@@ -152,3 +188,82 @@ async def close_episode_for_session(
         "summary": entry.summary if entry else summary,
         "local_day": entry.local_day if entry else None,
     }
+
+
+def _turns_from_chat_messages(messages: list) -> list[dict[str, str | None]]:
+    turns: list[dict[str, str | None]] = []
+    for msg in messages:
+        if isinstance(msg, dict):
+            sender = msg.get("sender")
+            text = str(msg.get("message") or "").strip()
+            ts = msg.get("timestamp")
+        else:
+            sender = getattr(msg, "sender", None)
+            text = str(getattr(msg, "message", "") or "").strip()
+            ts = getattr(msg, "timestamp", None)
+        if sender not in {"ma", "koyori"} or not text:
+            continue
+        turns.append({"sender": str(sender), "message": text, "timestamp": ts})
+    return turns
+
+
+def _session_updated_local_day(updated_at: str, *, timezone: str) -> str | None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from presence_ui.services.display_time import normalize_iso_timestamp
+
+    normalized = normalize_iso_timestamp(updated_at)
+    if not normalized:
+        return None
+    try:
+        dt = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+        return dt.astimezone(ZoneInfo(timezone)).date().isoformat()
+    except ValueError:
+        return None
+
+
+async def close_open_native_episodes_before_dream(
+    *,
+    person_id: str,
+    timezone: str | None = None,
+) -> list[dict[str, object]]:
+    """MEM-2b: close today's native sessions that were never episode-closed (pre-dream)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from presence_ui.services.native_history import (
+        fetch_native_session_messages,
+        list_native_sessions,
+    )
+
+    stores = get_stores()
+    tz = timezone or stores.policy_timezone
+    today = datetime.now(ZoneInfo(tz)).date().isoformat()
+    stm = StmStore(stores.db)
+    results: list[dict[str, object]] = []
+
+    for summary in list_native_sessions(limit=60).sessions:
+        session_id = summary.session_id
+        if stm.episode_closure_entry_id(session_id):
+            continue
+        if _session_updated_local_day(summary.updated_at, timezone=tz) != today:
+            continue
+        fetched = fetch_native_session_messages(session_id)
+        if fetched is None:
+            continue
+        turns = _turns_from_chat_messages(fetched.messages)
+        if len(turns) < 2:
+            continue
+        outcome = await close_episode_for_session(
+            person_id=person_id,
+            session_id=session_id,
+            turns=turns,
+            trigger="quiet_hours",
+            timezone=tz,
+        )
+        if outcome.get("closed") or outcome.get("reason") == "already_closed":
+            results.append({"session_id": session_id, **outcome})
+    return results

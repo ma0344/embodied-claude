@@ -53,7 +53,7 @@ def _parse_openai_chat_content(data: dict) -> str | None:
     return None
 
 
-def _load_soul_excerpt(*, max_chars: int = 2200) -> str:
+def load_soul_excerpt(*, max_chars: int = 2200) -> str:
     candidates = [
         os.environ.get("PRESENCE_SOUL_PATH"),
         str(Path(__file__).resolve().parents[4] / "SOUL.md"),
@@ -65,6 +65,11 @@ def _load_soul_excerpt(*, max_chars: int = 2200) -> str:
         if path.is_file():
             return path.read_text(encoding="utf-8")[:max_chars]
     return ""
+
+
+def _load_soul_excerpt(*, max_chars: int = 2200) -> str:
+    """Alias for internal callers."""
+    return load_soul_excerpt(max_chars=max_chars)
 
 
 def build_reply_prompt(
@@ -136,6 +141,16 @@ That block is for you only — never quote it to まー.
 Obey the latest turn's [Must include] / [Must avoid] / [Social move] only.
 When [relevant_memories] appear in gateway_turn_context, answer from them directly.
 Do NOT call mcp__memory__recall or other memory MCP tools for ordinary recall questions."""
+
+SOUL_VOICE_ANCHOR = """[Koyori voice — mandatory for every user-visible reply]
+You are こより. First person: うち. User is まー (childhood friend).
+Soft Kansai casual タメ口 only. No です・ます敬語. No generic assistant tone.
+Do not call yourself 「こより」in third person. Do not sound like a product demo."""
+
+
+def build_gateway_stable_append() -> str:
+    """Stable appendSystemPrompt: gateway rules + SOUL voice anchor."""
+    return f"{GATEWAY_STABLE_APPEND}\n\n{SOUL_VOICE_ANCHOR}"
 
 
 def prepend_gateway_turn_context(*, user_text: str, delta: str) -> str:

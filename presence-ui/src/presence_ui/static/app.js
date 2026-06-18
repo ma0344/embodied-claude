@@ -21,7 +21,8 @@ const KIOSK_SLEEP_MINUTES_KEY = "koyori-kiosk-sleep-minutes";
 const KIOSK_SLEEP_MINUTES_DEFAULT = 10;
 const KIOSK_SLEEP_WAKE_ON_NOTIFY_KEY = "koyori-kiosk-sleep-wake-on-notify";
 const CONTEXT_RAIL_PINS_KEY = "koyori-context-rail-pins";
-const STATUS_EXPAND_KEY = "koyori-status-expand";
+const INBOUND_SEEDS_STORAGE_KEY = "koyori-inbound-seeds-v1";
+const EPISODE_IDLE_MINUTES_DEFAULT = 20;
 
 let chatPinnedToBottom = true;
 let chatMessages = [];
@@ -56,6 +57,9 @@ let idleTimer = null;
 let idleActive = false;
 let roomInboundQueue = [];
 let roomInboundCurrent = null;
+/** A4j+: first user send after「返事する」carries inbound meta to gateway. */
+let pendingInboundReply = null;
+let episodeIdleTimer = null;
 
 function loadContextRailPins() {
   const defaults = { vision: true, status: false };
@@ -289,6 +293,8 @@ async function loadUiConfig() {
     outbound_web_speech_suppress_on_localhost: Boolean(
       data.outbound_web_speech_suppress_on_localhost,
     ),
+    episode_idle_close_minutes:
+      Number(data.episode_idle_close_minutes) || EPISODE_IDLE_MINUTES_DEFAULT,
   };
   syncKioskTtsHealthFromConfig();
 }
@@ -456,13 +462,59 @@ async function loadNativeMessagesFromServer(sessionId, { fullRebuild = false } =
   }
   const path = `${nativeSessionsApiPath()}/${encodeURIComponent(sessionId)}/messages`;
   const data = await fetchJson(path);
-  const fresh = (data.messages || []).map((msg) => ({
-    sender: msg.sender,
-    message: msg.message,
-    timestamp: msg.timestamp || "",
-  }));
+  const fresh = mergeInboundSeedMessages(
+    sessionId,
+    (data.messages || []).map((msg) => ({
+      sender: msg.sender,
+      message: msg.message,
+      timestamp: msg.timestamp || "",
+    })),
+  );
   if (!fresh.length && !fullRebuild) return;
   applyChatMessages(fresh, { fullRebuild, forceScroll: fullRebuild });
+  resetEpisodeIdleTimer();
+}
+
+function loadInboundSeedMap() {
+  try {
+    const raw = sessionStorage.getItem(INBOUND_SEEDS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveInboundSeed(sessionId, text, timestamp) {
+  if (!sessionId || !text) return;
+  const map = loadInboundSeedMap();
+  map[sessionId] = { text, timestamp: timestamp || new Date().toISOString() };
+  try {
+    sessionStorage.setItem(INBOUND_SEEDS_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // quota — non-fatal
+  }
+}
+
+function mergeInboundSeedMessages(sessionId, messages) {
+  const seed = loadInboundSeedMap()[sessionId];
+  if (!seed?.text) return messages;
+  const trimmed = String(seed.text).trim();
+  if (!trimmed) return messages;
+  const already = messages.some(
+    (msg) => msg.sender === "koyori" && String(msg.message || "").trim() === trimmed,
+  );
+  if (already) return messages;
+  return [
+    {
+      sender: "koyori",
+      message: trimmed,
+      timestamp: seed.timestamp || "",
+      _inboundSeed: true,
+    },
+    ...messages,
+  ];
 }
 
 function renderNativeSessionSwitcher() {
@@ -525,22 +577,24 @@ async function deleteNativeSession() {
 }
 
 function startNewNativeSession() {
-  void closeEpisodeBeforeNewSession().finally(() => {
-    activeSessionId = null;
-    localStorage.removeItem(SESSION_STORAGE_KEY);
-    chatMessages = [];
-    renderedMessageKeys = new Set();
-    clearChatLog();
-    showChatPlaceholder("新しい会話を始められる");
-    const select = document.getElementById("history-select");
-    if (select) select.value = "";
-  });
+  void startNewNativeSessionAsync();
 }
 
-async function closeEpisodeBeforeNewSession() {
-  const sessionId = activeSessionId;
-  if (!sessionId || !chatMessages.length) return;
-  const turns = chatMessages
+async function startNewNativeSessionAsync() {
+  await closeEpisodeBeforeNewSession();
+  activeSessionId = null;
+  localStorage.removeItem(SESSION_STORAGE_KEY);
+  chatMessages = [];
+  renderedMessageKeys = new Set();
+  clearChatLog();
+  showChatPlaceholder("新しい会話を始められる");
+  const select = document.getElementById("history-select");
+  if (select) select.value = "";
+  clearEpisodeIdleTimer();
+}
+
+function collectEpisodeTurns() {
+  return chatMessages
     .filter((msg) => !msg._pending && !msg._thinking && !msg._streaming)
     .map((msg) => ({
       sender: msg.sender,
@@ -548,17 +602,48 @@ async function closeEpisodeBeforeNewSession() {
       timestamp: msg.timestamp || null,
     }))
     .filter((turn) => turn.message && (turn.sender === "ma" || turn.sender === "koyori"));
+}
+
+async function closeEpisodeForCurrentSession({ trigger = "manual" } = {}) {
+  const sessionId = activeSessionId;
+  if (!sessionId || !chatMessages.length) return;
+  const turns = collectEpisodeTurns();
   if (!turns.length) return;
   try {
     await postJson("/api/v1/stm/close-episode", {
       person_id: "ma",
       session_id: sessionId,
-      trigger: "new_session",
+      trigger,
       turns,
     });
   } catch (err) {
     console.warn("STM episode close failed:", err);
   }
+}
+
+async function closeEpisodeBeforeNewSession() {
+  await closeEpisodeForCurrentSession({ trigger: "new_session" });
+}
+
+function episodeIdleCloseMs() {
+  const minutes = Number(uiConfig.episode_idle_close_minutes) || EPISODE_IDLE_MINUTES_DEFAULT;
+  return Math.max(5, minutes) * 60 * 1000;
+}
+
+function clearEpisodeIdleTimer() {
+  if (episodeIdleTimer) {
+    clearTimeout(episodeIdleTimer);
+    episodeIdleTimer = null;
+  }
+}
+
+function resetEpisodeIdleTimer() {
+  clearEpisodeIdleTimer();
+  if (!isNativeChat() || !activeSessionId || sendInProgress) return;
+  if (!collectEpisodeTurns().length) return;
+  episodeIdleTimer = setTimeout(() => {
+    void closeEpisodeForCurrentSession({ trigger: "idle" });
+  }, episodeIdleCloseMs());
 }
 
 async function initNativeSessions() {
@@ -597,6 +682,13 @@ function applyNativeSessionEvent(payload, userPreview) {
   if (!payload?.session_id || payload.claude_session === false) return;
   activeSessionId = payload.session_id;
   persistActiveSession();
+  if (pendingInboundReply?.text) {
+    saveInboundSeed(
+      activeSessionId,
+      pendingInboundReply.text,
+      pendingInboundReply.ts || new Date().toISOString(),
+    );
+  }
   if (userPreview) {
     const preview = String(userPreview).trim().slice(0, 48);
     let entry = nativeSessionList.find((item) => item.sessionId === activeSessionId);
@@ -1396,11 +1488,19 @@ async function sendChatMessageNative(trimmed) {
   setChatSendHint("返事を待ってる…");
 
   try {
+    const requestPayload = {
+      prompt: trimmed,
+      session_id: activeSessionId || undefined,
+    };
+    if (pendingInboundReply?.text) {
+      requestPayload.inbound_nudge = pendingInboundReply.text;
+      if (pendingInboundReply.nudge_id) {
+        requestPayload.inbound_nudge_id = pendingInboundReply.nudge_id;
+      }
+    }
+
     const response = await postNativeChatRequest(
-      {
-        prompt: trimmed,
-        session_id: activeSessionId || undefined,
-      },
+      requestPayload,
       activeStreamController.signal,
     );
 
@@ -1488,10 +1588,13 @@ async function sendChatMessageNative(trimmed) {
     }
 
     await refreshStatus();
+    pendingInboundReply = null;
+    resetEpisodeIdleTimer();
   } catch (err) {
     clearStreamingBubble();
     setChatThinking(false);
     confirmNativeUserMessage(trimmed, optimistic.timestamp);
+    pendingInboundReply = null;
     throw err;
   }
 }
@@ -2478,8 +2581,24 @@ function setKioskSleepWakeOnNotify(enabled) {
   }
 }
 
+function kioskScreenIdleUrl(path) {
+  return `http://127.0.0.1:18790${path}`;
+}
+
+function kioskScreenOff() {
+  if (!isKioskLayout()) return;
+  releaseWakeLock();
+  fetch(kioskScreenIdleUrl("/screen-off"), { mode: "no-cors", keepalive: true }).catch(() => {});
+}
+
+function kioskScreenOn() {
+  if (!isKioskLayout()) return;
+  fetch(kioskScreenIdleUrl("/screen-on"), { mode: "no-cors", keepalive: true }).catch(() => {});
+}
+
 async function acquireWakeLock() {
   if (!("wakeLock" in navigator)) return;
+  kioskScreenOn();
   if (wakeLock && !wakeLock.released) return;
   try {
     wakeLock = await navigator.wakeLock.request("screen");
@@ -2503,11 +2622,12 @@ function releaseWakeLock() {
 
 function resetIdleTimer() {
   if (!isKioskLayout() || !idleActive) return;
+  void acquireWakeLock();
   if (idleTimer) clearTimeout(idleTimer);
   const ms = getKioskSleepMinutes() * 60 * 1000;
   idleTimer = setTimeout(() => {
     if (!isKioskLayout()) return;
-    releaseWakeLock();
+    kioskScreenOff();
   }, ms);
 }
 
@@ -2793,25 +2913,46 @@ function buildInboundReplyPrompt(nudgeText) {
 async function beginInboundReply(item) {
   unlockSpeechOnce();
   if (isKioskLayout()) setRoomDrawerOpen(false);
-  if (isNativeChat()) {
-    startNewNativeSession();
-  }
-  const prompt = buildInboundReplyPrompt(item?.text);
-  const input = document.getElementById("chat-input");
-  if (input) {
-    input.placeholder = "こよりに話しかける...";
-  }
-  chatPinnedToBottom = true;
-  scrollChatToBottom();
+  const inboundText = (item?.text || "").trim();
+  pendingInboundReply = inboundText
+    ? {
+        text: inboundText,
+        nudge_id: item?.nudge_id || null,
+        ts: item?.ts || new Date().toISOString(),
+      }
+    : null;
 
-  try {
-    await sendChatMessage(prompt);
-  } catch (err) {
-    console.error("inbound reply send failed", err);
+  if (isNativeChat()) {
+    await startNewNativeSessionAsync();
+    const root = document.getElementById("chat-log");
+    if (root) root.querySelector(".placeholder")?.remove();
+    if (inboundText) {
+      const msg = {
+        sender: "koyori",
+        message: inboundText,
+        timestamp: pendingInboundReply.ts,
+        _inboundSeed: true,
+      };
+      chatMessages = [msg];
+      renderedMessageKeys = new Set();
+      appendMessagesToDom([msg], { animate: true });
+    }
+    const input = document.getElementById("chat-input");
     if (input) {
+      input.placeholder = inboundText ? "こよりに返事を書いて…" : "こよりに話しかける...";
       input.value = "";
       input.focus();
     }
+    chatPinnedToBottom = true;
+    scrollChatToBottom();
+    return;
+  }
+
+  const input = document.getElementById("chat-input");
+  if (input) {
+    input.placeholder = "こよりに話しかける...";
+    input.value = buildInboundReplyPrompt(inboundText);
+    input.focus();
   }
 }
 

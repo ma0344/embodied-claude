@@ -136,9 +136,8 @@
         >
           <h3 class="room-drawer__section-title">画面</h3>
           <p class="kiosk-sleep__hint">
-            無操作が続いたとき、このページが画面の常時点灯（wakeLock）をやめます。
-            実際の消灯は <strong>Surface（Ubuntu）側の OS 設定</strong>（DPMS / logind）に任せます。<br>
-            ここで選ぶ分数は「いつ wakeLock を離すか」だけ。ma-home のモニター設定には影響しません。
+            無操作が続いたとき、wakeLock を離して Surface 側で画面を消灯します（<code>127.0.0.1:18790</code> + DPMS）。<br>
+            ここで選ぶ分数は「いつ消灯するか」だけ。ma-home のモニターには影響しません。
           </p>
           <label class="kiosk-sleep__row" for="kiosk-sleep-minutes">
             <span class="kiosk-sleep__label">消灯まで</span>

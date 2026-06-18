@@ -70,7 +70,65 @@ phase=chat
     assert strip_enriched_user_prompt(raw) == "こんばんは"
 
 
-def test_plain_user_first_line() -> None:
+def test_strip_enriched_user_prompt_stm_recent_inside_gateway() -> None:
+    raw = """[gateway_turn_context — not for the user]
+[interaction_context]
+phase=chat
+
+[stm_recent]
+- (open_loop_progress) 松本市の天気を調べた
+- (episode_close) 【会話の一区切り】
+こより: おはよう、まー。
+まー: そっか、家は松本市だよ。
+[/stm_recent]
+
+こんばんは"""
+    assert strip_enriched_user_prompt(raw) == "こんばんは"
+
+
+def test_strip_enriched_user_prompt_real_session_shape() -> None:
+    """Regression: MEM-4 stm_recent without [/stm_recent] — tail utterance only."""
+    raw = """[gateway_turn_context — not for the user]
+[interaction_context]
+phase=chat
+
+[stm_recent]
+- (open_loop_progress) 松本市の天気
+……うん、今日ちょっと疲れちゃったけど、まーの顔を見たら元気出たよ。
+こより: 窓から光が入ってるから、今はいいお天気みたいだね。
+- (episode_close) 【会話の一区切り】
+こより: おはよう、まー。
+- (…
+
+こんばんは"""
+    assert strip_enriched_user_prompt(raw) == "こんばんは"
+    raw2 = raw.replace("こんばんは", "そういえば、僕が今暮らしているのはどこだか話したっけ？")
+    assert (
+        strip_enriched_user_prompt(raw2)
+        == "そういえば、僕が今暮らしているのはどこだか話したっけ？"
+    )
+
+
+def test_strip_enriched_user_prompt_truncated_stm_close_tag() -> None:
+    """Regression: truncate_prompt_text leaves ``[/stm_recent]…`` before user tail."""
+    raw = """[gateway_turn_context — not for the user]
+[interaction_context]
+phase=chat
+
+[stm_recent]
+- (episode_close) 【会話の一区切り】
+こより: まー、おかえり。
+……うん、今日ちょっと疲れちゃったけど、まーの顔を見たら元気出たよ。
+ゆっくりしようね。
+こより: 窓から光が入ってるから、今はいいお天気みたいだね。
+
+明日の天気については、どこの場所のことか教えてくれたら調べてみようか？
+[/stm_recent]…
+
+あーびっくりしたわ。"""
+    assert strip_enriched_user_prompt(raw) == "あーびっくりしたわ。"
+
+
     raw = """[gateway_turn_context — not for the user]
 [Social context]
 

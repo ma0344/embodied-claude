@@ -410,9 +410,10 @@ Deep（SOUL / 自己モデル）
 | MEM-0 | 本文（4 層 + 昇格図）+ backlog リンク | **済** |
 | MEM-1 | **STM ストア設計** — `stm_entries` in social.db、experience 自動ミラー、WM フラッシュ API (`POST /api/v1/stm/flush-wm`, `GET /api/v1/stm/recent`) | 済 |
 | MEM-2 | **WM→STM エピソード締め** — 「新しい会話」で前セッションを1回要約→STM（`POST /api/v1/stm/close-episode`、ルール要約 + 任意 LLM） | 済 |
+| MEM-2b | **追加トリガー** — idle（`PRESENCE_EPISODE_IDLE_CLOSE_MINUTES`）+ Dreaming 前の当日セッション自動締め | 済 |
 | MEM-3 | **Dreaming ジョブ** — 深夜 pulse: STM リプレイ → `remember` + `consolidate` + `append_daybook`；`last_dream_at` + `last_dream_digest.json`（`POST /api/v1/stm/dream`） | 済 |
 | MEM-4 | **朝注入** — 未報告 somatic（8c）+ Dreaming digest + 当日 STM を `enrich_interaction_context` → `compact_prompt_block` | 済 |
-| MEM-5 | **LTM 整理** — 忘却・重複統合ポリシー（低頻度） | 未 |
+| MEM-5 | **STM→LTM 採点・整理** — salience + 昇格スコア・重複マージ・忘却（下記） | **5a–5c 済** |
 | MEM-6 | **Deep 昇格** — interpretation_shift / arc → SOUL 級への提案経路（ガード付き） | 未 |
 | MEM-7 | **JSONL ライフサイクル** — 会話ログの保管・退避・削除（下記） | 未 |
 
@@ -430,14 +431,90 @@ Deep（SOUL / 自己モデル）
 
 **締めトリガー（実装候補）**
 
-1. **新規会話**（キオスク「新しい会話」/ PC 同様）— 前セッションを締める
-2. **idle** — 最終発話から N 分（例 15〜30）
-3. **quiet hours 開始** — 夜の Dreaming 前に当日会話を閉じる
+1. **新規会話**（キオスク「新しい会話」/ PC 同様）— 前セッションを締める ✅
+2. **idle** — 最終発話から N 分（`PRESENCE_EPISODE_IDLE_CLOSE_MINUTES`、既定 20）✅
+3. **quiet hours 開始** — Dreaming 前に当日未締めセッションを自動締め（pulse）✅
 4. **トピック切替** — intent / 長さ閾値（任意・後追い）
 
 **締め処理**: 軽い LLM 1回（「この会話で残すこと」3〜5行）またはルール＋必要時のみ LLM → STM 行。`finalize_chat_turn` の per-turn experience は監査用に残し、**エピソード要約は別レコード**。
 
 **運用**: まーが意図的にセッションを短く切る習慣は有効。UI は「新規会話＝裏でエピソード締め」と等价にできる。
+
+##### MEM-5 — STM→LTM 採点・整理（合意 2026-06-18）
+
+**問題**: Dreaming v0 は `kind` / `source` / `importance` の閾値だけで LTM 昇格しており、**反復・感情・興味**が反映されない。`open_loop_progress` ミラーが多いとノイズ化する。
+
+**方針**: 採点単位は **会話 JSONL ではなく `stm_entries` 行**。OpenClaw の Light/REM/Deep は参考にしつつ、こより既存信号を主とする。
+
+```
+会話 JSONL (WM)  →  episode_close / experience_mirror  →  stm_entries
+                                                              ↓ 夜 Dreaming
+                                                         score + merge/skip
+                                                              ↓
+                                                         LTM remember + consolidate
+```
+
+**睡眠フェーズ（こより版）**
+
+| フェーズ | 役割 | v0 実装 | MEM-5 |
+|---------|------|---------|-------|
+| Light | ノイズ除去 | エピソード締め、`wm_turn_*` 除外 | 同日重複 `open_loop_progress` → **merge**（最新1本のみ昇格候補） |
+| REM | 反復テーマ | `consolidate` | **frequency_score**（同日同トピック） |
+| Deep | 閾値超えのみ LTM | `should_promote_stm_to_ltm` ルール | **promote_score** + バイパス |
+
+**salience（記録時スナップショット）** — `stm_entries.metadata_json`（列は既存、未充填）
+
+```json
+{
+  "emotion_tag": "moved",
+  "importance": 4,
+  "dominant_desire": "miss_companion",
+  "desire_level": 0.66,
+  "open_loop_ids": ["..."],
+  "explicit_remember": false
+}
+```
+
+| フィールド | 供給元（記録時） |
+|-----------|------------------|
+| `emotion_tag` | memory-mcp enum / episode ルール / 任意 LLM（締め1回） |
+| `importance` | 既存列（1–5） |
+| `dominant_desire` / `desire_level` | compose `agent_state.desires` |
+| `open_loop_ids` | relationship open loops 一致時 |
+| `explicit_remember` | gateway `remember` 直行 |
+
+**v1 採点式（重みは仮・手計算用）**
+
+```
+emotion_score  = 0.6 * emotion_table[tag] + 0.4 * (importance/5)
+interest_score = desire_level + open_loop 一致 + episode 種別（ルール）
+frequency_score = min(1, 同日同トピック行数 / 3)
+recency_score    = ts からの経過（6h→1.0, 24h→0.85, …）
+
+promote_score = 0.25*recency + 0.20*frequency + 0.30*emotion + 0.25*interest
+```
+
+| 判定 | 条件 |
+|------|------|
+| **promote** | `score ≥ 0.55`、または residence/remember/interpretation_shift、または `importance≥5` |
+| **merge** | 同トピック `open_loop_progress` が複数 → **最新のみ** promote 候補、他は digest のみ |
+| **hold** | 挨拶のみ episode、private reflection（daybook のみ） |
+| **skip** | `wm_turn_*`、smoke セッション |
+
+**トピック検出（v1 ルール）**: `residence`（松本・長野）、`weather`、`home_helper`、`greeting`、`camera`、`fatigue_care`
+
+**試作コード**: `social_core/stm_scoring.py` + `scripts/score-stm-entries.py`
+
+**実装フェーズ**
+
+| ID | 内容 | 状態 |
+|----|------|------|
+| MEM-5a | 採点プロトタイプ + 手計算（backlog + script） | **済** |
+| MEM-5b | `metadata_json` 充填（episode_close / experience_mirror 時） | **済** |
+| MEM-5c | Dreaming が `stm_scoring` を使う（`entries_to_promote`） | **済** |
+| MEM-5d | LTM 忘却・重複統合（低頻度ジョブ） | 未 |
+
+**手計算メモ（2026-06-18 `social.db`）**: `scripts/score-stm-entries.py --day 2026-06-18` で再現。
 
 ##### MEM-7 — Native 会話 JSONL のデータ管理（合意 2026-06-18）
 
@@ -551,7 +628,7 @@ JSONL（WM の生ログ）
 |----|--------|------|------|
 | **MVP（済）** | チャット bubble + per-client poll | Web Speech（kiosk） | 検証用。A4i で置き換え、PC poll はやめる |
 | **A4i 本線** | キオスク **中央ダイアログ**（返事する／あとで） | Web Speech → TTS URL | **実装済み**（PC poll 廃止） |
-| **A4j** | ダイアログ CTA → 新規会話 | — | **実装済み**（**UX 要修正 → A4j+**） |
+| **A4j** | ダイアログ CTA → 新規会話 | — | **実装済み**（**A4j+ 済**） |
 | **A4g** | OS / ntfy 通知 | 任意 | PC 本線。部屋を開いたら通常チャット |
 | **目標** | kiosk: SSE `room_inbound` | Server TTS | push は従来どおり HTTP |
 
@@ -569,7 +646,7 @@ MVP チェックリスト:
 - [x] **A4b-mvp+** per-client ack（PC と Surface 両方に届く）
 - [x] **A4i** 部屋着信バナー（キオスク中央ダイアログ。bubble / PC poll 廃止）
 - [x] **A4j** 着信から新規会話 + 送信（着信文を compose プロンプトに同梱）
-- [ ] **A4j+** 着信返信 UX（**MEM 後に修正** — 2026-06-18 実戦報告）
+- [x] **A4j+** 着信返信 UX（2026-06-18 実戦報告 → 2026-06-18 修正）
 
   **いま（A4j）の挙動 — おかしい**:
   「返事する」→ 新規セッション → `buildInboundReplyPrompt()` の **メタ指示文**（`[こよりからの着信への返事]…まーとして…`）を **まーの bubble として自動送信** → こよりがそれに応答。チャット上は「まーが長い指示を送った」ように見える。
@@ -658,7 +735,7 @@ MVP チェックリスト:
   - **自動復帰**: 消灯中の say / 着信（outbound・room_say）で画面を戻す — **UI で ON/OFF 可変**
   - **実装メモ**: キオスクは SSE で着信・リマインドは `document.hidden` でも届くが、ポール fallback は hidden 時スキップ中 → 自動復帰 ON 時は `wakeLock.request` + 音声再生で復帰を試みる
 - [x] **C11h** チャットコピー — 各 `ma` / `koyori` bubble に「コピー」ボタン（プレーンテキスト、`clipboard` + fallback）。キオスク 44px タップ対象
-- [ ] **C11g-reg** 画面消灯が効かない（**回帰** 2026-06-18）— C11g 実装済みだが実機で DPMS / wakeLock 解除が動いていない報告。`app.js` idle → `releaseWakeLock`、Surface Ubuntu logind、Chromium wakeLock 権限を切り分け
+- [ ] **C11g-reg** 画面消灯が効かない — **修正 2026-06-19**: 原因は `koyori-kiosk.sh` の `xset -dpms`（DPMS 無効化）。`+dpms` + `koyori-screen-idle-server`（`:18790`）+ `app.js` から `screen-off` 呼び出し。Surface で `install-koyori-kiosk.sh` 再実行後リブート。任意: `KOYORI_CONSOLEBLANK_SEC=900` で GRUB `consoleblank`（[メモ](https://intinfinity.com/index.php/archives/1084)）
 - [ ] **C11-pc** `?kiosk=0` で会話・サイドバーが空（**回帰** 2026-06-18）— ma-home ブラウザ（PC レイアウト）でチャット履歴・右レールが表示されない。`isKioskLayout()` と session マウント / native history ポールの分岐を確認
 
 | 優先 | 項目 | メモ |

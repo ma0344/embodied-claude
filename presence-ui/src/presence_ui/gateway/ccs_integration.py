@@ -10,6 +10,8 @@ from typing import Callable
 from claude_code_server import AgentConfig, ChatRequest
 from fastapi import FastAPI
 
+from presence_ui.gateway.prompt_block_safe import truncate_prompt_text
+
 from presence_ui.gateway.social_chat import ChatInterceptResult, intercept_chat_request
 
 _DEFAULT_PERMISSION_MODE = "acceptEdits"
@@ -110,10 +112,7 @@ def default_agent_config(*, working_dir: Path | None = None) -> AgentConfig:
 
 
 def _cap_append(text: str, *, max_chars: int) -> str:
-    text = text.strip()
-    if len(text) <= max_chars:
-        return text
-    return text[: max_chars - 1].rstrip() + "…"
+    return truncate_prompt_text(text.strip(), max_chars)
 
 
 def agent_config_from_intercept(

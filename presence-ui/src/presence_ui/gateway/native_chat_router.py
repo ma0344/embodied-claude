@@ -211,8 +211,19 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
             logger.warning("native chat camera prefetch failed: %s", exc)
             vision_note = None
 
+        intercept_payload: dict[str, object] = {
+            "message": req.prompt,
+            "sessionId": req.session_id,
+        }
+        inbound_nudge = getattr(req, "inbound_nudge", None)
+        inbound_nudge_id = getattr(req, "inbound_nudge_id", None)
+        if inbound_nudge and str(inbound_nudge).strip():
+            intercept_payload["inboundNudge"] = str(inbound_nudge).strip()
+            if inbound_nudge_id:
+                intercept_payload["inboundNudgeId"] = inbound_nudge_id
+
         intercept = await intercept_chat_request_async(
-            payload={"message": req.prompt, "sessionId": req.session_id},
+            payload=intercept_payload,
             person_id=person_id,
             lite=True,
             vision_prefetch=vision_note,

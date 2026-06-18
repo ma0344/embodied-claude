@@ -46,6 +46,7 @@ fi
 install -m 755 "$SCRIPT_DIR/koyori-kiosk.sh" /usr/local/bin/koyori-kiosk
 install -m 755 "$SCRIPT_DIR/koyori-ime-start.sh" /usr/local/bin/koyori-ime-start
 install -m 755 "$SCRIPT_DIR/koyori-display-setup.sh" /usr/local/bin/koyori-display-setup
+install -m 755 "$SCRIPT_DIR/koyori-screen-idle-server.py" /usr/local/bin/koyori-screen-idle-server
 install -m 755 "$SCRIPT_DIR/koyori-input-leap-start.sh" /usr/local/bin/koyori-input-leap-start
 install -m 755 "$SCRIPT_DIR/koyori-keyboard-layout.sh" /usr/local/bin/koyori-keyboard-layout
 install -d -m 755 /usr/local/share/koyori-kiosk
@@ -153,6 +154,9 @@ KOYORI_BROWSER=firefox
 # KOYORI_USE_WM=1
 # Touch keyboard: deferred (docs/backlog-koyori.md). Enable: KOYORI_ONBOARD=1
 KOYORI_ONBOARD=0
+# C11g screen blank: DPMS standby after wakeLock release (seconds)
+KOYORI_DPMS_OFF_SEC=60
+# Optional kernel console blank (reboot): KOYORI_CONSOLEBLANK_SEC=900 sudo ./install-koyori-kiosk.sh
 EOF
 
 if [[ -n "$SAVE_INPUT_LEAP_SERVER" ]]; then
@@ -204,6 +208,18 @@ fi
 install -m 755 "$SCRIPT_DIR/diagnose-usb-c.sh" /usr/local/bin/koyori-diagnose-usb-c
 install -m 755 "$SCRIPT_DIR/fix-usb-c.sh" /usr/local/bin/koyori-fix-usb-c
 
+# Optional kernel consoleblank (Ubuntu Server framebuffer fallback).
+if [[ -n "${KOYORI_CONSOLEBLANK_SEC:-}" ]] && [[ -f /etc/default/grub ]]; then
+  blank="${KOYORI_CONSOLEBLANK_SEC}"
+  if grep -qE 'consoleblank=' /etc/default/grub 2>/dev/null; then
+    sed -i -E "s/consoleblank=[0-9]+/consoleblank=${blank}/" /etc/default/grub
+  elif grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub; then
+    sed -i -E "s/^GRUB_CMDLINE_LINUX_DEFAULT=\"/GRUB_CMDLINE_LINUX_DEFAULT=\"consoleblank=${blank} /" /etc/default/grub
+  fi
+  update-grub 2>/dev/null || true
+  echo "  GRUB consoleblank=${blank} (reboot required)"
+fi
+
 systemctl enable --now iptsd 2>/dev/null || true
 systemctl enable lightdm
 systemctl set-default graphical.target
@@ -232,3 +248,9 @@ echo ""
 echo "Input:"
 echo "  Keychron K4 MAX BT: koyori-pair-keychron.sh / koyori-connect-keychron.sh"
 echo "  IME: 半/全 in webui text fields"
+echo ""
+echo "Screen blank (C11g):"
+echo "  kiosk enables DPMS + local http://127.0.0.1:18790/screen-off"
+echo "  verify: curl -s http://127.0.0.1:18790/health  (on Surface, in X session)"
+echo "  optional kernel fallback: KOYORI_CONSOLEBLANK_SEC=900 sudo $0  (then reboot)"
+echo "  check: cat /sys/module/kernel/parameters/consoleblank"

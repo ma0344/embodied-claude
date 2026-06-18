@@ -20,6 +20,29 @@ const SYSTEM_BLOCK_RES = [
   /^\[memory_saved_server\]/i,
   /^\[memory_save_failed\]/i,
   /^\[memory_list_prefetch\]/i,
+  /^\[stm_recent\]\s*$/i,
+  /^\[\/stm_recent\]/i,
+  /^\[dream_digest\]\s*$/i,
+  /^\[\/dream_digest\]/i,
+  /^\[inbound_nudge\b/i,
+  /^\[somatic_state\]\s*$/i,
+  /^\[relevant_memories\]\s*$/i,
+  /^\[commitments_due\]\s*$/i,
+  /^\[interpretation_shifts\]\s*$/i,
+  /^\[desires\]\s*$/i,
+];
+
+const PAIRED_BLOCK_OPENERS = {
+  "[stm_recent]": "[/stm_recent]",
+  "[dream_digest]": "[/dream_digest]",
+};
+
+const STM_BULLET_RE = /^- \([a-z_]+\)/i;
+
+const STM_ORPHAN_LINE_RES = [
+  STM_BULLET_RE,
+  /^(まー|こより):\s+/i,
+  /^【会話の一区切り】/,
 ];
 
 const ROOM_CONTEXT_BODY_RES = [
@@ -55,6 +78,14 @@ function isContractBody(line) {
   return CONTRACT_BODY_RES.some((pattern) => pattern.test(stripped));
 }
 
+function pairedBlockClose(headerLine) {
+  const key = headerLine.trim().toLowerCase();
+  for (const [opener, closer] of Object.entries(PAIRED_BLOCK_OPENERS)) {
+    if (key === opener) return closer;
+  }
+  return null;
+}
+
 function blockIndices(lines, headerIndex, nextHeader) {
   if (nextHeader !== undefined) {
     return Array.from({ length: nextHeader - headerIndex }, (_, offset) => headerIndex + offset);
@@ -63,6 +94,20 @@ function blockIndices(lines, headerIndex, nextHeader) {
   const header = lines[headerIndex];
   let start = headerIndex + 1;
   const end = lines.length;
+
+  const pairedClose = pairedBlockClose(header);
+  if (pairedClose) {
+    const closeKey = pairedClose.toLowerCase();
+    while (start < end) {
+      const lineKey = lines[start].trim().toLowerCase();
+      if (lineKey === closeKey || lineKey.startsWith(closeKey)) {
+        start += 1;
+        break;
+      }
+      start += 1;
+    }
+    return Array.from({ length: start - headerIndex }, (_, offset) => headerIndex + offset);
+  }
 
   if (/^\[recent_room_context\b/i.test(header.trim())) {
     while (start < end && isRoomContextBody(lines[start])) start += 1;
@@ -93,16 +138,12 @@ function blockIndices(lines, headerIndex, nextHeader) {
   }
 
   if (/^\[gateway_turn_context\b/i.test(header.trim())) {
-    while (start < end) {
-      if (start > headerIndex && isSystemBlockHeader(lines[start])) break;
-      const line = lines[start].trim();
-      if (start > headerIndex && !line) {
-        start += 1;
-        while (start < end && !lines[start].trim()) start += 1;
-        break;
-      }
-      start += 1;
-    }
+    return [headerIndex];
+  }
+
+  if (/^\[inbound_nudge\b/i.test(header.trim())) {
+    while (start < end && lines[start].trim()) start += 1;
+    while (start < end && !lines[start].trim()) start += 1;
     return Array.from({ length: start - headerIndex }, (_, offset) => headerIndex + offset);
   }
 
@@ -136,7 +177,7 @@ function blockIndices(lines, headerIndex, nextHeader) {
 }
 
 /** Phase 1 fallback for history JSONL until sociality leaves user text (Phase 2). */
-function stripEnrichedUserPrompt(text) {
+function stripEnrichedUserPromptOnce(text) {
   const raw = String(text ?? "");
   if (!raw.trim()) return "";
 
@@ -157,6 +198,62 @@ function stripEnrichedUserPrompt(text) {
   while (kept.length && !kept[0].trim()) kept.shift();
   while (kept.length && !kept[kept.length - 1].trim()) kept.pop();
   return kept.join("\n").trim();
+}
+
+function stripLeadingOrphanInjectionLines(text) {
+  const lines = String(text ?? "").split("\n");
+  while (lines.length) {
+    const line = lines[0].trim();
+    if (!line) {
+      lines.shift();
+      continue;
+    }
+    if (STM_ORPHAN_LINE_RES.some((pattern) => pattern.test(line))) {
+      lines.shift();
+      continue;
+    }
+    break;
+  }
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  return lines.join("\n").trim();
+}
+
+function stripGatewayWrapperTail(text) {
+  const raw = String(text ?? "");
+  if (!raw.trim()) return "";
+  const lines = raw.split("\n");
+  if (!lines.length || !/^\[gateway_turn_context\b/i.test(lines[0].trim())) return null;
+  const remainder = lines.slice(1).join("\n");
+  if (!remainder.includes("\n\n")) {
+    const tail = remainder.trim();
+    return tail && !msgLooksInjected(tail) ? tail : null;
+  }
+  const splitAt = remainder.lastIndexOf("\n\n");
+  const tail = remainder.slice(splitAt + 2).trim();
+  if (!tail || msgLooksInjected(tail)) return null;
+  return tail;
+}
+
+function stripEnrichedUserPrompt(text) {
+  const raw = String(text ?? "");
+  if (!raw.trim()) return "";
+
+  const firstLine = raw.split("\n", 1)[0].trim();
+  if (/^\[gateway_turn_context\b/i.test(firstLine)) {
+    const gatewayTail = stripGatewayWrapperTail(raw);
+    if (gatewayTail !== null) return gatewayTail;
+  }
+
+  let current = raw;
+  for (let pass = 0; pass < 12; pass += 1) {
+    let nxt = stripEnrichedUserPromptOnce(current);
+    nxt = stripLeadingOrphanInjectionLines(nxt);
+    if (nxt === current.trim()) break;
+    current = nxt;
+  }
+  const iterative = current.trim();
+  if (iterative && !msgLooksInjected(iterative)) return iterative;
+  return iterative;
 }
 
 function extractTextBlocks(content) {
@@ -237,13 +334,14 @@ function displayMessageText(text, { showDebugInjection = false } = {}) {
   const raw = sanitizeDisplayText(text);
   if (!raw) return "";
   if (showDebugInjection) return raw;
-  if (msgLooksInjected(raw)) return stripEnrichedUserPrompt(raw);
-  return raw;
+  return stripEnrichedUserPrompt(raw);
 }
 
 function msgLooksInjected(text) {
   const lines = String(text ?? "").split("\n");
-  return lines.some((line) => isSystemBlockHeader(line));
+  return lines.some(
+    (line) => isSystemBlockHeader(line) || STM_BULLET_RE.test(line.trim()),
+  );
 }
 
 window.CcMessages = {

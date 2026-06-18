@@ -19,6 +19,16 @@ _SYSTEM_BLOCK_RES = (
     re.compile(r"^\[memory_list_prefetch\]", re.I),
     re.compile(r"^\[vision_prefetch\]\s*$", re.I),
     re.compile(r"^\[Gateway directive\b", re.I),
+    re.compile(r"^\[stm_recent\]\s*$", re.I),
+    re.compile(r"^\[/stm_recent\]", re.I),
+    re.compile(r"^\[dream_digest\]\s*$", re.I),
+    re.compile(r"^\[/dream_digest\]", re.I),
+    re.compile(r"^\[inbound_nudge\b", re.I),
+    re.compile(r"^\[somatic_state\]\s*$", re.I),
+    re.compile(r"^\[relevant_memories\]\s*$", re.I),
+    re.compile(r"^\[commitments_due\]\s*$", re.I),
+    re.compile(r"^\[interpretation_shifts\]\s*$", re.I),
+    re.compile(r"^\[desires\]\s*$", re.I),
 )
 
 _DIRECTIVE_BLOCK_RES = (
@@ -28,6 +38,21 @@ _DIRECTIVE_BLOCK_RES = (
     re.compile(r"^\[vision_prefetch\]\s*$", re.I),
     re.compile(r"^\[Gateway directive\b", re.I),
 )
+
+_PAIRED_BLOCK_OPENERS = {
+    "[stm_recent]": "[/stm_recent]",
+    "[dream_digest]": "[/dream_digest]",
+}
+
+_STM_BULLET_RE = re.compile(r"^- \([a-z_]+\)", re.I)
+
+_STM_ORPHAN_LINE_RES = (
+    _STM_BULLET_RE,
+    re.compile(r"^(まー|こより):\s+", re.I),
+    re.compile(r"^【会話の一区切り】"),
+)
+
+_GATEWAY_WRAPPER_RE = re.compile(r"^\[gateway_turn_context\b", re.I)
 
 _ROOM_CONTEXT_BODY_RES = (
     re.compile(r"^Room arc:", re.I),
@@ -79,6 +104,14 @@ def _is_contract_body(line: str) -> bool:
     return any(pattern.search(stripped) for pattern in _CONTRACT_BODY_RES)
 
 
+def _paired_block_close(header: str) -> str | None:
+    key = header.strip().casefold()
+    for opener, closer in _PAIRED_BLOCK_OPENERS.items():
+        if key == opener:
+            return closer
+    return None
+
+
 def _block_indices(lines: list[str], header_index: int, next_header: int | None) -> range:
     if next_header is not None:
         return range(header_index, next_header)
@@ -86,6 +119,17 @@ def _block_indices(lines: list[str], header_index: int, next_header: int | None)
     header = lines[header_index]
     start = header_index + 1
     end = len(lines)
+
+    paired_close = _paired_block_close(header)
+    if paired_close is not None:
+        close_cf = paired_close.casefold()
+        while start < end:
+            line_cf = lines[start].strip().casefold()
+            if line_cf == close_cf or line_cf.startswith(close_cf):
+                start += 1
+                break
+            start += 1
+        return range(header_index, start)
 
     if header.strip().startswith("[recent_room_context"):
         while start < end and _is_room_context_body(lines[start]):
@@ -105,15 +149,13 @@ def _block_indices(lines: list[str], header_index: int, next_header: int | None)
         return range(header_index, start)
 
     if header.strip().startswith("[gateway_turn_context"):
-        while start < end:
-            if start > header_index and _is_system_block_header(lines[start]):
-                break
-            line = lines[start].strip()
-            if start > header_index and not line:
-                start += 1
-                while start < end and not lines[start].strip():
-                    start += 1
-                break
+        # Wrapper only — nested blocks are stripped on later passes.
+        return range(header_index, header_index + 1)
+
+    if header.strip().startswith("[inbound_nudge"):
+        while start < end and lines[start].strip():
+            start += 1
+        while start < end and not lines[start].strip():
             start += 1
         return range(header_index, start)
 
@@ -127,8 +169,31 @@ def _block_indices(lines: list[str], header_index: int, next_header: int | None)
     return range(header_index, header_index + 1)
 
 
-def strip_enriched_user_prompt(text: str) -> str:
-    """Remove prepended sociality blocks from stored user prompts (Phase 1 only)."""
+def _strip_gateway_wrapper_tail(text: str) -> str | None:
+    """Extract user utterance from prepend_gateway_turn_context format.
+
+    Enriched prompts are ``[gateway_turn_context…]\\n{body}\\n\\n{utterance}``.
+    The body may contain blank lines, unclosed [stm_recent], and nested headers;
+    the reliable anchor is the final ``\\n\\n`` before the user's words.
+    """
+    raw = text or ""
+    if not raw.strip():
+        return ""
+    lines = raw.split("\n")
+    if not lines or not _GATEWAY_WRAPPER_RE.match(lines[0].strip()):
+        return None
+    remainder = "\n".join(lines[1:])
+    if "\n\n" not in remainder:
+        tail = remainder.strip()
+        return tail if tail and not looks_like_injected_prompt(tail) else None
+    _head, tail = remainder.rsplit("\n\n", 1)
+    tail = tail.strip()
+    if not tail or looks_like_injected_prompt(tail):
+        return None
+    return tail
+
+
+def _strip_enriched_user_prompt_once(text: str) -> str:
     raw = text or ""
     if not raw.strip():
         return ""
@@ -154,9 +219,59 @@ def strip_enriched_user_prompt(text: str) -> str:
     return "\n".join(kept).strip()
 
 
+def _strip_leading_orphan_injection_lines(text: str) -> str:
+    lines = text.split("\n")
+    while lines:
+        line = lines[0].strip()
+        if not line:
+            lines.pop(0)
+            continue
+        if any(pattern.search(line) for pattern in _STM_ORPHAN_LINE_RES):
+            lines.pop(0)
+            continue
+        break
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines).strip()
+
+
+def strip_enriched_user_prompt(text: str) -> str:
+    """Remove prepended sociality blocks from stored user prompts (Phase 1 only)."""
+    raw = text or ""
+    if not raw.strip():
+        return ""
+
+    # Gateway-wrapped prompts: final ``\n\n`` segment is authoritative. Truncated
+    # compose may leave orphan episode prose and ``[/stm_recent]…`` that iterative
+    # strip mis-identifies as the user's utterance.
+    first_line = raw.split("\n", 1)[0].strip()
+    if _GATEWAY_WRAPPER_RE.match(first_line):
+        tail = _strip_gateway_wrapper_tail(raw)
+        if tail is not None:
+            return tail
+
+    current = raw
+    for _ in range(12):
+        nxt = _strip_enriched_user_prompt_once(current)
+        nxt = _strip_leading_orphan_injection_lines(nxt)
+        if nxt == current.strip():
+            break
+        current = nxt
+    iterative = current.strip()
+
+    if iterative and not looks_like_injected_prompt(iterative):
+        return iterative
+    return iterative
+
+
 def looks_like_injected_prompt(text: str) -> bool:
     """True when stored user text contains gateway/sociality block headers."""
-    return any(_is_system_block_header(line) for line in (text or "").split("\n"))
+    for line in (text or "").split("\n"):
+        if _is_system_block_header(line):
+            return True
+        if _STM_BULLET_RE.match(line.strip()):
+            return True
+    return False
 
 
 def plain_user_first_line(text: str, *, max_len: int = 48) -> str:
@@ -187,8 +302,12 @@ def session_title_from_context(
 
     if not title:
         for msg in messages:
-            sender = getattr(msg, "sender", None) or (msg.get("sender") if isinstance(msg, dict) else None)
-            body = getattr(msg, "message", None) or (msg.get("message") if isinstance(msg, dict) else "")
+            sender = getattr(msg, "sender", None) or (
+                msg.get("sender") if isinstance(msg, dict) else None
+            )
+            body = getattr(msg, "message", None) or (
+                msg.get("message") if isinstance(msg, dict) else ""
+            )
             if sender == "ma" and str(body or "").strip():
                 title = plain_user_first_line(str(body), max_len=max_len)
                 if title:

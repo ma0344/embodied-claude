@@ -159,3 +159,24 @@ def test_intercept_preserves_explicit_permission_mode(mock_stores: MagicMock) ->
     assert result.forward is True
     assert result.payload is not None
     assert result.payload["permissionMode"] == "default"
+
+
+def test_intercept_includes_inbound_nudge(
+    mock_stores: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PRESENCE_KV_STABLE_APPEND", "1")
+    result = social_chat.intercept_chat_request(
+        payload={
+            "message": "うん、聞いてる",
+            "sessionId": "sess-inbound",
+            "inboundNudge": "まー、ちょっといい？",
+            "inboundNudgeId": "nudge-1",
+        },
+        person_id="ma",
+    )
+    assert result.forward is True
+    msg = result.payload["message"] if result.payload else ""
+    assert "[inbound_nudge" in msg
+    assert "まー、ちょっといい？" in msg
+    assert "nudge_id=nudge-1" in msg
+    assert msg.endswith("うん、聞いてる")

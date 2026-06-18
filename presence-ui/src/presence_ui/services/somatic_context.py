@@ -115,10 +115,12 @@ def enrich_interaction_context(
         compact = f"{compact}\n\n{block}"
     else:
         compact = block
+    from presence_ui.gateway.prompt_block_safe import truncate_prompt_text
+
     max_len = 12000
     ctx = ctx.model_copy(
         update={
-            "compact_prompt_block": compact[:max_len],
+            "compact_prompt_block": truncate_prompt_text(compact, max_len),
             "somatic_state": somatic,
         }
     )

@@ -45,6 +45,7 @@ class StmEntry:
     importance: int
     dreamed_at: str | None
     created_at: str
+    metadata_json: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -61,6 +62,7 @@ class StmEntry:
             "importance": self.importance,
             "dreamed_at": self.dreamed_at,
             "created_at": self.created_at,
+            "metadata_json": self.metadata_json,
         }
 
 
@@ -136,6 +138,7 @@ class StmStore:
             importance=max(1, min(importance, 5)),
             dreamed_at=None,
             created_at=now,
+            metadata_json=json.dumps(metadata or {}, ensure_ascii=False),
         )
 
     def flush_wm_turns(
@@ -174,6 +177,21 @@ class StmStore:
     def should_mirror_experience(self, *, kind: str, importance: int) -> bool:
         return kind in STM_AUTO_MIRROR_KINDS or importance >= STM_AUTO_MIRROR_MIN_IMPORTANCE
 
+    def _open_loops_for_person(self, person_id: str | None) -> list[tuple[str, str]]:
+        if not person_id:
+            return []
+        rows = self.db.fetchall(
+            """
+            SELECT loop_id, topic
+            FROM open_loops
+            WHERE person_id = ? AND status = 'open'
+            ORDER BY updated_at DESC
+            LIMIT 20
+            """,
+            (person_id,),
+        )
+        return [(str(row[0]), str(row[1])) for row in rows]
+
     def mirror_experience(
         self,
         experience_id: str,
@@ -183,7 +201,8 @@ class StmStore:
         """Copy an agent_experience row into STM if eligible and not already mirrored."""
         row = self.db.fetchone(
             """
-            SELECT experience_id, ts, person_id, kind, summary, importance
+            SELECT experience_id, ts, person_id, kind, summary, importance,
+                   desires_before_json, desires_after_json
             FROM agent_experiences
             WHERE experience_id = ?
             """,
@@ -201,14 +220,22 @@ class StmStore:
         )
         if existing is not None:
             return None
+        from social_core.stm_salience import salience_from_experience_row
+
+        person_id = row["person_id"]
+        salience = salience_from_experience_row(
+            row,
+            open_loops=self._open_loops_for_person(person_id),
+        )
         return self.append(
             summary=str(row["summary"]),
             kind=kind,
             source="experience_mirror",
             ts=str(row["ts"]),
-            person_id=row["person_id"],
+            person_id=person_id,
             experience_id=experience_id,
             importance=importance,
+            metadata=salience,
             timezone=timezone,
         )
 
@@ -234,7 +261,8 @@ class StmStore:
         rows = self.db.fetchall(
             f"""
             SELECT entry_id, ts, local_day, person_id, source, kind, summary,
-                   session_id, experience_id, turn_index, importance, dreamed_at, created_at
+                   session_id, experience_id, turn_index, importance, dreamed_at, created_at,
+                   metadata_json
             FROM stm_entries
             {clause}
             ORDER BY ts DESC, created_at DESC
@@ -279,6 +307,7 @@ class StmStore:
         turn_count: int = 0,
         ts: str | None = None,
         timezone: str = DEFAULT_POLICY_TIMEZONE,
+        salience: dict[str, Any] | None = None,
     ) -> StmEntry | None:
         """Persist one episode summary into STM (idempotent per session_id)."""
         if not session_id:
@@ -288,7 +317,8 @@ class StmStore:
             row = self.db.fetchone(
                 """
                 SELECT entry_id, ts, local_day, person_id, source, kind, summary,
-                       session_id, experience_id, turn_index, importance, dreamed_at, created_at
+                       session_id, experience_id, turn_index, importance, dreamed_at, created_at,
+                       metadata_json
                 FROM stm_entries WHERE entry_id = ?
                 """,
                 (existing_id,),
@@ -299,6 +329,22 @@ class StmStore:
         if not text:
             return None
 
+        from social_core.stm_salience import build_stm_salience_metadata, match_open_loop_ids
+
+        if salience is None:
+            loops = self._open_loops_for_person(person_id)
+            match_ids = match_open_loop_ids(text, loops)
+            salience_meta = build_stm_salience_metadata(
+                summary=text,
+                kind="episode_close",
+                source="episode_summary",
+                importance=3,
+                open_loop_ids=match_ids or None,
+            )
+        else:
+            salience_meta = salience
+        metadata = {"trigger": trigger, "turn_count": turn_count, **salience_meta}
+
         entry = self.append(
             summary=text,
             kind="episode_close",
@@ -306,8 +352,8 @@ class StmStore:
             ts=ts,
             person_id=person_id,
             session_id=session_id,
-            importance=3,
-            metadata={"trigger": trigger, "turn_count": turn_count},
+            importance=int(salience_meta.get("importance") or 3),
+            metadata=metadata,
             timezone=timezone,
         )
         with self.db.transaction() as conn:
@@ -362,6 +408,8 @@ class StmStore:
 
 
 def _row_to_entry(row: Any) -> StmEntry:
+    keys = row.keys() if hasattr(row, "keys") else []
+    metadata = row["metadata_json"] if "metadata_json" in keys else None
     return StmEntry(
         entry_id=row["entry_id"],
         ts=row["ts"],
@@ -376,6 +424,7 @@ def _row_to_entry(row: Any) -> StmEntry:
         importance=int(row["importance"]),
         dreamed_at=row["dreamed_at"],
         created_at=row["created_at"],
+        metadata_json=metadata,
     )
 
 

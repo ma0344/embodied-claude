@@ -1,9 +1,14 @@
-"""Tests for STM dreaming helpers (MEM-3)."""
+"""Tests for STM dreaming helpers (MEM-3 / MEM-5c)."""
 
 from __future__ import annotations
 
 from social_core.stm import StmEntry, StmStore
-from social_core.stm_dreaming import build_dream_digest, should_promote_stm_to_ltm
+from social_core.stm_dreaming import (
+    build_dream_digest,
+    emotion_for_ltm,
+    entries_to_promote,
+    should_promote_stm_to_ltm,
+)
 
 
 def _entry(**overrides) -> StmEntry:
@@ -14,7 +19,7 @@ def _entry(**overrides) -> StmEntry:
         "person_id": "ma",
         "source": "episode_summary",
         "kind": "episode_close",
-        "summary": "まーと天気の話をした",
+        "summary": "まーの家は長野県松本市。天気の話もした",
         "session_id": "sess_1",
         "experience_id": None,
         "turn_index": None,
@@ -33,6 +38,47 @@ def test_should_promote_episode_summary():
 def test_should_not_promote_raw_wm_turn():
     entry = _entry(source="wm_flush", kind="wm_turn_ma", summary="うん")
     assert should_promote_stm_to_ltm(entry) is False
+
+
+def test_should_not_promote_greeting_only_episode():
+    entry = _entry(summary="【会話の一区切り】\nこより: おはよう、まー。")
+    assert should_promote_stm_to_ltm(entry) is False
+
+
+def test_should_not_promote_private_reflection():
+    entry = _entry(
+        source="experience_mirror",
+        kind="agent_private_reflection",
+        summary="（自律の思考メモ） Open loops: 明日の天気",
+        metadata_json='{"emotion_tag":"moved","importance":3}',
+    )
+    assert should_promote_stm_to_ltm(entry) is False
+
+
+def test_entries_to_promote_dedupes_open_loop_progress():
+    weather_a = _entry(
+        entry_id="a",
+        source="experience_mirror",
+        kind="open_loop_progress",
+        summary="明日の天気は晴れみたい",
+        session_id=None,
+    )
+    weather_b = _entry(
+        entry_id="b",
+        source="experience_mirror",
+        kind="open_loop_progress",
+        summary="松本市だと晴れ時々曇り",
+        session_id=None,
+        ts="2026-06-16T11:00:00+09:00",
+    )
+    promote = entries_to_promote([weather_a, weather_b])
+    assert len(promote) == 1
+    assert promote[0].entry_id == "b"
+
+
+def test_emotion_for_ltm_uses_metadata():
+    entry = _entry(metadata_json='{"emotion_tag":"curious"}')
+    assert emotion_for_ltm(entry) == "curious"
 
 
 def test_mark_dreamed_updates_rows(social_db):

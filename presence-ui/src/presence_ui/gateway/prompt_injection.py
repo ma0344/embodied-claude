@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from presence_ui.services.llm import GATEWAY_STABLE_APPEND, prepend_gateway_turn_context
+from presence_ui.services.llm import GATEWAY_STABLE_APPEND, build_gateway_stable_append, prepend_gateway_turn_context
 
 
 def kv_stable_append_enabled() -> bool:
@@ -31,7 +31,7 @@ def apply_gateway_prompt_injection(
 
     if kv_stable_append_enabled():
         enriched = prepend_gateway_turn_context(user_text=message, delta=delta)
-        return enriched, GATEWAY_STABLE_APPEND
+        return enriched, build_gateway_stable_append()
 
     append = delta or None
     return message, append

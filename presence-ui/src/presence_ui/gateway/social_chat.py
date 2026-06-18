@@ -35,6 +35,8 @@ from presence_ui.gateway.direct_actions import (
 from presence_ui.gateway.hybrid_intent import HybridBodyIntent, resolve_hybrid_intent
 from presence_ui.gateway.open_loop_dismiss import dismiss_note, dismiss_progress_label
 from presence_ui.gateway.prompt_injection import apply_gateway_prompt_injection
+from presence_ui.gateway.prompt_block_safe import truncate_prompt_text
+from presence_ui.gateway.soul_prefetch import detect_soul_read_request, soul_read_prefetch_block
 from presence_ui.gateway.room_events import progress_event
 from presence_ui.gateway.room_ingest import ingest_human_turn_async
 from presence_ui.gateway.user_intent import (
@@ -55,6 +57,23 @@ _SILENT_MOVES = frozenset({"stay_silent", "defer", "quietly_prepare"})
 
 # Kiosk (:8090) has no webui permission UI; auto-accept edits within allow rules.
 _DEFAULT_PERMISSION_MODE = "acceptEdits"
+
+
+def _inbound_nudge_delta(payload: dict) -> str:
+    """Gateway-only context for replying to a proactive room inbound (A4j+)."""
+    text = str(payload.get("inboundNudge") or "").strip()
+    if not text:
+        return ""
+    nudge_id = str(payload.get("inboundNudgeId") or "").strip()
+    lines = [
+        "[inbound_nudge — not for the user]",
+        f"Koyori reached out proactively (room inbound): 「{text[:500]}」",
+        "The user's message is their reply. Respond naturally in Koyori voice; "
+        "do not quote this block or mention gateway/inbound metadata.",
+    ]
+    if nudge_id:
+        lines.insert(1, f"nudge_id={nudge_id}")
+    return "\n".join(lines)
 
 
 @dataclass(slots=True)
@@ -227,6 +246,29 @@ def _finish_intercept_chat_request(
         memory_notes.append(memory_saved_prompt_note(outcome))
 
     list_request = detect_memory_list_request(message)
+    if detect_soul_read_request(message) and not list_request:
+        turn_delta = soul_read_prefetch_block()
+        enriched_message, append_prompt = apply_gateway_prompt_injection(
+            user_text=message,
+            turn_delta=turn_delta,
+        )
+        enriched = payload.copy()
+        enriched["message"] = enriched_message
+        if append_prompt:
+            enriched["appendSystemPrompt"] = append_prompt
+        if not enriched.get("permissionMode"):
+            enriched["permissionMode"] = _DEFAULT_PERMISSION_MODE
+        gateway_events.append(
+            progress_event(phase="soul", label="SOUL.md を読み込んだ")
+        )
+        return ChatInterceptResult(
+            forward=True,
+            payload=enriched,
+            plan_move="answer_directly",
+            user_text=message,
+            gateway_events=gateway_events,
+        )
+
     if list_request:
         rows = fetch_memory_list(
             limit=list_request.limit,
@@ -369,10 +411,12 @@ def _finish_intercept_chat_request(
     if memory_notes:
         note = "\n\n".join(memory_notes)
         turn_delta = f"{turn_delta}\n\n{note}" if turn_delta else note
+    inbound_delta = _inbound_nudge_delta(payload)
+    if inbound_delta:
+        turn_delta = f"{turn_delta}\n\n{inbound_delta}" if turn_delta else inbound_delta
     if lite and turn_delta:
         cap = int(os.getenv("PRESENCE_LITE_APPEND_MAX_CHARS", "2500"))
-        if len(turn_delta) > cap:
-            turn_delta = turn_delta[: cap - 1].rstrip() + "…"
+        turn_delta = truncate_prompt_text(turn_delta, cap)
     extra_append = ""
     if remember_intent and memory_notes and "[memory_save_failed]" in memory_notes[0]:
         extra_append = (

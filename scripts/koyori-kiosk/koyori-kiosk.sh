@@ -64,11 +64,33 @@ fi
 # but presence-ui listens on IPv4 only (typical: 0.0.0.0:8090).
 # Example: KOYORI_WEBUI_URL='http://192.168.10.50:8090/'
 
+koyori_configure_dpms() {
+  command -v xset >/dev/null 2>&1 || return 0
+  [[ -n "${DISPLAY:-}" ]] || return 0
+  local off_sec="${KOYORI_DPMS_OFF_SEC:-60}"
+  # C11g: wakeLock 解除後に OS が消灯できるよう DPMS を有効化（旧: xset -dpms で常時点灯固定）
+  xset s off 2>/dev/null || true
+  xset +dpms 2>/dev/null || true
+  xset dpms 0 0 "$off_sec" 2>/dev/null || true
+  log "dpms enabled standby_off_sec=$off_sec"
+}
+
+koyori_start_screen_idle_server() {
+  local py="/usr/local/bin/koyori-screen-idle-server"
+  [[ -x "$py" ]] || return 0
+  if ss -ltn 2>/dev/null | grep -q ":${KOYORI_SCREEN_IDLE_PORT:-18790} "; then
+    log "screen-idle-server already listening"
+    return 0
+  fi
+  "$py" &
+  log "screen-idle-server pid=$! port=${KOYORI_SCREEN_IDLE_PORT:-18790}"
+}
+
 if command -v xset >/dev/null 2>&1 && [[ -n "${DISPLAY:-}" ]]; then
-  xset s off || true
-  xset -dpms || true
-  xset s noblank || true
+  koyori_configure_dpms
 fi
+
+koyori_start_screen_idle_server
 
 if command -v unclutter >/dev/null 2>&1 && [[ -n "${DISPLAY:-}" ]]; then
   unclutter -idle 0 -root &

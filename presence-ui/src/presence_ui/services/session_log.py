@@ -9,7 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from presence_ui.schemas import ChatMessage
-from presence_ui.gateway.user_prompt import plain_user_first_line, session_title_from_context
+from presence_ui.gateway.user_prompt import (
+    plain_user_first_line,
+    session_title_from_context,
+    strip_enriched_user_prompt,
+)
 
 _KOYORI_SKIP_PREFIXES = (
     "[Request interrupted by user for tool use]",
@@ -96,6 +100,9 @@ def _messages_from_jsonl(path: Path) -> list[ChatMessage]:
                 continue
             text = "\n".join(prompts)
             if _should_skip_user_text(text):
+                continue
+            text = strip_enriched_user_prompt(text)
+            if not text.strip():
                 continue
             messages.append(ChatMessage(sender="ma", message=text, timestamp=ts))
         elif rec_type == "assistant":

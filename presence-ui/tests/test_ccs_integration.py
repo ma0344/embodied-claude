@@ -74,18 +74,50 @@ def test_config_factory_injects_stable_gateway_append(
     mock_stores: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from presence_ui.services.llm import GATEWAY_STABLE_APPEND
+    from presence_ui.services.llm import SOUL_VOICE_ANCHOR, build_gateway_stable_append
 
     monkeypatch.setattr(
         social_chat,
         "detect_memory_list_request",
         lambda text: None,
     )
+    monkeypatch.setattr(
+        social_chat,
+        "detect_soul_read_request",
+        lambda text: False,
+    )
     factory = ccs_integration.make_ccs_config_factory(person_id="ma")
     cfg = factory(ChatRequest(prompt="hello", session_id="sess-1"))
 
-    assert cfg.append_system_prompt == GATEWAY_STABLE_APPEND
+    assert cfg.append_system_prompt == build_gateway_stable_append()
+    assert SOUL_VOICE_ANCHOR in (cfg.append_system_prompt or "")
     assert cfg.permission_mode == "acceptEdits"
+
+
+def test_intercept_skips_compose_for_soul_read(
+    mock_stores: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    soul = tmp_path / "SOUL.md"
+    soul.write_text("うちはこより。関西弁。", encoding="utf-8")
+    monkeypatch.setenv("PRESENCE_SOUL_PATH", str(soul))
+    compose_calls: list[object] = []
+
+    def track_compose(*args, **kwargs):
+        compose_calls.append(kwargs)
+        return _minimal_ctx()
+
+    monkeypatch.setattr(social_chat, "compose_interaction_context", track_compose)
+    result = social_chat.intercept_chat_request(
+        payload={"message": "./SOUL.mdを読んでみて"},
+        person_id="ma",
+    )
+    assert result.forward is True
+    assert compose_calls == []
+    assert result.payload is not None
+    assert "[soul_prefetch" in (result.payload.get("message") or "")
+    assert "関西弁" in (result.payload.get("message") or "")
 
 
 def test_intercept_skips_compose_for_memory_list(

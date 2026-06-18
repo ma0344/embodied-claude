@@ -56,10 +56,11 @@ class _Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     if not os.environ.get("DISPLAY"):
-        sys.stderr.write("koyori-screen-idle: DISPLAY unset — exit\n")
-        sys.exit(1)
+        os.environ["DISPLAY"] = ":0"
     server = HTTPServer((HOST, PORT), _Handler)
-    sys.stderr.write(f"koyori-screen-idle: listening on http://{HOST}:{PORT}/\n")
+    sys.stderr.write(
+        f"koyori-screen-idle: listening on http://{HOST}:{PORT}/ DISPLAY={os.environ['DISPLAY']}\n"
+    )
     server.serve_forever()
 
 

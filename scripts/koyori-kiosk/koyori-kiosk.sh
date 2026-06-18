@@ -42,6 +42,8 @@ pick_browser() {
 
 : "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
 export XDG_RUNTIME_DIR
+# lightdm/Xsession 経由で未設定のことがある
+export DISPLAY="${DISPLAY:-:0}"
 if [[ -S "${XDG_RUNTIME_DIR}/bus" ]]; then
   export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 fi
@@ -77,13 +79,27 @@ koyori_configure_dpms() {
 
 koyori_start_screen_idle_server() {
   local py="/usr/local/bin/koyori-screen-idle-server"
-  [[ -x "$py" ]] || return 0
-  if ss -ltn 2>/dev/null | grep -q ":${KOYORI_SCREEN_IDLE_PORT:-18790} "; then
-    log "screen-idle-server already listening"
+  local port="${KOYORI_SCREEN_IDLE_PORT:-18790}"
+  if [[ ! -x "$py" ]]; then
+    log "WARN screen-idle-server missing — run: sudo install-koyori-kiosk.sh"
     return 0
   fi
-  "$py" &
-  log "screen-idle-server pid=$! port=${KOYORI_SCREEN_IDLE_PORT:-18790}"
+  if ss -ltn 2>/dev/null | grep -qE ":${port}\\b"; then
+    log "screen-idle-server already listening on :${port}"
+    return 0
+  fi
+  DISPLAY="$DISPLAY" "$py" &
+  local pid=$!
+  sleep 0.3
+  if ! kill -0 "$pid" 2>/dev/null; then
+    log "WARN screen-idle-server exited immediately (DISPLAY=$DISPLAY)"
+    return 0
+  fi
+  if ! ss -ltn 2>/dev/null | grep -qE ":${port}\\b"; then
+    log "WARN screen-idle-server pid=$pid but port :${port} not listening"
+    return 0
+  fi
+  log "screen-idle-server pid=$pid port=$port"
 }
 
 if command -v xset >/dev/null 2>&1 && [[ -n "${DISPLAY:-}" ]]; then

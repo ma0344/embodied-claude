@@ -409,7 +409,7 @@ Deep（SOUL / 自己モデル）
 |----|------|------|
 | MEM-0 | 本文（4 層 + 昇格図）+ backlog リンク | **済** |
 | MEM-1 | **STM ストア設計** — `stm_entries` in social.db、experience 自動ミラー、WM フラッシュ API (`POST /api/v1/stm/flush-wm`, `GET /api/v1/stm/recent`) | 済 |
-| MEM-2 | **WM→STM エピソード締め** — 毎ターン要約はしない。境界で1回要約→STM（下記） | 未 |
+| MEM-2 | **WM→STM エピソード締め** — 「新しい会話」で前セッションを1回要約→STM（`POST /api/v1/stm/close-episode`、ルール要約 + 任意 LLM） | 済 |
 | MEM-3 | **Dreaming ジョブ** — 深夜 pulse: STM リプレイ → `consolidate` + episode + daybook 素材；`last_dream_at` on pulse | 未 |
 | MEM-4 | **朝注入** — 未報告 somatic + Dreaming 要約を compose `compact_prompt_block`（8c と接続） | 未 |
 | MEM-5 | **LTM 整理** — 忘却・重複統合ポリシー（低頻度） | 未 |

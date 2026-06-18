@@ -39,6 +39,24 @@ class StmRecentResponse(BaseModel):
     prompt_block: str = ""
 
 
+class StmCloseEpisodeRequest(BaseModel):
+    person_id: str = "ma"
+    session_id: str
+    trigger: str = "new_session"
+    turns: list[WmTurn] = Field(default_factory=list)
+    timezone: str | None = None
+    use_llm: bool | None = None
+
+
+class StmCloseEpisodeResponse(BaseModel):
+    ok: bool = True
+    closed: bool = False
+    skipped: bool = False
+    reason: str | None = None
+    entry_id: str | None = None
+    summary: str | None = None
+
+
 def stm_flush_wm(body: StmFlushWmRequest) -> StmFlushWmResponse:
     stores = get_stores()
     tz = body.timezone or stores.policy_timezone
@@ -78,3 +96,18 @@ def stm_recent(
         entries=[entry.to_dict() for entry in entries],
         prompt_block=block,
     )
+
+
+async def stm_close_episode(body: StmCloseEpisodeRequest) -> StmCloseEpisodeResponse:
+    from presence_ui.services.stm_episode import close_episode_for_session
+
+    turns = [turn.model_dump() for turn in body.turns]
+    result = await close_episode_for_session(
+        person_id=body.person_id,
+        session_id=body.session_id,
+        turns=turns,
+        trigger=body.trigger,
+        timezone=body.timezone,
+        use_llm=body.use_llm,
+    )
+    return StmCloseEpisodeResponse.model_validate(result)

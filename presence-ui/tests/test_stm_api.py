@@ -54,3 +54,41 @@ def test_stm_flush_wm_and_recent(client):
     assert recent_body["count"] == 2
     assert recent_body["local_day"] == "2026-06-16"
     assert "[stm_recent]" in recent_body["prompt_block"]
+
+
+def test_stm_close_episode(client):
+    payload = {
+        "person_id": "ma",
+        "session_id": "sess_close",
+        "trigger": "new_session",
+        "turns": [
+            {
+                "sender": "ma",
+                "message": "明日の天気どう？",
+                "timestamp": "2026-06-16T18:00:00+09:00",
+            },
+            {
+                "sender": "koyori",
+                "message": "雨みたいやから傘持って行った方がええかも",
+                "timestamp": "2026-06-16T18:00:05+09:00",
+            },
+        ],
+        "timezone": "Asia/Tokyo",
+        "use_llm": False,
+    }
+    first = client.post("/api/v1/stm/close-episode", json=payload)
+    assert first.status_code == 200
+    body = first.json()
+    assert body["ok"] is True
+    assert body["closed"] is True
+    assert body["skipped"] is False
+    assert body["entry_id"]
+    assert "天気" in (body["summary"] or "")
+
+    second = client.post("/api/v1/stm/close-episode", json=payload)
+    assert second.status_code == 200
+    again = second.json()
+    assert again["skipped"] is True
+    assert again["reason"] == "already_closed"
+    assert again["entry_id"] == body["entry_id"]
+

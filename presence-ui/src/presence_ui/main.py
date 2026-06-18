@@ -699,6 +699,18 @@ def create_app() -> FastAPI:
             ).model_dump(mode="json")
         )
 
+    @app.post("/api/v1/stm/close-episode")
+    async def post_stm_close_episode(request: Request) -> JSONResponse:
+        """MEM-2: close WM episode with one STM summary (new session / idle)."""
+        from presence_ui.gateway.stm_api import StmCloseEpisodeRequest, stm_close_episode
+
+        try:
+            raw = await request.json()
+        except json.JSONDecodeError:
+            raw = {}
+        body = StmCloseEpisodeRequest.model_validate(raw if isinstance(raw, dict) else {})
+        return utf8_json((await stm_close_episode(body)).model_dump(mode="json"))
+
     @app.post("/api/v1/autonomous-tick")
     async def post_autonomous_tick(request: Request) -> JSONResponse:
         """Run one bounded autonomous action (compose/plan/execute, no MCP body tools)."""

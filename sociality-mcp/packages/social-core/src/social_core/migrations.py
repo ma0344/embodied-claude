@@ -397,6 +397,24 @@ MIGRATIONS = [
             WHERE dreamed_at IS NULL;
         """,
     ),
+    Migration(
+        name="007_session_episode_closures",
+        sql="""
+        CREATE TABLE IF NOT EXISTS session_episode_closures (
+            session_id TEXT PRIMARY KEY,
+            stm_entry_id TEXT NOT NULL,
+            person_id TEXT,
+            trigger TEXT NOT NULL,
+            turn_count INTEGER NOT NULL DEFAULT 0,
+            closed_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_session_episode_closures_closed
+            ON session_episode_closures(closed_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_session_episode_closures_person
+            ON session_episode_closures(person_id, closed_at DESC);
+        """,
+    ),
 ]
 
 

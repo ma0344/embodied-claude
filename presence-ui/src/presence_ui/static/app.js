@@ -525,14 +525,40 @@ async function deleteNativeSession() {
 }
 
 function startNewNativeSession() {
-  activeSessionId = null;
-  localStorage.removeItem(SESSION_STORAGE_KEY);
-  chatMessages = [];
-  renderedMessageKeys = new Set();
-  clearChatLog();
-  showChatPlaceholder("新しい会話を始められる");
-  const select = document.getElementById("history-select");
-  if (select) select.value = "";
+  void closeEpisodeBeforeNewSession().finally(() => {
+    activeSessionId = null;
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    chatMessages = [];
+    renderedMessageKeys = new Set();
+    clearChatLog();
+    showChatPlaceholder("新しい会話を始められる");
+    const select = document.getElementById("history-select");
+    if (select) select.value = "";
+  });
+}
+
+async function closeEpisodeBeforeNewSession() {
+  const sessionId = activeSessionId;
+  if (!sessionId || !chatMessages.length) return;
+  const turns = chatMessages
+    .filter((msg) => !msg._pending && !msg._thinking && !msg._streaming)
+    .map((msg) => ({
+      sender: msg.sender,
+      message: displayTextForMessage(msg),
+      timestamp: msg.timestamp || null,
+    }))
+    .filter((turn) => turn.message && (turn.sender === "ma" || turn.sender === "koyori"));
+  if (!turns.length) return;
+  try {
+    await postJson("/api/v1/stm/close-episode", {
+      person_id: "ma",
+      session_id: sessionId,
+      trigger: "new_session",
+      turns,
+    });
+  } catch (err) {
+    console.warn("STM episode close failed:", err);
+  }
 }
 
 async function initNativeSessions() {

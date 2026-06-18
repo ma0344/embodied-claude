@@ -260,6 +260,73 @@ class StmStore:
             )
         return int(row[0]) if row else 0
 
+    def episode_closure_entry_id(self, session_id: str) -> str | None:
+        row = self.db.fetchone(
+            "SELECT stm_entry_id FROM session_episode_closures WHERE session_id = ?",
+            (session_id,),
+        )
+        if row is None:
+            return None
+        return str(row["stm_entry_id"])
+
+    def close_episode(
+        self,
+        *,
+        summary: str,
+        person_id: str | None = None,
+        session_id: str | None = None,
+        trigger: str = "new_session",
+        turn_count: int = 0,
+        timezone: str = DEFAULT_POLICY_TIMEZONE,
+    ) -> StmEntry | None:
+        """Persist one episode summary into STM (idempotent per session_id)."""
+        if not session_id:
+            return None
+        existing_id = self.episode_closure_entry_id(session_id)
+        if existing_id:
+            row = self.db.fetchone(
+                """
+                SELECT entry_id, ts, local_day, person_id, source, kind, summary,
+                       session_id, experience_id, turn_index, importance, dreamed_at, created_at
+                FROM stm_entries WHERE entry_id = ?
+                """,
+                (existing_id,),
+            )
+            return _row_to_entry(row) if row is not None else None
+
+        text = summary.strip()
+        if not text:
+            return None
+
+        entry = self.append(
+            summary=text,
+            kind="episode_close",
+            source="episode_summary",
+            person_id=person_id,
+            session_id=session_id,
+            importance=3,
+            metadata={"trigger": trigger, "turn_count": turn_count},
+            timezone=timezone,
+        )
+        with self.db.transaction() as conn:
+            conn.execute(
+                """
+                INSERT INTO session_episode_closures(
+                    session_id, stm_entry_id, person_id, trigger, turn_count, closed_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    session_id,
+                    entry.entry_id,
+                    person_id,
+                    trigger,
+                    turn_count,
+                    utc_now(),
+                ),
+            )
+        return entry
+
 
 def _row_to_entry(row: Any) -> StmEntry:
     return StmEntry(

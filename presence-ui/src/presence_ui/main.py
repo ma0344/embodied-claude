@@ -711,6 +711,25 @@ def create_app() -> FastAPI:
         body = StmCloseEpisodeRequest.model_validate(raw if isinstance(raw, dict) else {})
         return utf8_json((await stm_close_episode(body)).model_dump(mode="json"))
 
+    @app.post("/api/v1/stm/dream")
+    async def post_stm_dream(request: Request) -> JSONResponse:
+        """MEM-3: run Dreaming (STM → LTM + consolidate + daybook)."""
+        from presence_ui.gateway.stm_api import StmDreamRequest, stm_dream
+
+        try:
+            raw = await request.json()
+        except json.JSONDecodeError:
+            raw = {}
+        body = StmDreamRequest.model_validate(raw if isinstance(raw, dict) else {})
+        return utf8_json((await stm_dream(body)).model_dump(mode="json"))
+
+    @app.get("/api/v1/stm/dream-digest")
+    async def get_stm_dream_digest() -> JSONResponse:
+        """MEM-3/4: last overnight dream digest for compose prep."""
+        from presence_ui.gateway.stm_api import stm_dream_digest
+
+        return utf8_json(stm_dream_digest().model_dump(mode="json"))
+
     @app.post("/api/v1/autonomous-tick")
     async def post_autonomous_tick(request: Request) -> JSONResponse:
         """Run one bounded autonomous action (compose/plan/execute, no MCP body tools)."""

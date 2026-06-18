@@ -410,8 +410,8 @@ Deep（SOUL / 自己モデル）
 | MEM-0 | 本文（4 層 + 昇格図）+ backlog リンク | **済** |
 | MEM-1 | **STM ストア設計** — `stm_entries` in social.db、experience 自動ミラー、WM フラッシュ API (`POST /api/v1/stm/flush-wm`, `GET /api/v1/stm/recent`) | 済 |
 | MEM-2 | **WM→STM エピソード締め** — 「新しい会話」で前セッションを1回要約→STM（`POST /api/v1/stm/close-episode`、ルール要約 + 任意 LLM） | 済 |
-| MEM-3 | **Dreaming ジョブ** — 深夜 pulse: STM リプレイ → `consolidate` + episode + daybook 素材；`last_dream_at` on pulse | 未 |
-| MEM-4 | **朝注入** — 未報告 somatic + Dreaming 要約を compose `compact_prompt_block`（8c と接続） | 未 |
+| MEM-3 | **Dreaming ジョブ** — 深夜 pulse: STM リプレイ → `remember` + `consolidate` + `append_daybook`；`last_dream_at` + `last_dream_digest.json`（`POST /api/v1/stm/dream`） | 済 |
+| MEM-4 | **朝注入** — 未報告 somatic（8c）+ Dreaming digest + 当日 STM を `enrich_interaction_context` → `compact_prompt_block` | 済 |
 | MEM-5 | **LTM 整理** — 忘却・重複統合ポリシー（低頻度） | 未 |
 | MEM-6 | **Deep 昇格** — interpretation_shift / arc → SOUL 級への提案経路（ガード付き） | 未 |
 | MEM-7 | **JSONL ライフサイクル** — 会話ログの保管・退避・削除（下記） | 未 |

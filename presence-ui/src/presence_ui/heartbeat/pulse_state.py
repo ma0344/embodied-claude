@@ -25,6 +25,8 @@ class AgentPulseState:
     last_action: str | None = None
     dominant_desire: str | None = None
     last_consolidate_at: str | None = None
+    last_dream_at: str | None = None
+    last_dream_summary: str | None = None
     channel: str | None = None
 
     def to_dict(self) -> dict[str, object]:
@@ -39,6 +41,8 @@ class AgentPulseState:
             last_action=_opt_str(data.get("last_action")),
             dominant_desire=_opt_str(data.get("dominant_desire")),
             last_consolidate_at=_opt_str(data.get("last_consolidate_at")),
+            last_dream_at=_opt_str(data.get("last_dream_at")),
+            last_dream_summary=_opt_str(data.get("last_dream_summary")),
             channel=_opt_str(data.get("channel")),
         )
 

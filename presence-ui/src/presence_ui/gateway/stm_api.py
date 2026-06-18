@@ -9,6 +9,7 @@ from social_core import utc_now
 from social_core.stm import StmStore, build_stm_prompt_block, local_day_for_ts
 
 from presence_ui.deps import get_stores
+from presence_ui.services.dream_digest import load_dream_digest
 
 
 class WmTurn(BaseModel):
@@ -55,6 +56,7 @@ class StmCloseEpisodeResponse(BaseModel):
     reason: str | None = None
     entry_id: str | None = None
     summary: str | None = None
+    local_day: str | None = None
 
 
 def stm_flush_wm(body: StmFlushWmRequest) -> StmFlushWmResponse:
@@ -111,3 +113,44 @@ async def stm_close_episode(body: StmCloseEpisodeRequest) -> StmCloseEpisodeResp
         use_llm=body.use_llm,
     )
     return StmCloseEpisodeResponse.model_validate(result)
+
+
+class StmDreamRequest(BaseModel):
+    person_id: str = "ma"
+    local_day: str | None = None
+    force: bool = False
+
+
+class StmDreamResponse(BaseModel):
+    ok: bool = True
+    skipped: bool = False
+    reason: str | None = None
+    remembered_count: int = 0
+    stm_marked: int = 0
+    consolidate_ok: bool = False
+    consolidate_stats: dict[str, Any] | None = None
+    digest_summary: str = ""
+    daybook_day: str | None = None
+
+
+class StmDreamDigestResponse(BaseModel):
+    ok: bool = True
+    digest: dict[str, Any] | None = None
+
+
+def stm_dream_digest() -> StmDreamDigestResponse:
+    record = load_dream_digest()
+    if record is None:
+        return StmDreamDigestResponse(ok=True, digest=None)
+    return StmDreamDigestResponse(ok=True, digest=record.to_dict())
+
+
+async def stm_dream(body: StmDreamRequest) -> StmDreamResponse:
+    from presence_ui.services.dreaming import run_dreaming_job
+
+    result = run_dreaming_job(
+        person_id=body.person_id,
+        local_day=body.local_day,
+        force=body.force,
+    )
+    return StmDreamResponse.model_validate(result.to_dict())

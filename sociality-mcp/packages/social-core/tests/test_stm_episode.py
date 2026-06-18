@@ -46,10 +46,12 @@ def test_close_episode_idempotent(social_db):
         session_id="sess_ep_1",
         trigger="new_session",
         turn_count=len(turns),
+        ts="2026-06-16T20:00:00+09:00",
         timezone="Asia/Tokyo",
     )
     assert first is not None
     assert first.kind == "episode_close"
+    assert first.local_day == "2026-06-16"
     assert first.source == "episode_summary"
 
     second = stm.close_episode(

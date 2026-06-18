@@ -16,6 +16,7 @@ from presence_ui.heartbeat.schedule import (
     compute_next_pulse,
     seconds_until_wake,
     should_run_consolidate_now,
+    should_run_dream_now,
 )
 
 
@@ -108,6 +109,23 @@ def test_should_run_consolidate_now_respects_recent_mark(tmp_path: Path, monkeyp
     with patch("presence_ui.heartbeat.schedule.datetime") as mock_dt:
         mock_dt.now.return_value = now
         assert should_run_consolidate_now() is False
+
+
+def test_should_run_dream_now_respects_recent_mark(tmp_path: Path, monkeypatch) -> None:
+    tz = ZoneInfo("Asia/Tokyo")
+    now = datetime.now(tz).replace(hour=3, minute=0, second=0, microsecond=0)
+    path = tmp_path / "pulse.json"
+    monkeypatch.setenv("PRESENCE_AGENT_PULSE_PATH", str(path))
+    save_pulse_state(
+        AgentPulseState(
+            next_wake_at=now.isoformat(),
+            reason="x",
+            last_dream_at=now.isoformat(),
+        )
+    )
+    with patch("presence_ui.heartbeat.schedule.datetime") as mock_dt:
+        mock_dt.now.return_value = now
+        assert should_run_dream_now() is False
 
 
 def test_pulse_state_roundtrip(tmp_path: Path, monkeypatch) -> None:

@@ -8,6 +8,16 @@ import httpx
 from social_core.stm import StmStore
 from social_core.stm_episode import summarize_episode_turns
 
+
+def _episode_ts_from_turns(turns: list[dict[str, str | None]]) -> str | None:
+    for turn in reversed(turns):
+        raw = turn.get("timestamp") or turn.get("ts")
+        if raw:
+            text = str(raw).strip()
+            if text:
+                return text
+    return None
+
 from presence_ui.deps import get_stores
 from presence_ui.services.llm import _lm_studio_settings, _parse_openai_chat_content
 
@@ -130,6 +140,7 @@ async def close_episode_for_session(
         session_id=session_id,
         trigger=trigger,
         turn_count=len(turns),
+        ts=_episode_ts_from_turns(turns),
         timezone=tz,
     )
     return {
@@ -139,4 +150,5 @@ async def close_episode_for_session(
         "reason": None,
         "entry_id": entry.entry_id if entry else None,
         "summary": entry.summary if entry else summary,
+        "local_day": entry.local_day if entry else None,
     }

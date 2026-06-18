@@ -277,6 +277,7 @@ class StmStore:
         session_id: str | None = None,
         trigger: str = "new_session",
         turn_count: int = 0,
+        ts: str | None = None,
         timezone: str = DEFAULT_POLICY_TIMEZONE,
     ) -> StmEntry | None:
         """Persist one episode summary into STM (idempotent per session_id)."""
@@ -302,6 +303,7 @@ class StmStore:
             summary=text,
             kind="episode_close",
             source="episode_summary",
+            ts=ts,
             person_id=person_id,
             session_id=session_id,
             importance=3,
@@ -326,6 +328,37 @@ class StmStore:
                 ),
             )
         return entry
+
+    def mark_dreamed(self, entry_ids: list[str], *, dreamed_at: str | None = None) -> int:
+        when = dreamed_at or utc_now()
+        updated = 0
+        with self.db.transaction() as conn:
+            for entry_id in entry_ids:
+                cursor = conn.execute(
+                    """
+                    UPDATE stm_entries
+                    SET dreamed_at = ?
+                    WHERE entry_id = ? AND dreamed_at IS NULL
+                    """,
+                    (when, entry_id),
+                )
+                updated += int(cursor.rowcount or 0)
+        return updated
+
+    def count_undreamed(self, *, person_id: str | None = None, local_day: str | None = None) -> int:
+        where = ["dreamed_at IS NULL"]
+        args: list[Any] = []
+        if person_id is not None:
+            where.append("(person_id = ? OR person_id IS NULL)")
+            args.append(person_id)
+        if local_day:
+            where.append("local_day = ?")
+            args.append(local_day)
+        row = self.db.fetchone(
+            f"SELECT COUNT(*) FROM stm_entries WHERE {' AND '.join(where)}",
+            tuple(args),
+        )
+        return int(row[0]) if row else 0
 
 
 def _row_to_entry(row: Any) -> StmEntry:

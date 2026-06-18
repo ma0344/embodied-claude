@@ -1,6 +1,8 @@
-"""Gateway STM API tests (MEM-1)."""
+"""Gateway STM API tests (MEM-1+)."""
 
 from __future__ import annotations
+
+import threading
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,6 +11,8 @@ from social_core import SocialDB
 from presence_ui.deps import reset_stores
 from presence_ui.main import create_app
 
+_thread_local = threading.local()
+
 
 class _StmStores:
     def __init__(self, db: SocialDB) -> None:
@@ -16,18 +20,32 @@ class _StmStores:
         self.policy_timezone = "Asia/Tokyo"
 
 
+def _thread_get_stores(db_path):
+    stores = getattr(_thread_local, "stores", None)
+    if stores is None:
+        stores = _StmStores(SocialDB(db_path))
+        _thread_local.stores = stores
+    return stores
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     db_path = tmp_path / "social.db"
-    db = SocialDB(db_path)
-    stores = _StmStores(db)
     reset_stores()
+    _thread_local.stores = None
     monkeypatch.setenv("SOCIAL_DB_PATH", str(db_path))
-    monkeypatch.setattr("presence_ui.deps.get_stores", lambda: stores)
+
+    def getter():
+        return _thread_get_stores(db_path)
+
+    monkeypatch.setattr("presence_ui.deps.get_stores", getter)
+    monkeypatch.setattr("presence_ui.gateway.stm_api.get_stores", getter)
+    monkeypatch.setattr("presence_ui.services.stm_episode.get_stores", getter)
     app = create_app()
     with TestClient(app) as test_client:
         yield test_client
     reset_stores()
+    _thread_local.stores = None
 
 
 def test_stm_flush_wm_and_recent(client):
@@ -91,4 +109,3 @@ def test_stm_close_episode(client):
     assert again["skipped"] is True
     assert again["reason"] == "already_closed"
     assert again["entry_id"] == body["entry_id"]
-

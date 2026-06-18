@@ -189,6 +189,10 @@ def apply_pulse_schedule(
     existing = load_pulse_state()
     if existing and existing.last_consolidate_at:
         state.last_consolidate_at = existing.last_consolidate_at
+    if existing and existing.last_dream_at:
+        state.last_dream_at = existing.last_dream_at
+    if existing and existing.last_dream_summary:
+        state.last_dream_summary = existing.last_dream_summary
     save_pulse_state(state)
     return state
 
@@ -247,5 +251,47 @@ def mark_consolidated() -> None:
                 next_wake_at=(datetime.now(tz) + timedelta(hours=6)).isoformat(),
                 reason="consolidate_only",
                 last_consolidate_at=now,
+            )
+        )
+
+
+def should_run_dream_now(state: AgentPulseState | None = None) -> bool:
+    """Once per day during 02:00-04:00 local if not dreamed recently."""
+    tz = policy_timezone()
+    now = datetime.now(tz)
+    if not (2 <= now.hour < 4):
+        return False
+    from presence_ui.heartbeat.pulse_state import load_pulse_state
+
+    pulse = state or load_pulse_state()
+    if pulse and pulse.last_dream_at:
+        try:
+            last = parse_iso(pulse.last_dream_at, tz=tz)
+            if (now - last).total_seconds() < 20 * 3600:
+                return False
+        except ValueError:
+            pass
+    return os.getenv("PRESENCE_AUTO_DREAM", "1").lower() not in {"0", "false", "no"}
+
+
+def mark_dreamed(*, summary: str = "") -> None:
+    from presence_ui.heartbeat.pulse_state import load_pulse_state
+
+    tz = policy_timezone()
+    now = datetime.now(tz).isoformat()
+    pulse = load_pulse_state()
+    digest = summary.strip()[:1200] if summary else None
+    if pulse:
+        pulse.last_dream_at = now
+        if digest:
+            pulse.last_dream_summary = digest
+        save_pulse_state(pulse)
+    else:
+        save_pulse_state(
+            AgentPulseState(
+                next_wake_at=(datetime.now(tz) + timedelta(hours=6)).isoformat(),
+                reason="dream_only",
+                last_dream_at=now,
+                last_dream_summary=digest,
             )
         )

@@ -116,12 +116,15 @@ def enrich_interaction_context(
     else:
         compact = block
     max_len = 12000
-    return ctx.model_copy(
+    ctx = ctx.model_copy(
         update={
             "compact_prompt_block": compact[:max_len],
             "somatic_state": somatic,
         }
     )
+    from presence_ui.services.memory_context import enrich_memory_context
+
+    return enrich_memory_context(ctx, person_id=ctx.person_id or "ma", channel=channel)
 
 
 def apply_somatic_plan_side_effects(

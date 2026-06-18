@@ -78,7 +78,16 @@ class InteractionOrchestratorStore:
                     utc_now(),
                 ),
             )
+        self._mirror_to_stm(experience_id)
         return StoredExperience(experience_id=experience_id, ts=ts)
+
+    def _mirror_to_stm(self, experience_id: str) -> None:
+        from social_core.stm import StmStore
+
+        try:
+            StmStore(self.db).mirror_experience(experience_id)
+        except Exception:
+            pass
 
     def recent_agent_experiences(
         self,

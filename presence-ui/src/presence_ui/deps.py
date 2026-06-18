@@ -57,3 +57,9 @@ def get_stores() -> PresenceStores:
     )
     _local.stores = stores
     return stores
+
+
+def reset_stores() -> None:
+    """Clear per-thread store cache (tests)."""
+    if hasattr(_local, "stores"):
+        delattr(_local, "stores")

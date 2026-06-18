@@ -363,6 +363,40 @@ MIGRATIONS = [
             ON outbound_nudge_client_acks(client_id, acked_at DESC);
         """,
     ),
+    Migration(
+        name="006_stm_entries",
+        sql="""
+        CREATE TABLE IF NOT EXISTS stm_entries (
+            entry_id TEXT PRIMARY KEY,
+            ts TEXT NOT NULL,
+            local_day TEXT NOT NULL,
+            person_id TEXT,
+            source TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            session_id TEXT,
+            experience_id TEXT,
+            turn_index INTEGER,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            importance INTEGER NOT NULL DEFAULT 3,
+            dreamed_at TEXT,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_stm_entries_ts
+            ON stm_entries(ts DESC, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_stm_entries_local_day
+            ON stm_entries(local_day DESC, ts DESC);
+        CREATE INDEX IF NOT EXISTS idx_stm_entries_person_day
+            ON stm_entries(person_id, local_day DESC, ts DESC);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_stm_entries_experience
+            ON stm_entries(experience_id)
+            WHERE experience_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_stm_entries_undreamed
+            ON stm_entries(dreamed_at, local_day)
+            WHERE dreamed_at IS NULL;
+        """,
+    ),
 ]
 
 

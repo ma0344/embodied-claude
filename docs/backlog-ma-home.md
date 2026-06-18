@@ -408,7 +408,7 @@ Deep（SOUL / 自己モデル）
 | ID | 内容 | 状態 |
 |----|------|------|
 | MEM-0 | 本文（4 層 + 昇格図）+ backlog リンク | **済** |
-| MEM-1 | **STM ストア設計** — 日次バッファ（experience 正規化 or 専用 SQLite）。WM フラッシュ API | 未 |
+| MEM-1 | **STM ストア設計** — `stm_entries` in social.db、experience 自動ミラー、WM フラッシュ API (`POST /api/v1/stm/flush-wm`, `GET /api/v1/stm/recent`) | 済 |
 | MEM-2 | **WM→STM エピソード締め** — 毎ターン要約はしない。境界で1回要約→STM（下記） | 未 |
 | MEM-3 | **Dreaming ジョブ** — 深夜 pulse: STM リプレイ → `consolidate` + episode + daybook 素材；`last_dream_at` on pulse | 未 |
 | MEM-4 | **朝注入** — 未報告 somatic + Dreaming 要約を compose `compact_prompt_block`（8c と接続） | 未 |
@@ -551,7 +551,7 @@ JSONL（WM の生ログ）
 |----|--------|------|------|
 | **MVP（済）** | チャット bubble + per-client poll | Web Speech（kiosk） | 検証用。A4i で置き換え、PC poll はやめる |
 | **A4i 本線** | キオスク **中央ダイアログ**（返事する／あとで） | Web Speech → TTS URL | **実装済み**（PC poll 廃止） |
-| **A4j** | ダイアログ CTA → 新規会話 | — | **実装済み**（ヒューリスティック下書き + 自動送信） |
+| **A4j** | ダイアログ CTA → 新規会話 | — | **実装済み**（**UX 要修正 → A4j+**） |
 | **A4g** | OS / ntfy 通知 | 任意 | PC 本線。部屋を開いたら通常チャット |
 | **目標** | kiosk: SSE `room_inbound` | Server TTS | push は従来どおり HTTP |
 
@@ -569,7 +569,19 @@ MVP チェックリスト:
 - [x] **A4b-mvp+** per-client ack（PC と Surface 両方に届く）
 - [x] **A4i** 部屋着信バナー（キオスク中央ダイアログ。bubble / PC poll 廃止）
 - [x] **A4j** 着信から新規会話 + 送信（着信文を compose プロンプトに同梱）
-- [ ] **A4j+** 着信返信 UX — 下書き編集可（自動送信オプション）、`suggestInboundReplyText` 拡充
+- [ ] **A4j+** 着信返信 UX（**MEM 後に修正** — 2026-06-18 実戦報告）
+
+  **いま（A4j）の挙動 — おかしい**:
+  「返事する」→ 新規セッション → `buildInboundReplyPrompt()` の **メタ指示文**（`[こよりからの着信への返事]…まーとして…`）を **まーの bubble として自動送信** → こよりがそれに応答。チャット上は「まーが長い指示を送った」ように見える。
+
+  **あるべき流れ**:
+  1. 「返事する」→ **新規セッション**（こより開始でも可 — 技術的には koyori bubble を先に DOM/履歴に載せればよい）
+  2. チャットに **こよりの着信文だけ** bubble 表示（`sender: koyori`）
+  3. 入力欄にフォーカス → **まーが自分の言葉で返信**（自動送信しない）
+  4. compose/plan には着信文を **gateway 側メタ**（`gateway_turn_context` / inbound payload）で渡す。ユーザー可視のプロンプトにしない
+
+  **実装メモ**: `app.js` `beginInboundReply` / `buildInboundReplyPrompt` / `sendChatMessage(prompt)` が原因。`suggestInboundReplyText` 下書きは任意（A4j+ 第2段）。
+
 - [x] **A4b+** SSE `room_inbound` + 着信即時（poll はフォールバック 60s）
 - [x] **A4c+** Server TTS URL + Web Audio（`POST/GET /api/v1/tts/surface`、Aivis/VOICEVOX）
 - [x] **A4d-lite** kiosk-primary — Surface SSE alive 時は PC（Win/browser/voice_local）抑制、ntfy は維持

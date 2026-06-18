@@ -668,6 +668,37 @@ def create_app() -> FastAPI:
         body = FinalizeTurnRequest.model_validate(raw if isinstance(raw, dict) else {})
         return utf8_json(finalize_turn_body(body).model_dump(mode="json"))
 
+    @app.post("/api/v1/stm/flush-wm")
+    async def post_stm_flush_wm(request: Request) -> JSONResponse:
+        """MEM-1: flush kiosk WM turns into STM (session buffer → daily log)."""
+        from presence_ui.gateway.stm_api import StmFlushWmRequest, stm_flush_wm
+
+        try:
+            raw = await request.json()
+        except json.JSONDecodeError:
+            raw = {}
+        body = StmFlushWmRequest.model_validate(raw if isinstance(raw, dict) else {})
+        return utf8_json(stm_flush_wm(body).model_dump(mode="json"))
+
+    @app.get("/api/v1/stm/recent")
+    async def get_stm_recent(
+        person_id: str = DEFAULT_PERSON_ID,
+        limit: int = 20,
+        local_day: str | None = None,
+        include_prompt_block: bool = True,
+    ) -> JSONResponse:
+        """MEM-1: recent STM entries for debug / compose prep."""
+        from presence_ui.gateway.stm_api import stm_recent
+
+        return utf8_json(
+            stm_recent(
+                person_id=person_id,
+                limit=limit,
+                local_day=local_day,
+                include_prompt_block=include_prompt_block,
+            ).model_dump(mode="json")
+        )
+
     @app.post("/api/v1/autonomous-tick")
     async def post_autonomous_tick(request: Request) -> JSONResponse:
         """Run one bounded autonomous action (compose/plan/execute, no MCP body tools)."""

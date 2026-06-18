@@ -196,10 +196,14 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
         hybrid = resolve_hybrid_intent(req.prompt)
         vision_note: str | None = None
         try:
+            from presence_ui.deps import get_stores
+
             vision_note, _prefetch_events = await prefetch_camera_for_message(
                 req.prompt,
                 see_intent=hybrid.see_intent,
                 ptz_intent=hybrid.ptz_intent,
+                stores=get_stores(),
+                person_id=person_id,
             )
             if vision_note:
                 logger.info("native chat camera prefetch ok (%d chars)", len(vision_note))

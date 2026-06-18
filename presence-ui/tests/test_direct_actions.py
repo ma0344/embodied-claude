@@ -150,6 +150,9 @@ async def test_observe_room_direct_empty_captures_shows_hint() -> None:
     assert outcome.ok is False
     assert "cooldown" in outcome.summary
     assert outcome.detail == "camera unavailable (cooldown)"
+    stores.orchestrator.record_agent_experience.assert_called_once()
+    affliction = stores.orchestrator.record_agent_experience.call_args[0][0]
+    assert affliction.kind == "body_affliction"
 
 
 @pytest.mark.asyncio

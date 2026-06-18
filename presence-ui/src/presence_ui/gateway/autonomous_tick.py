@@ -22,6 +22,11 @@ from presence_ui.gateway.direct_actions import (
     execute_autonomous_plan,
 )
 from presence_ui.heartbeat.schedule import apply_pulse_schedule
+from presence_ui.services.somatic_context import (
+    apply_somatic_plan_side_effects,
+    enrich_interaction_context,
+    quiet_from_context,
+)
 
 
 @dataclass(slots=True)
@@ -35,6 +40,20 @@ class AutonomousTickResult:
     plan: ResponsePlan | None = None
     ctx: InteractionContext | None = None
     next_wake_at: str | None = None
+
+
+def _pulse_reason_suffix(summary: str | None) -> str:
+    text = (summary or "").strip()
+    if not text:
+        return ""
+    try:
+        from wifi_cam_mcp.vision import caption_looks_corrupt
+
+        if caption_looks_corrupt(text):
+            return "vision caption unavailable"
+    except ImportError:
+        pass
+    return text[:60]
 
 
 async def run_autonomous_tick(
@@ -91,8 +110,17 @@ async def run_autonomous_tick(
         orchestrator_store=stores.orchestrator,
         policy_timezone=stores.policy_timezone,
     )
+    ctx = enrich_interaction_context(ctx, channel="autonomous", user_text=None)
     plan = plan_response(
         PlanResponseInput(interaction_context=ctx, user_text=None),
+    )
+    apply_somatic_plan_side_effects(
+        primary_move=plan.primary_move,
+        channel="autonomous",
+        quiet_active=quiet_from_context(ctx),
+        local_time=ctx.local_time,
+        timezone=ctx.timezone,
+        user_text=None,
     )
 
     if smoke_action:
@@ -122,7 +150,7 @@ async def run_autonomous_tick(
         plan=plan,
         ctx=ctx,
         action=outcome.action,
-        reason_suffix=(outcome.summary or "")[:60],
+        reason_suffix=_pulse_reason_suffix(outcome.summary),
     )
 
     return AutonomousTickResult(

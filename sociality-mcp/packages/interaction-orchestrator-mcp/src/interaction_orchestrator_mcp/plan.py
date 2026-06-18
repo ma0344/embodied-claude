@@ -16,6 +16,9 @@ from .schemas import (
     VoiceHint,
 )
 
+# Quiet hours: inward desires may still run (private DB / recall only).
+_QUIET_INWARD_DESIRES = frozenset({"cognitive_load", "identity_coherence"})
+
 
 def plan_response(payload: PlanResponseInput) -> ResponsePlan:
     """Compute a response plan from an interaction context.
@@ -96,6 +99,12 @@ def _pick_primary_move(
 ) -> tuple[PrimaryMove, str]:
     if is_autonomous:
         if quiet_active:
+            dominant = ctx.agent_state.dominant_desire
+            if dominant in _QUIET_INWARD_DESIRES:
+                return (
+                    "act_autonomously",
+                    "Quiet hours — inward desire calls for private thinking or recall only.",
+                )
             return (
                 "write_private_reflection",
                 "Autonomous tick during quiet hours — prefer a private note over any speech.",
@@ -232,12 +241,13 @@ def _pick_initiative(
         if ctx.commitments_due and not quiet_active:
             allowed.append("remind_commitment")
         dominant = ctx.agent_state.dominant_desire
-        if dominant == "look_outside":
-            allowed.append("camera_look_outside")
-        if dominant == "observe_room":
-            allowed.append("camera_look_around")
-        if dominant == "browse_curiosity":
-            allowed.append("web_search")
+        if not quiet_active:
+            if dominant == "look_outside":
+                allowed.append("camera_look_outside")
+            if dominant == "observe_room":
+                allowed.append("camera_look_around")
+            if dominant == "browse_curiosity":
+                allowed.append("web_search")
         if dominant == "identity_coherence":
             allowed.append("recall_memories")
         if dominant == "cognitive_load":
@@ -254,6 +264,19 @@ def _pick_initiative(
         level = "none"
     if primary_move == "defer":
         level = "low"
+
+    escalation = (ctx.somatic_state or {}).get("escalation") or {}
+    esc_level = str(escalation.get("level") or "none")
+    if esc_level == "critical" and not quiet_active:
+        allowed.append("request_human_help")
+        allowed.append("nudge_human")
+        level = "high"
+    elif esc_level == "elevated" and primary_move in {
+        "answer_directly",
+        "answer_with_empathy",
+        "act_autonomously",
+    }:
+        allowed.append("request_human_help")
 
     # de-duplicate while preserving order
     seen = set()
@@ -330,6 +353,39 @@ def _pick_must_lists(
         must_include.append("explain why this was a reflection, not a nudge")
     if not user_text and primary_move != "stay_silent":
         must_avoid.append("responding as if the human just spoke")
+    somatic = ctx.somatic_state or {}
+    pending = somatic.get("pending_unreported") or []
+    if pending and primary_move != "stay_silent":
+        summaries = [str(p.get("summary") or "")[:80] for p in pending[:3] if p.get("summary")]
+        if summaries:
+            if primary_move == "write_private_reflection":
+                must_include.append(
+                    "private reflection may note overnight body state briefly: "
+                    + " / ".join(summaries)
+                )
+            elif primary_move in {"answer_directly", "answer_with_empathy"}:
+                must_include.append(
+                    "if natural, mention recent body issues to まー in one short line: "
+                    + " / ".join(summaries)
+                )
+    escalation = somatic.get("escalation") or {}
+    esc_level = str(escalation.get("level") or "none")
+    if esc_level in {"elevated", "critical"} and primary_move != "stay_silent":
+        organs = ", ".join(
+            str(item.get("organ_ja") or item.get("organ") or "")
+            for item in (escalation.get("organs_affected") or [])[:3]
+            if item
+        )
+        if esc_level == "critical":
+            must_include.append(
+                "health_safety: multiple organs failing"
+                + (f" ({organs})" if organs else "")
+                + " — explicitly ask まー to check systems in one urgent short line"
+            )
+        elif primary_move in {"answer_directly", "answer_with_empathy"}:
+            must_include.append(
+                "multiple body issues detected — ask まー for help if self-remedy failed"
+            )
     return must_include, must_avoid
 
 

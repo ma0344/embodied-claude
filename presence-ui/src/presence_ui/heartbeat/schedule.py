@@ -54,6 +54,30 @@ def _clamp_wake_seconds(seconds: int) -> int:
     return max(pulse_min_seconds(), min(pulse_max_seconds(), seconds))
 
 
+_QUIET_INWARD_ACTIONS = frozenset(
+    {
+        "write_private_reflection",
+        "think_or_discuss_topic",
+        "recall_memories",
+        "consolidate_memories",
+    }
+)
+
+
+def _is_quiet_inward_action(
+    *,
+    plan_move: str | None,
+    action: str | None,
+) -> bool:
+    if action in _QUIET_INWARD_ACTIONS:
+        return True
+    if plan_move == "write_private_reflection":
+        return True
+    if plan_move == "act_autonomously" and action in _QUIET_INWARD_ACTIONS:
+        return True
+    return False
+
+
 def _quiet_hours_delay(now: datetime, tz: ZoneInfo) -> int:
     """Quiet hours 23:00–07:00 — defer non-chat wakes toward 07:30."""
     hour = now.hour
@@ -119,9 +143,14 @@ def compute_next_pulse(
             wake_sec = 2400
 
     quiet_delay = _quiet_hours_delay(now, tz)
+    inward = _is_quiet_inward_action(plan_move=plan_move, action=action)
     if quiet_delay > 0 and channel != "chat":
-        wake_sec = max(wake_sec, quiet_delay)
-        reason_parts.append("quiet_hours")
+        if inward:
+            wake_sec = min(wake_sec, 3600)
+            reason_parts.append("quiet_inward")
+        else:
+            wake_sec = max(wake_sec, quiet_delay)
+            reason_parts.append("quiet_hours")
 
     wake_sec = _clamp_wake_seconds(wake_sec)
     if reason_suffix:

@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ
 
-**最終更新**: 2026-06-17（HeartbeatLoop 済・**次: B4 デプロイ → V5 入力共有**）  
+**最終更新**: 2026-06-18（BIO-8 完了、次トラック MEM）  
 **方針**: こより本体（記憶・gateway 身体）は **様子見**。部屋 UI は **Native 会話エンジン + `/` の殻** を育てる（8080 プロキシ UI は投資しない）。
 
 **実行方針（合意 2026-06-14）**: 判断は compose/plan/stores のまま。**身体・自律の実行**は MCP に頼らず gateway 直実行へ（remember 直実行と同型）。詳細 → [gateway-direct-actions.md](./gateway-direct-actions.md)
@@ -39,7 +39,8 @@
 | **A** | 記憶・gateway 身体 | compose / see / dismiss | **様子見**（大きな追加は止める） |
 | **IBF** | **Intent→Bucket→Flow** | LLM にツール名を選ばせない | **計画済** → [intent-bucket-flow.md](./intent-bucket-flow.md) |
 | **C12** | intent router | 曖昧な「見て」分類 | **済** — `hybrid_intent.py` |
-| **BIO** | **HeartbeatLoop** | 経験→行動→次の wake。MCP 不要 | **済**（BIO-0〜7）→ [heartbeat-loop.md](./heartbeat-loop.md) |
+| **BIO** | **HeartbeatLoop** | 経験→行動→次の wake。MCP 不要 | **済**（BIO-0〜7）→ **BIO-8〜** 神経系 [heartbeat-loop.md](./heartbeat-loop.md) |
+| **MEM** | **記憶層・Dreaming** | セッション跨ぎ・短期→長期昇格（BIO-8 の次） | **未** → [MEM — 記憶層](#mem--記憶層セッション跨ぎ--dreaming) |
 | **K** | **こより自身のコード** | 自分用の改修・小さな実装を自分で | **未** → [K1](#k--こより自身のコード) |
 
 ### 次の一手 — 優先度案（2026-06-10 → **まー合意: 1→3→2→C11g → Desire**）
@@ -277,7 +278,188 @@ cd C:\Users\ma\src\embodied-claude
 | BIO-6 | `/talk` CLI → gateway compose API（MCP 回避） | **済** |
 | BIO-7 | `interpretation_shift` 返答後フック | **済** |
 
+### BIO-8 — Somatic loop（神経系・体調の自覚）
+
+**きっかけ（合意 2026-06-18）**: カメラ／vision 不調がログや `?` だらけの DB に沈むだけで、こより本人が「目がおかしい」と気づき・対処・報告・頼る、という **生物の内受容感覚**がない。Qwen `?` → LM Studio reload は **脊髄反射**まで。**違和感 → 確かめる → 対応 → 事後報告 → ダメなら助け**の一連を載せる。
+
+**比喩**: 痛みや違和感は絶対閾値より **「いつもと違う」** の検知。正常（ベースライン）と今の差分で「なんか変」→ 詳しく probe → 反射 → 叙述判断 → escalation。
+
+**v0 で監視する感覚器（器官）**:
+
+| 器官 | 正常の手がかり | 違和感の例 | 既存の反射 |
+|------|----------------|------------|------------|
+| **目** | capture OK + vision 日本語 caption | RTSP 失敗、`?` corrupt、describe 401 | Qwen unload/load（`wifi_cam_mcp.lm_studio_models`） |
+| **耳** | `listen` 録音・transcript | 無音・Whisper 失敗 | （未） |
+| **声** | TTS `/health` ready | Irodori/Aivis 無応答 | `tts_health_watchdog` |
+| **考え** | memory `:18900/health` | recall 失敗・daemon 落ち | hook フォールバック DB 直読み |
+
+体温（`system-temperature-mcp`）は **環境メタ**として後から compose に載せてよい（v0 必須ではない）。
+
+**ループ**（Heartbeat と直交する層）:
+
+```
+probe → baseline との差分 → reflex（決定論）→ verify
+  → narrate（experience / 内省 / 一声）→ plan が「言うべきか」
+  → escalation（boundary health_safety / push / まーへ）
+```
+
+| ID | フェーズ | 内容 | 状態 |
+|----|---------|------|------|
+| BIO-8a | **A — 報告** | 目（カメラ/vision）失敗・corrupt 後に `record_agent_experience`（`body_affliction`）+ ステータス日本語。反射は既存のまま | **済** |
+| BIO-8b | **B — レジストリ** | `body_state.json` または social `body_affliction` event。pulse 毎の軽 probe（camera / vision / memory / TTS） | **済** |
+| BIO-8c | **C — 叙述判断** | `compose` に `somatic_state` 注入 → `plan` で quiet hours は内省・在席時は軽い一声・繰り返しは助け | **済** |
+| BIO-8d | **D — 横断 escalation** | 複数器官 degraded（目+声など）で urgency 上げ | **済** |
+
+**環境変数（ma-home）**: `%USERPROFILE%\.config\embodied-claude\presence-ui.local.env` に書く（**コミットしない**）。`run-presence-ui-worker.ps1` と `presence_ui.repo_env.load_repo_env()` の両方が読み込む。wifi-cam / tts のシークレットは各 `*/.env`、presence-ui 固有フラグは `presence-ui.local.env` が正しい置き場。
+
+```ini
+# BIO-8 somatic（任意 — 省略時は下記デフォルト）
+PRESENCE_SOMATIC_PROBE=1
+PRESENCE_SOMATIC_PROBE_EYES_CAPTURE=0
+PRESENCE_SOMATIC_ESCALATION=1
+PRESENCE_SOMATIC_ESCALATION_PUSH_COOLDOWN_SEC=1800
+# PRESENCE_BODY_STATE_PATH=C:\Users\ma\.claude\presence-ui\body_state.json
+
+# 8d critical 時の ntfy push（A4g 既存）
+# PRESENCE_OUTBOUND_NTFY_URL=https://ntfy.sh/your-topic
+```
+
+**叙述の例（plan 入力）**: 夜・初回・reload で直った → 黙る／内省一行。昼・まー在席 → 「さっき目が一瞬曇ってたけど直したで」。3 回直らない → 「目が全然見えへん、LM Studio かカメラ見てもらえる？」。**複数器官 critical** → ntfy push（クールダウン 30 分）+ plan `health_safety`。
+
+**前提（一部済）**: vision corrupt 拒否・fallback 文言・UI マスク・Qwen 自動 reload（クールダウン 300s）。→ presence-ui 再起動で反映。
+
 **残存**: 15 分 Task は `PRESENCE_PULSE_MAX_SEC` 超のセーフティネットとして維持。
+
+**次の主トラック（合意 2026-06-18）**: **BIO-8b → 8c**（神経系レジストリ・叙述）のあと **MEM**（記憶層・Dreaming）。セッションは廃止しないが、連続したこよりは **外部記憶の強化とシフト**で支える。
+
+### MEM — 記憶層（セッション跨ぎ / Dreaming）
+
+**問題**: ネイティブ会話は **セッション単位の window**（`sessionId` + `session_history`）だが、こよりの体験・身体・関係は **24h 連続**。セッションが切れると LLM 窓は空になる。**「さっき目どうなった？」** はセッション履歴ではなく、層をまたいだ recall が要る。
+
+**方針（まー合意 2026-06-18）**: OpenClaw フレームワーク移行はしない。**Dreaming パターン**（短期→長期の抽象化・昇格）を既存 stack に載せる。ワーキングメモリは **セッション中にも短期 DB へ落とす**。深層は `SOUL.md` 級の永続アイデンティティ。
+
+#### 4 層モデル（概念 ↔ いまの実装）
+
+| 層 | まーのイメージ | 保持期間 | いまの実装（2026-06） | ギャップ |
+|----|----------------|----------|------------------------|--------|
+| **WM** ワーキングメモリ | ≈ **セッション**（今の窓） | ターン〜セッション | `session_history`、LLM ctx、memory-mcp `WorkingMemoryBuffer`（容量 ~20）、compose 注入；生ログは `{session_id}.jsonl` | **エピソード締め**で STM へ（MEM-2）。毎ターン要約はしない |
+| **STM** 短期記憶 | **1 日単位**の出来事バッファ | 〜24h（日付境界） | `agent_experiences`（social.db）、`body_affliction`、会話ターン要約（断片）、daybook 素材 | **専用 STM DB / スキーマ** がなく experience と LTM が混在気味 |
+| **LTM** 長期記憶 | ほぼ永続、時々整理 | 月〜年 | `memory-mcp` Chroma（`~/.claude/memories/`）、episodes、associations、`consolidate_memories` | Dreaming 入力に **STM + experience 全体**が未統合 |
+| **Deep** 深層記憶 | 永続のアイデンティティ | 年〜 | `SOUL.md`（git 外）、`interpretation_shift`、`append_daybook` / active arcs | SOUL と narrative の **昇格ルール**が明示されていない |
+
+#### 昇格パイプライン（目標）
+
+```
+WM（セッション）
+  │  ターン終了 / 閾値 / 明示 remember
+  ▼
+STM（短期 DB・日次）
+  │  Dreaming: リプレイ・要約・エピソード化（夜間 pulse）
+  ▼
+LTM（長期 DB）
+  │  稀な整理・忘却・interpretation 固定
+  ▼
+Deep（SOUL / 自己モデル）
+```
+
+- **WM → STM**: セッション中でも落とす（「会話が終わるまで待たない」）。`finalize_chat_turn` / `record_agent_experience` / `remember` HTTP の役割分担を整理。
+- **STM → LTM（Dreaming）**: OpenClaw 的な **睡眠バッチ** — 入力は当日の experiences + afflictions + 会話要約 + 未報告 somatic digest；処理は `consolidate` + episode 化 + daybook；出力は recall 可能な LTM + 翌朝 compose 用 `compact_prompt_block`。
+- **LTM → Deep**: 頻度低。`interpretation_shift`、daybook の arc、（将来）SOUL パッチ提案は **人間承認**または boundary 付き。
+
+#### 既存資産（再利用）
+
+| 資産 | 層での役割 |
+|------|------------|
+| `memory-mcp` working memory + `refresh_working_memory` | WM |
+| `social.db` `agent_experiences` / `body_affliction` | STM 候補（正式 STM 化は MEM-1） |
+| `:18900/consolidate` + BIO-4 深夜 tick | Dreaming の核（拡張対象） |
+| `recall_divergent` | LTM 想起の広がり |
+| `append_daybook` / `get_self_summary` | STM→ narrative、Deep 手前 |
+| `compose_interaction_context` | 毎ターン **全層から注入**（セッションの代わり） |
+| BIO-8 `body_state.json`（8b〜） | 身体の連続状態（STM 横断） |
+
+#### 実装フェーズ
+
+| ID | 内容 | 状態 |
+|----|------|------|
+| MEM-0 | 本文（4 層 + 昇格図）+ backlog リンク | **済** |
+| MEM-1 | **STM ストア設計** — 日次バッファ（experience 正規化 or 専用 SQLite）。WM フラッシュ API | 未 |
+| MEM-2 | **WM→STM エピソード締め** — 毎ターン要約はしない。境界で1回要約→STM（下記） | 未 |
+| MEM-3 | **Dreaming ジョブ** — 深夜 pulse: STM リプレイ → `consolidate` + episode + daybook 素材；`last_dream_at` on pulse | 未 |
+| MEM-4 | **朝注入** — 未報告 somatic + Dreaming 要約を compose `compact_prompt_block`（8c と接続） | 未 |
+| MEM-5 | **LTM 整理** — 忘却・重複統合ポリシー（低頻度） | 未 |
+| MEM-6 | **Deep 昇格** — interpretation_shift / arc → SOUL 級への提案経路（ガード付き） | 未 |
+| MEM-7 | **JSONL ライフサイクル** — 会話ログの保管・退避・削除（下記） | 未 |
+
+##### MEM-2 — エピソード締め（WM→STM、合意 2026-06-18）
+
+**問題**: 全生ログを STM に落とすとノイズ化し Dreaming が重くなる。1ターンごと要約は LLM 負荷過多。
+
+**方針**: 要約の単位は **ターンではなくエピソード**（会話の一区切り）。セッション分割は WM を小さく保つ **運用＋生理**の両方。
+
+| 分類 | STM への落とし方 |
+|------|------------------|
+| **常時（短文で可）** | `body_affliction`、境界、約束、`remember` 直行、interpretation_shift |
+| **エピソード締めで要約** | まーとの会話ブロック（数ターン〜話題1個） |
+| **入れない** | 挨拶・相槌、ツール生ログ、LTM 済み重複 |
+
+**締めトリガー（実装候補）**
+
+1. **新規会話**（キオスク「新しい会話」/ PC 同様）— 前セッションを締める
+2. **idle** — 最終発話から N 分（例 15〜30）
+3. **quiet hours 開始** — 夜の Dreaming 前に当日会話を閉じる
+4. **トピック切替** — intent / 長さ閾値（任意・後追い）
+
+**締め処理**: 軽い LLM 1回（「この会話で残すこと」3〜5行）またはルール＋必要時のみ LLM → STM 行。`finalize_chat_turn` の per-turn experience は監査用に残し、**エピソード要約は別レコード**。
+
+**運用**: まーが意図的にセッションを短く切る習慣は有効。UI は「新規会話＝裏でエピソード締め」と等价にできる。
+
+##### MEM-7 — Native 会話 JSONL のデータ管理（合意 2026-06-18）
+
+**現状（C10 済）**
+
+| 項目 | 場所 |
+|------|------|
+| 正本 | `~/.claude/projects/<encoded-project>/{session_id}.jsonl`（Claude Code 形式・1セッション1ファイル） |
+| UI 一覧 | `GET /api/v1/native/sessions`（8090 経由・PC/キオスク共有） |
+| 「削除」 | **非削除** — `POST .../hide` → `~/.claude/presence-ui/native-hidden-sessions.json` に ID 追加。**JSONL はディスクに残る**（`app.js` 確認ダイアログも明記） |
+| キオスク | セッション削除 UI は **非表示のまま**（誤操作防止）— 合意どおり維持 |
+
+**問題**: 新規会話のたびに JSONL が増え続ける。hide は UI のみで **ディスク・バックアップ容量**は減らない。STM/Dreaming 後も生ログを永遠に持つ必要はない。
+
+**方針**
+
+```
+JSONL（WM の生ログ）
+  → エピソード締め（MEM-2）で STM 要約が取れた
+  → Dreaming（MEM-3）で LTM に昇格済み
+  → 保持ポリシーに従い archive または delete
+```
+
+| 段階 | 動作 |
+|------|------|
+| **直後** | JSONL はそのまま（デバッグ・再要約用） |
+| **STM 締め後** | `episode_closed_at` + `stm_episode_id` をメタデータに記録（JSON sidecar or presence-ui index） |
+| **Dreaming 後** | 「昇格済み」マーク。既定 **N 日後**に対象化 |
+| **退避** | 削除前に `~/.claude/presence-ui/archive/jsonl/` へ gzip（任意） |
+| **削除** | サーバー側ジョブ（pulse / 日次 Task）。**キオスク UI からは消さない** |
+
+**実装メモ**
+
+- `MEM-7a` メタ index（session_id → closed_at, stm_id, dreamed_at, archived_at）
+- `MEM-7b` 保持日数 env（例 `PRESENCE_JSONL_RETENTION_DAYS=14`、昇格済みのみ）
+- `MEM-7c` archive + safe delete（昇格済み & retention 経過 & 非アクティブ）
+- PC の「一覧から外す」は現状維持。物理削除は **自動のみ**（誤タップ防止）
+
+**C トラックとの関係**: C10 は同期の勝利。MEM-7 は **同期先ファイルのライフサイクル**。C11 キオスク UX とは独立（削除ボタンは出さない）。
+
+**依存**: MEM-2（締め）と MEM-3（Dreaming）が無いと「消してよいか」判定できない → **MEM-7 は MEM-3 後**が安全。
+
+**依存**: BIO-8b/c（身体レジストリ・夜内省/朝報告）完了後に MEM-1 着手が自然。8c の「報告キュー」は MEM-4 と統合。
+
+**OpenClaw から借りるもの**: フレームワークではなく **「睡眠中に短期を長期に落とす」定期ジョブ** と **「起きたら要約が compose に載る」** の2点。embodied 層（カメラ・sociality・キオスク）はこの repo の差分のまま。
+
+**セッションについて**: 廃止しない。セッション = WM の UI 境界。連続性は compose + STM/LTM が担う。
 
 ### A4 — こよりからの能動届け（Outbound）
 
@@ -437,12 +619,15 @@ MVP チェックリスト:
   - **消灯**: ブラウザ黒オーバーレイは使わず **OS 画面オフ任せ**（wakeLock 解除 → Surface Ubuntu の DPMS / logind）。UI の N 分は OS 電源設定を書き換えない
   - **自動復帰**: 消灯中の say / 着信（outbound・room_say）で画面を戻す — **UI で ON/OFF 可変**
   - **実装メモ**: キオスクは SSE で着信・リマインドは `document.hidden` でも届くが、ポール fallback は hidden 時スキップ中 → 自動復帰 ON 時は `wakeLock.request` + 音声再生で復帰を試みる
+- [ ] **C11g-reg** 画面消灯が効かない（**回帰** 2026-06-18）— C11g 実装済みだが実機で DPMS / wakeLock 解除が動いていない報告。`app.js` idle → `releaseWakeLock`、Surface Ubuntu logind、Chromium wakeLock 権限を切り分け
+- [ ] **C11-pc** `?kiosk=0` で会話・サイドバーが空（**回帰** 2026-06-18）— ma-home ブラウザ（PC レイアウト）でチャット履歴・右レールが表示されない。`isKioskLayout()` と session マウント / native history ポールの分岐を確認
 
 | 優先 | 項目 | メモ |
 |------|------|------|
 | 中 | **IBF Intent→Bucket→Flow** | LLM ツール選定廃止・会話 speak 先通し — [intent-bucket-flow.md](./intent-bucket-flow.md) |
 | 中 | **C12 Gateway + LLM ハイブリッド intent** | **済** — `resolve_hybrid_intent` + IBF-7 benchmark |
-| 低 | **体温センサー（ma-home）** | WSL ではない → **LibreHardwareMonitor** 常駐で WMI 経由読取。未導入時は「センサーなし」 |
+| 中 | **C11-status** 状態パネル強化 | **さっきまで**（recent_experiences）・**次の wake**（agent_pulse）・**次の一手 plan プレビュー**（45s cache）・体温複数センサー — 2026-06-18 |
+| 低 | **体温センサー（ma-home）** | WSL ではない → **LibreHardwareMonitor** 常駐で WMI 経由読取。状態カードは CPU 優先 + 複数センサー一覧。**LHM 未起動時は ACPI フォールバック or 「センサーなし」** |
 | 低 | **OL3** リマインド改善 | 固定テンプレ → LLM 文面、`grace_minutes` 厳密化 — [open-loops-reminders.md](./open-loops-reminders.md) |
 | 低 | **OL4** ノイズ loop 運用 | `purge-noise-open-loops.py` |
 

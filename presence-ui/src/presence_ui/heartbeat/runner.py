@@ -33,6 +33,13 @@ async def _maybe_consolidate() -> None:
 
 
 async def _pulse_cycle(*, person_id: str) -> None:
+    from presence_ui.services.somatic_probe import run_somatic_probes, somatic_probe_enabled
+
+    if somatic_probe_enabled():
+        try:
+            await run_somatic_probes()
+        except Exception as exc:
+            logger.warning("Somatic probe failed: %s", exc)
     await _maybe_consolidate()
     result = await run_autonomous_tick(person_id=person_id, trigger="pulse_wake")
     logger.info(

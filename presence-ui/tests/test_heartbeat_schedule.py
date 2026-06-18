@@ -48,6 +48,32 @@ def test_compute_next_pulse_chat_shorter_than_autonomous() -> None:
     assert chat_wake < auto_wake
 
 
+def test_quiet_inward_action_skips_long_defer() -> None:
+    tz = ZoneInfo("Asia/Tokyo")
+    # 03:00 JST — outward action would defer toward 07:30
+    now = datetime(2026, 6, 18, 3, 0, 0, tzinfo=tz)
+    with patch("presence_ui.heartbeat.schedule.datetime") as mock_dt:
+        mock_dt.now.return_value = now
+        outward = compute_next_pulse(
+            channel="autonomous",
+            plan_move="act_autonomously",
+            action="camera_look_outside",
+            ctx=_ctx(dominant="look_outside"),
+        )
+        inward = compute_next_pulse(
+            channel="autonomous",
+            plan_move="act_autonomously",
+            action="think_or_discuss_topic",
+            ctx=_ctx(dominant="cognitive_load"),
+        )
+    outward_wake = datetime.fromisoformat(outward.next_wake_at)
+    inward_wake = datetime.fromisoformat(inward.next_wake_at)
+    assert "quiet_hours" in outward.reason
+    assert outward_wake.hour >= 7
+    assert "quiet_inward" in inward.reason
+    assert (inward_wake - now).total_seconds() <= 3600
+
+
 def test_apply_pulse_schedule_persists(tmp_path: Path, monkeypatch) -> None:
     path = tmp_path / "agent_pulse.json"
     monkeypatch.setenv("PRESENCE_AGENT_PULSE_PATH", str(path))

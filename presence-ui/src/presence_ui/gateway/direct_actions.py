@@ -332,12 +332,22 @@ async def observe_room_direct(
     from presence_ui.services.camera import camera_failure_hint, camera_look_around
     from presence_ui.services.vision_capture import (
         describe_existing_capture,
+        observation_summary_from_vision,
         remember_vision_capture,
     )
 
     captures = await camera_look_around()
     if not captures:
         hint = camera_failure_hint() or "no captures"
+        from presence_ui.services.somatic import maybe_record_eye_affliction
+
+        maybe_record_eye_affliction(
+            stores,
+            person_id=person_id,
+            action="camera_look_around",
+            error=hint,
+            capture_failed=True,
+        )
         return DirectActionOutcome(
             ok=False,
             action="camera_look_around",
@@ -362,6 +372,15 @@ async def observe_room_direct(
     )
     if not vision.ok:
         hint = vision.error or "vision describe failed"
+        from presence_ui.services.somatic import maybe_record_eye_affliction
+
+        maybe_record_eye_affliction(
+            stores,
+            person_id=person_id,
+            action="camera_look_around",
+            error=hint,
+            vision=vision,
+        )
         return DirectActionOutcome(
             ok=False,
             action="camera_look_around",
@@ -378,9 +397,21 @@ async def observe_room_direct(
         )
 
     remember_ok = remember_vision_capture(vision)
-    summary = vision.caption or vision.mcp_text[:240] or (
-        f"Gateway observe_room: {len(captures)} angles"
+    summary = observation_summary_from_vision(vision)
+    if not vision.caption and len(captures) > 0:
+        summary = f"{summary}（{len(captures)} angles）"
+    from presence_ui.services.somatic import maybe_record_eye_affliction, maybe_record_eye_ok
+
+    remedy = "qwen_reload" if vision.vision_reloaded else None
+    affliction = maybe_record_eye_affliction(
+        stores,
+        person_id=person_id,
+        action="camera_look_around",
+        vision=vision,
+        remedy=remedy,
     )
+    if not affliction:
+        maybe_record_eye_ok(vision=vision, note=summary[:120])
     stores.orchestrator.record_agent_experience(
         RecordAgentExperienceInput(
             ts=utc_now(),
@@ -803,7 +834,11 @@ async def look_preset_direct(
     person_id: str,
     location: PresetLocation,
 ) -> DirectActionOutcome:
-    from presence_ui.services.vision_capture import capture_and_describe, remember_vision_capture
+    from presence_ui.services.vision_capture import (
+        capture_and_describe,
+        observation_summary_from_vision,
+        remember_vision_capture,
+    )
 
     spec = CAMERA_LOCATIONS[location]
     action = f"camera_look_{location}" if location != "window" else "camera_look_outside"
@@ -811,6 +846,16 @@ async def look_preset_direct(
 
     vision = await capture_and_describe(mode=location, label=spec.capture_label)
     if not vision.ok:
+        from presence_ui.services.somatic import maybe_record_eye_affliction
+
+        maybe_record_eye_affliction(
+            stores,
+            person_id=person_id,
+            action=action,
+            error=vision.error or "capture failed",
+            vision=vision,
+            capture_failed=True,
+        )
         return DirectActionOutcome(
             ok=False,
             action=action,
@@ -827,7 +872,19 @@ async def look_preset_direct(
         )
 
     remember_ok = remember_vision_capture(vision)
-    summary = vision.caption or vision.mcp_text[:240] or f"{location} capture"
+    summary = observation_summary_from_vision(vision)
+    from presence_ui.services.somatic import maybe_record_eye_affliction, maybe_record_eye_ok
+
+    remedy = "qwen_reload" if vision.vision_reloaded else None
+    affliction = maybe_record_eye_affliction(
+        stores,
+        person_id=person_id,
+        action=action,
+        vision=vision,
+        remedy=remedy,
+    )
+    if not affliction:
+        maybe_record_eye_ok(vision=vision, note=summary[:120])
     stores.orchestrator.record_agent_experience(
         RecordAgentExperienceInput(
             ts=utc_now(),

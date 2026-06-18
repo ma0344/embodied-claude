@@ -40,13 +40,15 @@ class VisionCaptureResult:
     file_path: str | None
     error: str | None = None
     remember_ok: bool = False
+    vision_corrupt: bool = False
+    vision_reloaded: bool = False
 
 
 async def capture_and_describe(*, mode: SeeMode, label: str = "") -> VisionCaptureResult:
     """Capture with optional PTZ, vision-describe, return MCP-shaped text."""
     try:
         from wifi_cam_mcp.vision import (
-            describe_image_via_lm_studio,
+            describe_image_outcome,
             format_capture_text,
             vision_describe_enabled,
         )
@@ -77,8 +79,13 @@ async def capture_and_describe(*, mode: SeeMode, label: str = "") -> VisionCaptu
     capture = outcome.capture
     view_label = label or outcome.view_label or mode
     caption: str | None = None
+    vision_corrupt = False
+    vision_reloaded = False
     if vision_describe_enabled() and capture.image_base64:
-        caption = await describe_image_via_lm_studio(capture.image_base64)
+        describe_out = await describe_image_outcome(capture.image_base64)
+        caption = describe_out.caption
+        vision_corrupt = describe_out.saw_corrupt
+        vision_reloaded = describe_out.reloaded
 
     mcp_text = format_capture_text(capture, view_label, vision_caption=caption)
     return VisionCaptureResult(
@@ -88,6 +95,8 @@ async def capture_and_describe(*, mode: SeeMode, label: str = "") -> VisionCaptu
         mcp_text=mcp_text,
         caption=caption,
         file_path=capture.file_path,
+        vision_corrupt=vision_corrupt,
+        vision_reloaded=vision_reloaded,
     )
 
 
@@ -101,7 +110,7 @@ async def describe_existing_capture(
     """Vision-describe an existing CaptureResult (e.g. center frame from look_around)."""
     try:
         from wifi_cam_mcp.vision import (
-            describe_image_via_lm_studio,
+            describe_image_outcome,
             format_capture_text,
             vision_describe_enabled,
         )
@@ -117,9 +126,14 @@ async def describe_existing_capture(
         )
 
     caption: str | None = None
+    vision_corrupt = False
+    vision_reloaded = False
     image_b64 = getattr(capture, "image_base64", None)
     if vision_describe_enabled() and image_b64:
-        caption = await describe_image_via_lm_studio(image_b64)
+        describe_out = await describe_image_outcome(image_b64)
+        caption = describe_out.caption
+        vision_corrupt = describe_out.saw_corrupt
+        vision_reloaded = describe_out.reloaded
     mcp_text = format_capture_text(capture, label, vision_caption=caption)
     if extra_line.strip():
         mcp_text = f"{mcp_text}\n{extra_line.strip()}"
@@ -130,7 +144,32 @@ async def describe_existing_capture(
         mcp_text=mcp_text,
         caption=caption,
         file_path=getattr(capture, "file_path", None),
+        vision_corrupt=vision_corrupt,
+        vision_reloaded=vision_reloaded,
     )
+
+
+def observation_summary_from_vision(result: VisionCaptureResult) -> str:
+    """Human-readable summary for experiences; never store bare '?' captions."""
+    caption = (result.caption or "").strip()
+    if caption:
+        try:
+            from wifi_cam_mcp.vision import caption_looks_corrupt
+
+            if caption_looks_corrupt(caption):
+                caption = ""
+        except ImportError:
+            pass
+    if caption:
+        return caption[:240]
+    if result.file_path:
+        return "画像は撮れたが、LM Studio の視覚説明を取得できなかった"
+    if result.error:
+        return (result.error or "vision failed")[:240]
+    snippet = (result.mcp_text or "").strip()
+    if snippet and not snippet.startswith("---"):
+        return snippet[:240]
+    return "視界キャプチャ（説明なし）"
 
 
 def remember_vision_capture(result: VisionCaptureResult) -> bool:

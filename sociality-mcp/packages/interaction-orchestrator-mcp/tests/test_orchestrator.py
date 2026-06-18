@@ -318,6 +318,76 @@ class TestPlan:
         assert plan.voice.speak is False
         assert "camera_speaker_audio" in plan.initiative.forbidden_actions
 
+    def test_autonomous_quiet_inward_cognitive_load(self, stores, monkeypatch, tmp_path):
+        import json as _json
+
+        stores["social_state"].ingest_social_event(
+            {
+                "ts": "2026-04-18T16:30:00Z",
+                "source": "camera",
+                "kind": "scene_parse",
+                "person_id": "ma",
+                "confidence": 0.8,
+                "payload": {"scene_summary": "Dim room."},
+            }
+        )
+        fake_desires = tmp_path / "desires.json"
+        fake_desires.write_text(
+            _json.dumps(
+                {
+                    "updated_at": "2026-04-19T10:00:00+00:00",
+                    "desires": {"cognitive_load": 1.0, "observe_room": 1.0},
+                    "discomforts": {"cognitive_load": 0.8, "observe_room": 0.9},
+                    "dominant": "cognitive_load",
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("DESIRES_PATH", str(fake_desires))
+        ctx = _compose(stores, user_text=None, channel="autonomous")
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text=None)
+        )
+        assert plan.primary_move == "act_autonomously"
+        assert "think_or_discuss_topic" in plan.initiative.allowed_actions
+        assert "camera_look_around" not in plan.initiative.allowed_actions
+        assert plan.voice is not None
+        assert plan.voice.speak is False
+
+    def test_autonomous_quiet_inward_identity_coherence(self, stores, monkeypatch, tmp_path):
+        import json as _json
+
+        stores["social_state"].ingest_social_event(
+            {
+                "ts": "2026-04-18T16:30:00Z",
+                "source": "camera",
+                "kind": "scene_parse",
+                "person_id": "ma",
+                "confidence": 0.8,
+                "payload": {"scene_summary": "Dim room."},
+            }
+        )
+        fake_desires = tmp_path / "desires.json"
+        fake_desires.write_text(
+            _json.dumps(
+                {
+                    "updated_at": "2026-04-19T10:00:00+00:00",
+                    "desires": {"identity_coherence": 1.0},
+                    "discomforts": {"identity_coherence": 0.7},
+                    "dominant": "identity_coherence",
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("DESIRES_PATH", str(fake_desires))
+        ctx = _compose(stores, user_text=None, channel="autonomous")
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text=None)
+        )
+        assert plan.primary_move == "act_autonomously"
+        assert "recall_memories" in plan.initiative.allowed_actions
+        assert "web_search" not in plan.initiative.allowed_actions
+
     def test_plan_must_avoid_includes_contract_avoid(self, stores):
         ctx = _compose(stores, user_text="please help")
         plan = plan_response(
@@ -325,6 +395,45 @@ class TestPlan:
         )
         joined = " ".join(plan.must_avoid)
         assert "generic assistant tone" in joined
+
+    def test_plan_somatic_pending_in_must_include(self, stores):
+        ctx = _compose(stores, user_text="please help")
+        ctx = ctx.model_copy(
+            update={
+                "somatic_state": {
+                    "pending_unreported": [{"summary": "eyes were blurry"}],
+                },
+            }
+        )
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text="please help")
+        )
+        assert plan.primary_move in {"answer_directly", "answer_with_empathy"}
+        joined = " ".join(plan.must_include)
+        assert "eyes were blurry" in joined
+        assert "body issues" in joined.lower()
+
+    def test_plan_somatic_critical_escalation(self, stores):
+        ctx = _compose(stores, user_text="please help")
+        ctx = ctx.model_copy(
+            update={
+                "somatic_state": {
+                    "escalation": {
+                        "level": "critical",
+                        "organs_affected": [
+                            {"organ": "eyes", "organ_ja": "目"},
+                            {"organ": "voice", "organ_ja": "声"},
+                        ],
+                    },
+                },
+            }
+        )
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text="please help")
+        )
+        joined = " ".join(plan.must_include)
+        assert "health_safety" in joined.lower()
+        assert "request_human_help" in plan.initiative.allowed_actions
 
     def test_ambiguous_short_input_asks_clarifying_question(self, stores):
         ctx = _compose(stores, user_text="ね")

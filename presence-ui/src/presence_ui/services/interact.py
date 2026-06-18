@@ -16,6 +16,7 @@ from presence_ui.schemas import ChatMessage, ChatSendResponse
 from presence_ui.gateway.room_ingest import ingest_agent_turn, ingest_human_turn_async
 from presence_ui.services.llm import generate_koyori_reply
 from presence_ui.services.sessions import get_session, touch_session
+from presence_ui.services.somatic_context import enrich_interaction_context
 
 _SILENT_MOVES = frozenset({"stay_silent", "defer", "quietly_prepare"})
 _SPEAKING_MOVES = frozenset(
@@ -73,6 +74,7 @@ def _compose_and_plan(
         orchestrator_store=stores.orchestrator,
         policy_timezone=stores.policy_timezone,
     )
+    ctx = enrich_interaction_context(ctx, channel="chat", user_text=text)
     plan = plan_response(
         PlanResponseInput(
             interaction_context=ctx,

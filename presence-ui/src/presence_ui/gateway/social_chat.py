@@ -43,6 +43,11 @@ from presence_ui.gateway.user_intent import (
 )
 from presence_ui.heartbeat.schedule import apply_pulse_schedule
 from presence_ui.services.llm import build_social_turn_delta
+from presence_ui.services.somatic_context import (
+    apply_somatic_plan_side_effects,
+    enrich_interaction_context,
+    quiet_from_context,
+)
 
 # write_private_reflection must still reach Claude Code so it can call
 # mcp__sociality__append_private_reflection (voice.speak=false in the plan).
@@ -283,11 +288,20 @@ def _finish_intercept_chat_request(
         orchestrator_store=stores.orchestrator,
         policy_timezone=stores.policy_timezone,
     )
+    ctx = enrich_interaction_context(ctx, channel="chat", user_text=message)
     plan = plan_response(
         PlanResponseInput(
             interaction_context=ctx,
             user_text=message,
         )
+    )
+    apply_somatic_plan_side_effects(
+        primary_move=plan.primary_move,
+        channel="chat",
+        quiet_active=quiet_from_context(ctx),
+        local_time=ctx.local_time,
+        timezone=ctx.timezone,
+        user_text=message,
     )
 
     if plan.primary_move in _SILENT_MOVES:

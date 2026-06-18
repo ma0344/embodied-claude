@@ -34,6 +34,7 @@ ExperienceKind = Literal[
     "desire_satisfied",
     "boundary_respected",
     "open_loop_progress",
+    "body_affliction",
 ]
 
 PrivacyLevel = Literal["private", "relationship", "public"]
@@ -174,6 +175,8 @@ class InteractionContext(BaseModel):
 
     relevant_memories: list[RelevantMemoryRef] = Field(default_factory=list)
     recent_experiences: list[RecentExperienceRef] = Field(default_factory=list)
+
+    somatic_state: dict[str, Any] | None = None
 
     joint_focus: dict[str, Any] | None = None
     current_scene_summary: str | None = None

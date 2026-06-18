@@ -7,6 +7,7 @@ import io
 import logging
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
@@ -16,6 +17,34 @@ from ._behavior import get_behavior
 from .camera import CaptureResult
 
 logger = logging.getLogger(__name__)
+
+
+def caption_looks_corrupt(caption: str | None) -> bool:
+    """Reject LM Studio outputs that are only replacement question marks."""
+    if not caption:
+        return False
+    stripped = caption.strip()
+    if len(stripped) < 4:
+        return False
+    compact = stripped.replace(" ", "").replace("\n", "")
+    if compact and set(compact) <= {"?"}:
+        return True
+    return stripped.count("?") / len(stripped) > 0.4
+
+
+def normalize_vision_caption(caption: str | None) -> str | None:
+    if caption is None:
+        return None
+    text = caption.strip()
+    if not text:
+        return None
+    if caption_looks_corrupt(text):
+        logger.warning(
+            "Vision caption rejected as corrupt (%d chars, mostly '?')",
+            len(text),
+        )
+        return None
+    return text
 
 
 def text_only_tool_results() -> bool:
@@ -178,8 +207,57 @@ async def _describe_via_messages(
     return _parse_anthropic_message_content(resp.json())
 
 
-async def describe_image_via_lm_studio(image_base64: str) -> str | None:
-    """Send JPEG to LM Studio vision; return text-only caption."""
+async def _describe_attempt(
+    client: httpx.AsyncClient,
+    *,
+    base: str,
+    model: str,
+    headers: dict[str, str],
+    prompt: str,
+    image_b64: str,
+    max_tokens: int,
+    api_order: list[str],
+) -> tuple[str | None, bool]:
+    """Return (caption, saw_corrupt_raw)."""
+    saw_corrupt = False
+    for kind in api_order:
+        try:
+            if kind == "chat":
+                raw = await _describe_via_chat(
+                    client, base, model, headers, prompt, image_b64, max_tokens=max_tokens
+                )
+                label = "/v1/chat/completions"
+            else:
+                raw = await _describe_via_messages(
+                    client, base, model, headers, prompt, image_b64, max_tokens=max_tokens
+                )
+                label = "/v1/messages"
+            if raw and caption_looks_corrupt(raw):
+                saw_corrupt = True
+                logger.warning(
+                    "Vision describe %s returned corrupt caption (%d chars)",
+                    label,
+                    len(raw),
+                )
+            caption = normalize_vision_caption(raw)
+            if caption:
+                logger.info("Vision describe OK via %s (%d chars)", label, len(caption))
+                return caption, saw_corrupt
+            logger.warning("Vision describe %s: empty or corrupt content", label)
+        except Exception as exc:
+            logger.warning("Vision describe %s failed: %s", kind, exc)
+    return None, saw_corrupt
+
+
+@dataclass(slots=True)
+class VisionDescribeOutcome:
+    caption: str | None
+    saw_corrupt: bool = False
+    reloaded: bool = False
+
+
+async def describe_image_outcome(image_base64: str) -> VisionDescribeOutcome:
+    """Send JPEG to LM Studio vision; include corrupt/reload metadata."""
     base, model, token = lm_studio_settings()
     max_side = int(os.environ.get("WIFI_CAM_VISION_MAX_SIDE", "1024"))
     max_tokens = int(os.environ.get("WIFI_CAM_VISION_MAX_TOKENS", "720"))
@@ -197,27 +275,51 @@ async def describe_image_via_lm_studio(image_base64: str) -> str | None:
     else:
         order = ["chat", "messages"]
 
+    saw_corrupt = False
+    reloaded = False
     async with httpx.AsyncClient(timeout=120.0) as client:
-        for kind in order:
-            try:
-                if kind == "chat":
-                    caption = await _describe_via_chat(
-                        client, base, model, headers, prompt, image_b64, max_tokens=max_tokens
-                    )
-                    label = "/v1/chat/completions"
-                else:
-                    caption = await _describe_via_messages(
-                        client, base, model, headers, prompt, image_b64, max_tokens=max_tokens
-                    )
-                    label = "/v1/messages"
-                if caption:
-                    logger.info("Vision describe OK via %s (%d chars)", label, len(caption))
-                    return caption
-                logger.warning("Vision describe %s: empty content", label)
-            except Exception as exc:
-                logger.warning("Vision describe %s failed: %s", kind, exc)
+        caption, saw_corrupt = await _describe_attempt(
+            client,
+            base=base,
+            model=model,
+            headers=headers,
+            prompt=prompt,
+            image_b64=image_b64,
+            max_tokens=max_tokens,
+            api_order=order,
+        )
+        if caption:
+            return VisionDescribeOutcome(caption=caption, saw_corrupt=saw_corrupt)
 
-    return None
+        if saw_corrupt:
+            from .lm_studio_models import reload_configured_vision_model, vision_auto_reload_enabled
+
+            if vision_auto_reload_enabled():
+                reloaded = await reload_configured_vision_model(client)
+                if reloaded:
+                    caption, _ = await _describe_attempt(
+                        client,
+                        base=base,
+                        model=model,
+                        headers=headers,
+                        prompt=prompt,
+                        image_b64=image_b64,
+                        max_tokens=max_tokens,
+                        api_order=order,
+                    )
+                    if caption:
+                        return VisionDescribeOutcome(
+                            caption=caption,
+                            saw_corrupt=True,
+                            reloaded=True,
+                        )
+
+    return VisionDescribeOutcome(caption=None, saw_corrupt=saw_corrupt, reloaded=reloaded)
+
+
+async def describe_image_via_lm_studio(image_base64: str) -> str | None:
+    """Send JPEG to LM Studio vision; return text-only caption."""
+    return (await describe_image_outcome(image_base64)).caption
 
 
 def format_capture_text(

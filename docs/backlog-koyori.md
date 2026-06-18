@@ -1,6 +1,14 @@
 # koyori バックログ
 
-ma-home 側の全体優先順・記憶 E2E: [backlog-ma-home.md](./backlog-ma-home.md)（2026-06-13 更新）。
+ma-home 側の全体優先順・記憶 E2E: [backlog-ma-home.md](./backlog-ma-home.md)（2026-06-18 更新）。
+
+## MEM — 記憶層・Dreaming（BIO-8 の次）
+
+4 層（WM≈セッション → STM≈日次 → LTM → Deep/SOUL）と昇格パイプライン。詳細 → [backlog-ma-home.md#mem--記憶層セッション跨ぎ--dreaming](./backlog-ma-home.md)。
+
+## BIO-8 — 神経系（体調の自覚）
+
+ma-home バックログ **BIO-8a〜d** と同じ。こより端では **目・声の不調がキオスクに届く**のがゴール（ステータス／着信／一声）。詳細 → [backlog-ma-home.md#bio-8--somatic-loop神経系体調の自覚](./backlog-ma-home.md)。
 
 ## 本番: Keychron K4 MAX Bluetooth
 

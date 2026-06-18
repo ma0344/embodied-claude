@@ -198,10 +198,17 @@ class SocialStateView(BaseModel):
     summary: str
 
 
+class TemperatureReading(BaseModel):
+    name: str
+    celsius: float
+    source: str | None = None
+
+
 class TemperatureView(BaseModel):
     celsius: float | None
     feeling: str
     source: str | None = None
+    readings: list[TemperatureReading] = Field(default_factory=list)
 
 
 class ReminderCardItem(BaseModel):
@@ -234,6 +241,25 @@ class PatchReminderSpeakLineResponse(BaseModel):
     speak_line: str
 
 
+class AgentPulseView(BaseModel):
+    next_wake_at: str | None = None
+    next_wake_in_sec: float | None = None
+    reason: str | None = None
+    last_wake_at: str | None = None
+    last_action: str | None = None
+    dominant_desire: str | None = None
+    channel: str | None = None
+
+
+class PlanPreviewView(BaseModel):
+    primary_move: str
+    why: str
+    allowed_actions: list[str] = Field(default_factory=list)
+    forbidden_actions: list[str] = Field(default_factory=list)
+    quiet_hours_active: bool = False
+    preview_at: str
+
+
 class KoyoriStatusResponse(BaseModel):
     updated_at: str
     desires: list[DesireItem]
@@ -243,6 +269,8 @@ class KoyoriStatusResponse(BaseModel):
     social_state: SocialStateView | None = None
     temperature: TemperatureView
     reminders: list[ReminderCardItem] = Field(default_factory=list)
+    agent_pulse: AgentPulseView | None = None
+    autonomous_plan: PlanPreviewView | None = None
 
 
 class CameraSnapshotResponse(BaseModel):

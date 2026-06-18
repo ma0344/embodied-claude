@@ -82,6 +82,23 @@ def http_remember(
     return data if isinstance(data, dict) else {"ok": False, "error": "invalid response"}
 
 
+def http_memory_health(*, timeout_sec: float = 2.0) -> dict[str, Any]:
+    port = memory_http_port()
+    url = f"http://127.0.0.1:{port}/health"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout_sec) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        return {"ok": False, "error": str(exc)}
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        return {"ok": False, "error": "invalid JSON"}
+    if isinstance(data, dict) and data.get("ok") is True:
+        return {"ok": True}
+    return {"ok": False, "error": "health not ok"}
+
+
 def http_recall_divergent(
     *,
     context: str,

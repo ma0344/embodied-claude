@@ -1672,6 +1672,9 @@ function buildStatusHtml(data, { compact = false } = {}) {
   const desires = KoyoriVoice.formatDesires(data.desires, data.dominant_desire);
   const social = KoyoriVoice.formatSocialVibe(data.social_state);
   const journey = KoyoriVoice.formatJourney(data.active_arcs);
+  const recent = KoyoriVoice.formatExperiences(data.recent_experiences);
+  const pulse = KoyoriVoice.formatPulse(data.agent_pulse);
+  const plan = KoyoriVoice.formatPlanPreview(data.autonomous_plan);
   const open = (id) => isStatusCardOpen(id, compact);
   const reminders = data.reminders || [];
 
@@ -1686,6 +1689,31 @@ function buildStatusHtml(data, { compact = false } = {}) {
     .map(
       (item) =>
         `<li><strong>${escapeHtml(item.title)}</strong> — ${escapeHtml(item.summary || "")}</li>`,
+    )
+    .join("");
+
+  const recentList = recent.items
+    .map((item) => {
+      const when = item.ts ? formatTimestamp(item.ts) : "";
+      return `<li><span class="tag">${escapeHtml(item.kind)}</span> ${
+        when ? `<time class="status-time">${escapeHtml(when)}</time> ` : ""
+      }${escapeHtml(item.summary || "")}</li>`;
+    })
+    .join("");
+
+  const pulseLines = pulse.lines
+    .map((line) => `<p class="status-card__sub">${escapeHtml(line)}</p>`)
+    .join("");
+
+  const planLines = plan.lines
+    .map((line) => `<p class="status-card__sub">${escapeHtml(line)}</p>`)
+    .join("");
+
+  const tempReadings = (data.temperature?.readings || [])
+    .slice(0, 4)
+    .map(
+      (row) =>
+        `<li>${escapeHtml(row.name)}: ${Number(row.celsius).toFixed(1)}°C</li>`,
     )
     .join("");
 
@@ -1737,7 +1765,16 @@ function buildStatusHtml(data, { compact = false } = {}) {
       open: open("temp"),
       innerHtml: `
         <p class="status-card__body">${escapeHtml(temp.body)}</p>
-        ${temp.detail ? `<span class="status-card__detail">${escapeHtml(temp.detail)}</span>` : ""}`,
+        ${temp.detail ? `<span class="status-card__detail">${escapeHtml(temp.detail)}</span>` : ""}
+        ${tempReadings ? `<ul class="temp-readings">${tempReadings}</ul>` : ""}`,
+    }),
+    buildStatusCard({
+      id: "recent",
+      label: recent.headline,
+      open: open("recent"),
+      innerHtml: `
+        <p class="status-card__body">${escapeHtml(recent.body)}</p>
+        ${recentList ? `<ul class="experience-list">${recentList}</ul>` : ""}`,
     }),
     buildStatusCard({
       id: "desires",
@@ -1763,6 +1800,24 @@ function buildStatusHtml(data, { compact = false } = {}) {
       innerHtml: `
         <p class="status-card__body">${escapeHtml(social.body)}</p>
         ${socialTags ? `<div class="tag-row">${socialTags}</div>` : ""}`,
+    }),
+    buildStatusCard({
+      id: "pulse",
+      label: pulse.headline,
+      icon: "⏰",
+      open: open("pulse"),
+      innerHtml: `
+        <p class="status-card__body">${escapeHtml(pulse.body)}</p>
+        ${pulseLines}`,
+    }),
+    buildStatusCard({
+      id: "plan",
+      label: plan.headline,
+      icon: "◎",
+      open: open("plan"),
+      innerHtml: `
+        <p class="status-card__body">${escapeHtml(plan.body)}</p>
+        ${planLines}`,
     }),
     buildStatusCard({
       id: "reminders",
@@ -2638,20 +2693,17 @@ async function pumpRoomInbound() {
   }
 }
 
-function suggestInboundReplyText(nudgeText) {
-  const t = (nudgeText || "").trim();
-  if (!t) return "うん。";
-  if (/おる[？?]?$|いる[？?]?$/.test(t)) return "おるよ。";
-  if (/元気|調子|大丈夫/.test(t)) return "まあまあやで。";
-  if (/[？?]$/.test(t)) return "うん。";
-  return "聞こえてるよ。";
-}
-
-function buildInboundReplyPrompt(nudgeText, draft) {
+function buildInboundReplyPrompt(nudgeText) {
   const line = (nudgeText || "").trim();
-  const reply = (draft || "").trim() || "うん。";
-  if (!line) return reply;
-  return `[こよりからの着信への返事]\nこより: 「${line}」\n\nまー: ${reply}`;
+  if (!line) {
+    return "[こよりからの着信への返事]\nまーとして、ひとこと返して。";
+  }
+  return (
+    `[こよりからの着信への返事]\n` +
+    `こより: 「${line}」\n\n` +
+    `まーとして、こよりの言葉に自然にひとこと返して。` +
+    `定型句に偏らず、そのときの気分で。`
+  );
 }
 
 async function beginInboundReply(item) {
@@ -2660,8 +2712,7 @@ async function beginInboundReply(item) {
   if (isNativeChat()) {
     startNewNativeSession();
   }
-  const draft = suggestInboundReplyText(item?.text);
-  const prompt = buildInboundReplyPrompt(item?.text, draft);
+  const prompt = buildInboundReplyPrompt(item?.text);
   const input = document.getElementById("chat-input");
   if (input) {
     input.placeholder = "こよりに話しかける...";
@@ -2674,7 +2725,7 @@ async function beginInboundReply(item) {
   } catch (err) {
     console.error("inbound reply send failed", err);
     if (input) {
-      input.value = draft;
+      input.value = "";
       input.focus();
     }
   }

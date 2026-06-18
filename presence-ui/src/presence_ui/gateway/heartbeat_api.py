@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from presence_ui.deps import get_stores
 from presence_ui.heartbeat.record import finalize_chat_turn
+from presence_ui.services.somatic_context import enrich_interaction_context
 
 
 class ComposePlanRequest(BaseModel):
@@ -72,6 +73,11 @@ def compose_plan_body(body: ComposePlanRequest) -> ComposePlanResponse:
         self_narrative_store=stores.self_narrative,
         orchestrator_store=stores.orchestrator,
         policy_timezone=stores.policy_timezone,
+    )
+    ctx = enrich_interaction_context(
+        ctx,
+        channel=body.channel,
+        user_text=body.user_text,
     )
     plan = plan_response(
         PlanResponseInput(

@@ -80,6 +80,22 @@ wake
 
 ---
 
+## Somatic loop（神経系・BIO-8）
+
+HeartbeatLoop（いつ起きるか・何をするか）に **直交する層**。器官の正常ベースラインと今の差分で違和感を検知し、反射→確認→叙述→助けを求める。
+
+| 器官 | v0 |
+|------|-----|
+| 目 | capture / vision caption |
+| 耳 | listen（後続） |
+| 声 | TTS health |
+| 考え | memory HTTP health |
+
+実装フェーズ: **BIO-8a**（報告）→ **8b**（レジストリ + probe）→ **8c**（compose/plan で言うべきか）→ **8d**（横断 escalation）。  
+詳細は [backlog-ma-home.md](./backlog-ma-home.md) の BIO-8 節。
+
+---
+
 ## 実装フェーズ（backlog BIO）
 
 | ID | 内容 | 状態 |
@@ -92,6 +108,17 @@ wake
 | BIO-5 | `plan.pulse_schedule` / LLM 微調整（任意） | 未 |
 | BIO-6 | `/talk` → gateway API 一本化（CLI） | **済** |
 | BIO-7 | `interpretation_shift` 返答後フック | **済** |
+| BIO-8a | Somatic — 目の不調を experience + ステータスに報告 | **済** |
+| BIO-8b | Somatic — `body_state` + pulse probe | **済** |
+| BIO-8c | Somatic — compose/plan 叙述判断 | **済** |
+| BIO-8d | Somatic — 複数器官 escalation | **済** |
+| MEM-0 | 記憶 4 層 + Dreaming 昇格（backlog） | **済** |
+| MEM-1〜2 | STM / エピソード締め（WM→STM） | 未 |
+| MEM-3〜4 | Dreaming / 朝注入 | 未 |
+| MEM-5〜6 | LTM 整理 / Deep 昇格 | 未 |
+| MEM-7 | JSONL ライフサイクル（hide≠削除・自動退避） | 未（MEM-3 後） |
+
+**次トラック（合意 2026-06-18）**: **MEM**（セッション跨ぎ・Dreaming）。詳細 → [backlog-ma-home.md](./backlog-ma-home.md) MEM 節。
 
 ---
 

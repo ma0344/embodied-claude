@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from presence_ui.deps import PresenceStores
 from presence_ui.gateway.direct_actions import direct_actions_enabled
 from presence_ui.gateway.room_events import activity_event
 from presence_ui.gateway.see_intent import (
@@ -42,6 +43,8 @@ async def prefetch_camera_for_message(
     *,
     see_intent: SeeIntent | None = None,
     ptz_intent: PtzIntent | None = None,
+    stores: PresenceStores | None = None,
+    person_id: str = "ma",
 ) -> tuple[str | None, list[dict[str, Any]]]:
     """Run PTZ and/or vision prefetch when the user message implies camera motion or seeing."""
     text = (message or "").strip()
@@ -96,6 +99,20 @@ async def prefetch_camera_for_message(
                 )
             )
             notes.append(vision_note)
+            if stores is not None:
+                from presence_ui.services.somatic import maybe_record_eye_affliction
+
+                action = f"see_{see.mode}"
+                remedy = "qwen_reload" if result.vision_reloaded else None
+                maybe_record_eye_affliction(
+                    stores,
+                    person_id=person_id,
+                    action=action,
+                    error=result.error,
+                    vision=result,
+                    capture_failed=not result.ok,
+                    remedy=remedy,
+                )
         except Exception as exc:  # noqa: BLE001
             notes.append(
                 "[vision_prefetch]\n"

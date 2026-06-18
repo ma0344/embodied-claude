@@ -70,6 +70,8 @@ const KoyoriVoice = (() => {
     agent_response: "さっきの応答",
     agent_voice_utterance: "声で話したこと",
     agent_observation: "気づいたこと",
+    agent_autonomous_action: "自律の一手",
+    body_affliction: "体の不調",
     open_loop_progress: "続きの話",
     boundary_respected: "境界を守った瞬間",
     desire_satisfied: "やりたかったことをした",
@@ -77,6 +79,19 @@ const KoyoriVoice = (() => {
 
   function desirePhrase(id) {
     return DESIRE_PHRASES[id] || `「${id}」が、心の隅にある`;
+  }
+
+  function sanitizeStatusText(text) {
+    const t = String(text || "").trim();
+    if (!t) return "（なし）";
+    const compact = t.replace(/\s/g, "");
+    if (compact.length >= 8 && [...compact].every((ch) => ch === "?")) {
+      return "（視覚説明が壊れている — LM Studio vision を確認）";
+    }
+    if (t.length >= 8 && (t.match(/\?/g) || []).length / t.length > 0.4) {
+      return "（説明テキスト不明瞭 — vision 要確認）";
+    }
+    return t;
   }
 
   function intensityLabel(level) {
@@ -249,10 +264,12 @@ const KoyoriVoice = (() => {
       return { headline: "さっきまで", body: "特に記録はない", items: [] };
     }
 
-    const items = experiences.slice(0, 3).map((exp) => ({
+    const items = experiences.slice(0, 5).map((exp) => ({
       kind: EXPERIENCE_KINDS[exp.kind] || exp.kind,
-      summary:
+      summary: sanitizeStatusText(
         exp.summary?.length > 80 ? `${exp.summary.slice(0, 78)}…` : exp.summary,
+      ),
+      ts: exp.ts,
     }));
 
     return {
@@ -262,11 +279,77 @@ const KoyoriVoice = (() => {
     };
   }
 
+  function formatPulse(pulse) {
+    if (!pulse?.next_wake_at) {
+      return {
+        headline: "次の wake",
+        body: "まだスケジュールされていない",
+        lines: [],
+      };
+    }
+    const sec = pulse.next_wake_in_sec;
+    let when = pulse.next_wake_at;
+    try {
+      when = new Date(pulse.next_wake_at).toLocaleString("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        month: "numeric",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      /* keep raw */
+    }
+    let inText = "";
+    if (sec != null) {
+      if (sec <= 0) inText = "もうすぐ（予定時刻を過ぎている）";
+      else if (sec < 120) inText = `あと ${Math.round(sec)} 秒`;
+      else inText = `あと ${Math.round(sec / 60)} 分`;
+    }
+    const lines = [
+      inText ? `起きる: ${when}（${inText}）` : `起きる: ${when}`,
+      pulse.last_action ? `前回: ${pulse.last_action}` : "",
+      pulse.reason ? `理由: ${sanitizeStatusText(pulse.reason)}` : "",
+      pulse.dominant_desire ? `pulse dominant: ${pulse.dominant_desire}` : "",
+    ].filter(Boolean);
+    return {
+      headline: "次の wake",
+      body: lines[0] || when,
+      lines: lines.slice(1),
+    };
+  }
+
+  function formatPlanPreview(plan) {
+    if (!plan?.primary_move) {
+      return {
+        headline: "次の一手（plan）",
+        body: "いまは読めない",
+        lines: [],
+      };
+    }
+    const allowed = (plan.allowed_actions || []).join(", ") || "（なし）";
+    const forbidden = (plan.forbidden_actions || []).slice(0, 4).join(", ");
+    const lines = [
+      `move: ${plan.primary_move}`,
+      plan.why ? `why: ${plan.why}` : "",
+      `allowed: ${allowed}`,
+      forbidden ? `forbidden: ${forbidden}` : "",
+      plan.quiet_hours_active ? "quiet hours: ON" : "",
+    ].filter(Boolean);
+    return {
+      headline: "次の一手（plan）",
+      body: `${plan.primary_move}`,
+      lines,
+    };
+  }
+
   return {
     formatDesires,
     formatTemperature,
     formatSocialVibe,
     formatJourney,
     formatExperiences,
+    formatPulse,
+    formatPlanPreview,
   };
 })();

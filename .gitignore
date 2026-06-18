@@ -107,3 +107,20 @@ SOUL.md
 .gitignore
 claude-code-webui-fork
 tts-mcp/tts-samples/*.wav
+
+# Local docs scratch / session exports
+docs/tmp/
+
+# Claude Code local scheduled tasks (machine-specific)
+.claude/scheduled_tasks.json
+
+# ma-home: no-console VBS wrappers (absolute paths; generic: embodied-hidden-launcher.ps1)
+scripts/run-*-hidden.vbs
+scripts/start-*-hidden.vbs
+
+# Local TTS / audio test samples (not tts-mcp package samples)
+scripts/tts-samples/
+scripts/*.wav
+
+# Accidental local SQLite scratch DBs in packages
+**/t.db

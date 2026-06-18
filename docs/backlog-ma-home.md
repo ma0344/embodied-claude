@@ -312,16 +312,41 @@ probe → baseline との差分 → reflex（決定論）→ verify
 
 **環境変数（ma-home）**: `%USERPROFILE%\.config\embodied-claude\presence-ui.local.env` に書く（**コミットしない**）。`run-presence-ui-worker.ps1` と `presence_ui.repo_env.load_repo_env()` の両方が読み込む。wifi-cam / tts のシークレットは各 `*/.env`、presence-ui 固有フラグは `presence-ui.local.env` が正しい置き場。
 
-```ini
-# BIO-8 somatic（任意 — 省略時は下記デフォルト）
-PRESENCE_SOMATIC_PROBE=1
-PRESENCE_SOMATIC_PROBE_EYES_CAPTURE=0
-PRESENCE_SOMATIC_ESCALATION=1
-PRESENCE_SOMATIC_ESCALATION_PUSH_COOLDOWN_SEC=1800
-# PRESENCE_BODY_STATE_PATH=C:\Users\ma\.claude\presence-ui\body_state.json
+| 変数 | デフォルト | 何のスイッチか |
+|------|------------|----------------|
+| `PRESENCE_SOMATIC_PROBE` | `1` | **pulse 毎の軽い自己診断**（目＝接続ヒント、声＝TTS health、考え＝memory `:18900/health`）。`0` で probe 自体を止める |
+| `PRESENCE_SOMATIC_PROBE_EYES_CAPTURE` | `0` | probe で**実際にカメラキャプチャ**するか。`1` は重い（本番は通常 `0`） |
+| `PRESENCE_SOMATIC_ESCALATION` | `1` | **横断 escalation**（複数器官の重症度判定 + critical 時の ntfy push）。`0` で 8d の push／plan 用 escalation を止める（8a〜8c の affliction 記録は別） |
+| `PRESENCE_SOMATIC_ESCALATION_PUSH_COOLDOWN_SEC` | `1800` | **escalation push の最短間隔（秒）**。同じ critical でもこの間は ntfy を再送しない。probe 間隔ではない |
+| `PRESENCE_BODY_STATE_PATH` | （未設定→ `~/.claude/presence-ui/body_state.json`） | 器官レジストリ JSON の上書きパス |
+| `PRESENCE_OUTBOUND_NTFY_URL` | （未設定） | 8d critical 時の push 先（A4g）。無いと Win toast のみ |
 
-# 8d critical 時の ntfy push（A4g 既存）
+```ini
+# BIO-8 somatic — presence-ui.local.env に追記する例（# 行はそのままコピペ可）
+# pulse 毎: 器官の軽 probe（既定 ON）
+PRESENCE_SOMATIC_PROBE=1
+# probe でカメラ実キャプチャ（重い・通常 OFF）
+PRESENCE_SOMATIC_PROBE_EYES_CAPTURE=0
+# 複数器官 degraded 時の escalation + critical push（既定 ON）
+PRESENCE_SOMATIC_ESCALATION=1
+# escalation push の再送間隔（秒）。30分 = 1800
+PRESENCE_SOMATIC_ESCALATION_PUSH_COOLDOWN_SEC=1800
+# 器官状態ファイル（省略時は %USERPROFILE%\.claude\presence-ui\body_state.json）
+# PRESENCE_BODY_STATE_PATH=C:\Users\ma\.claude\presence-ui\body_state.json
+# 8d critical 時の ntfy（A4g 既存・topic URL）
 # PRESENCE_OUTBOUND_NTFY_URL=https://ntfy.sh/your-topic
+```
+
+**スモーク（BIO-8）**:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8090/api/v1/health
+Invoke-RestMethod -Method POST http://127.0.0.1:8090/api/v1/autonomous-tick `
+  -ContentType "application/json" -Body '{"smoke_action":"observe_room"}'
+Get-Content $env:USERPROFILE\.claude\presence-ui\body_state.json
+Invoke-RestMethod "http://127.0.0.1:8090/api/v1/koyori/status?person_id=ma"
+Invoke-RestMethod -Method POST http://127.0.0.1:8090/api/v1/heartbeat/compose-plan `
+  -ContentType "application/json" -Body '{"person_id":"ma","user_text":"見て","channel":"chat"}'
 ```
 
 **叙述の例（plan 入力）**: 夜・初回・reload で直った → 黙る／内省一行。昼・まー在席 → 「さっき目が一瞬曇ってたけど直したで」。3 回直らない → 「目が全然見えへん、LM Studio かカメラ見てもらえる？」。**複数器官 critical** → ntfy push（クールダウン 30 分）+ plan `health_safety`。
@@ -330,7 +355,7 @@ PRESENCE_SOMATIC_ESCALATION_PUSH_COOLDOWN_SEC=1800
 
 **残存**: 15 分 Task は `PRESENCE_PULSE_MAX_SEC` 超のセーフティネットとして維持。
 
-**次の主トラック（合意 2026-06-18）**: **BIO-8b → 8c**（神経系レジストリ・叙述）のあと **MEM**（記憶層・Dreaming）。セッションは廃止しないが、連続したこよりは **外部記憶の強化とシフト**で支える。
+**次の主トラック（合意 2026-06-18）**: **MEM**（記憶層・Dreaming）。セッションは廃止しないが、連続したこよりは **外部記憶の強化とシフト**で支える。
 
 ### MEM — 記憶層（セッション跨ぎ / Dreaming）
 

@@ -914,6 +914,62 @@ function displayTextForMessage(msg) {
   return raw;
 }
 
+async function copyTextToClipboard(text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(trimmed);
+      return true;
+    }
+  } catch {
+    /* fallback below */
+  }
+  const ta = document.createElement("textarea");
+  ta.value = trimmed;
+  ta.setAttribute("readonly", "");
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    document.body.removeChild(ta);
+  }
+}
+
+function wireMessageCopyButton(el, msg) {
+  if (!el || msg._thinking || msg._pending) return;
+  const btn = el.querySelector(".message-copy-btn");
+  if (!btn) return;
+  const text = displayTextForMessage(msg);
+  if (!text.trim()) {
+    btn.hidden = true;
+    return;
+  }
+  btn.hidden = false;
+  btn.onclick = async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const ok = await copyTextToClipboard(text);
+    if (ok) {
+      btn.classList.add("is-copied");
+      const prev = btn.textContent;
+      btn.textContent = "コピー済";
+      window.setTimeout(() => {
+        btn.classList.remove("is-copied");
+        btn.textContent = prev || "コピー";
+      }, 1500);
+      setChatSendHint("コピーした");
+    } else {
+      setChatSendHint("コピーできなかった");
+    }
+  };
+}
+
 function renderMessageBodyHtml(msg) {
   const body = displayTextForMessage(msg);
   if (typeof ChatMarkdown !== "undefined") {
@@ -990,9 +1046,10 @@ function updateMessageElement(el, msg) {
     const label = msg.sender === "ma" ? "M" : "K";
     const meta = el.querySelector(".meta-line");
     if (meta) {
-      meta.innerHTML = `<span class="sender-badge">${label}</span> ${who} · ${formatTimestamp(msg.timestamp)}`;
+      meta.innerHTML = `<span class="meta-line-main"><span class="sender-badge">${label}</span> ${who} · ${formatTimestamp(msg.timestamp)}</span><button type="button" class="message-copy-btn" title="メッセージをコピー" aria-label="メッセージをコピー">コピー</button>`;
     }
   }
+  wireMessageCopyButton(el, msg);
   el.classList.remove("is-pending", "is-streaming", "is-thinking");
 }
 
@@ -1030,9 +1087,10 @@ function buildMessageElement(msg, { animate = false } = {}) {
   el.className = `message ${msg.sender}${extraClass}${enterClass}`;
   el.dataset.sender = msg.sender;
   el.dataset.messageKey = messageKey({ ...msg, message: body });
-  el.innerHTML = `<span class="meta-line"><span class="sender-badge">${label}</span> ${who} · ${formatTimestamp(msg.timestamp)}</span>
+  el.innerHTML = `<span class="meta-line"><span class="meta-line-main"><span class="sender-badge">${label}</span> ${who} · ${formatTimestamp(msg.timestamp)}</span><button type="button" class="message-copy-btn" title="メッセージをコピー" aria-label="メッセージをコピー">コピー</button></span>
         <div class="message-body"></div>`;
   setMessageBodyContent(el.querySelector(".message-body"), { ...msg, message: body });
+  wireMessageCopyButton(el, { ...msg, message: body });
   return el;
 }
 

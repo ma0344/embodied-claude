@@ -998,11 +998,42 @@ body {
 }
 
 .message .meta-line {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
   margin-bottom: 0.3rem;
   font-size: 0.68rem;
   color: var(--text-muted);
   letter-spacing: 0.05em;
+}
+
+.meta-line-main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.message-copy-btn {
+  flex-shrink: 0;
+  border: none;
+  background: rgba(122, 107, 88, 0.08);
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  line-height: 1.2;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.message-copy-btn:hover {
+  background: rgba(122, 107, 88, 0.16);
+  color: var(--text);
+}
+
+.message-copy-btn.is-copied {
+  color: var(--koyori);
+  background: rgba(122, 107, 88, 0.14);
 }
 
 .sender-badge {
@@ -1255,6 +1286,7 @@ body {
 
 .room--kiosk .session-select,
 .room--kiosk .session-import,
+.room--kiosk .message-copy-btn,
 .room--kiosk .drawer-action,
 .room--kiosk .room-drawer-open,
 .room--kiosk .room-drawer__close {

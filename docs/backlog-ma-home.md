@@ -629,6 +629,7 @@ MVP チェックリスト:
 | 中 | **C11d** 状態圧縮 | キオスク用サマリ2枚（話しかけていい？ / 気持ち1行）— 折りたたみカードで代替可 |
 | 中 | **C11e** 右コンテキストレール | チャット左・常時/ピン留め右サイドバー。ドロワーで選んだ視界/状態カードを固定表示（Surface タッチ向け） |
 | 中 | **C11g** スリープ / 画面消灯 | アイドル時 Surface 画面オフ、タッチで復帰。焼き付き・常時点灯対策 |
+| 中 | **C11h** チャットコピー | キオスクは `user-select: none` のため各 bubble に「コピー」ボタン（MEM 前の実戦ニーズ） |
 
 - [x] **C11a** タッチ即効（視界 img 差し替え、チャット pan-y、キオスク 44px）
 - [x] **C11b** ドロワー UI（`?kiosk=1`、セッション操作・視界・状態・画面更新）
@@ -644,6 +645,7 @@ MVP チェックリスト:
   - **消灯**: ブラウザ黒オーバーレイは使わず **OS 画面オフ任せ**（wakeLock 解除 → Surface Ubuntu の DPMS / logind）。UI の N 分は OS 電源設定を書き換えない
   - **自動復帰**: 消灯中の say / 着信（outbound・room_say）で画面を戻す — **UI で ON/OFF 可変**
   - **実装メモ**: キオスクは SSE で着信・リマインドは `document.hidden` でも届くが、ポール fallback は hidden 時スキップ中 → 自動復帰 ON 時は `wakeLock.request` + 音声再生で復帰を試みる
+- [x] **C11h** チャットコピー — 各 `ma` / `koyori` bubble に「コピー」ボタン（プレーンテキスト、`clipboard` + fallback）。キオスク 44px タップ対象
 - [ ] **C11g-reg** 画面消灯が効かない（**回帰** 2026-06-18）— C11g 実装済みだが実機で DPMS / wakeLock 解除が動いていない報告。`app.js` idle → `releaseWakeLock`、Surface Ubuntu logind、Chromium wakeLock 権限を切り分け
 - [ ] **C11-pc** `?kiosk=0` で会話・サイドバーが空（**回帰** 2026-06-18）— ma-home ブラウザ（PC レイアウト）でチャット履歴・右レールが表示されない。`isKioskLayout()` と session マウント / native history ポールの分岐を確認
 

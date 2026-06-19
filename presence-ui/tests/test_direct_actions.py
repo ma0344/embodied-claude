@@ -89,6 +89,26 @@ def test_write_private_reflection_direct_persists() -> None:
     stores.orchestrator.record_agent_experience.assert_called_once()
 
 
+def test_reflection_body_omits_injection_blocks() -> None:
+    ctx = _ctx()
+    ctx = ctx.model_copy(
+        update={
+            "compact_prompt_block": "[gateway_turn_context]\n[desires] observe_room\n[/desires]",
+            "prompt_summary": "quiet night summary",
+            "open_loops": [
+                {"loop_id": "l1", "topic": "明日のヘルパー", "status": "open", "updated_at": None}
+            ],
+        }
+    )
+    plan = _plan(allowed=["write_private_reflection"])
+    body = direct_actions._reflection_body(ctx, plan)
+    assert "[desires]" not in body
+    assert "gateway_turn_context" not in body
+    assert "quiet night summary" not in body
+    assert "test move" in body
+    assert "明日のヘルパー" in body
+
+
 def test_build_social_turn_delta_private_reflection_no_mcp() -> None:
     plan = _plan()
     delta = build_social_turn_delta(ctx=_ctx(), plan=plan)

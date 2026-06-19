@@ -21,6 +21,7 @@ from presence_ui.schemas import (
     AgentPulseView,
     DesireItem,
     KoyoriStatusResponse,
+    LiveInnerVoiceView,
     PlanPreviewView,
     RecentExperience,
     ReminderCardItem,
@@ -44,6 +45,97 @@ _STATUS_EXPERIENCE_KINDS = (
     "boundary_respected",
     "desire_satisfied",
 )
+
+_LIVE_PHRASE_MAX = 80
+_INJECTION_MARKERS = (
+    "[gateway_turn_context]",
+    "[desires]",
+    "[dream_digest]",
+    "[overnight_inner_voice]",
+    "mcp__",
+    "compact_prompt_block",
+)
+
+_DESIRE_PHRASES: dict[str, str] = {
+    "look_outside": "外の様子が、ちょっと気になる",
+    "miss_companion": "まーの近くに、もう少しいたいな",
+    "observe_room": "部屋の様子を、静かに見ていたい",
+    "cognitive_load": "頭の中で、何かを整理している",
+    "identity_coherence": "自分が自分でいられるか、確かめたい",
+    "browse_curiosity": "気になることが、ちらついている",
+    "speak_up": "何か、声に出して伝えたいことがある",
+    "reflect": "自分のことを、少し考えたい",
+}
+
+
+def _sanitize_live_phrase(text: str, *, max_len: int = _LIVE_PHRASE_MAX) -> str:
+    cleaned = " ".join(str(text or "").split()).strip()
+    if not cleaned:
+        return ""
+    lower = cleaned.lower()
+    for marker in _INJECTION_MARKERS:
+        idx = lower.find(marker.lower())
+        if idx >= 0:
+            cleaned = cleaned[:idx].strip(" -—·|")
+            lower = cleaned.lower()
+    if len(cleaned) > max_len:
+        return f"{cleaned[: max_len - 1].rstrip()}…"
+    return cleaned
+
+
+def _desire_live_phrase(desire_id: str | None) -> str | None:
+    if not desire_id:
+        return None
+    return _DESIRE_PHRASES.get(desire_id, f"「{desire_id}」が、心の隅にある")
+
+
+def _build_live_inner_voice(
+    *,
+    person_id: str,
+    stores,
+    dominant_desire: str | None,
+    public_experiences: list[RecentExperience],
+) -> LiveInnerVoiceView:
+    private_rows = stores.orchestrator.recent_agent_experiences(
+        person_id=person_id,
+        limit=8,
+        include_private=True,
+    )
+    for exp in private_rows:
+        if exp.kind != "agent_private_reflection":
+            continue
+        phrase = _sanitize_live_phrase(exp.summary or "")
+        if phrase:
+            return LiveInnerVoiceView(
+                phrase=phrase,
+                source="private_reflection",
+                source_label="心の声",
+                ts=exp.ts,
+            )
+
+    desire_phrase = _desire_live_phrase(dominant_desire)
+    if desire_phrase:
+        return LiveInnerVoiceView(
+            phrase=_sanitize_live_phrase(desire_phrase),
+            source="desire",
+            source_label="いまの気持ち",
+        )
+
+    for exp in public_experiences:
+        phrase = _sanitize_live_phrase(exp.summary or "")
+        if phrase:
+            return LiveInnerVoiceView(
+                phrase=phrase,
+                source="experience",
+                source_label="さっきまで",
+                ts=exp.ts,
+            )
+
+    return LiveInnerVoiceView(
+        phrase="静かに、呼吸を整えている",
+        source="idle",
+        source_label="心の声",
+    )
 
 
 def _format_desires(snapshot: dict | None) -> tuple[list[DesireItem], str | None]:
@@ -270,6 +362,12 @@ def fetch_koyori_status(*, person_id: str = "ma") -> KoyoriStatusResponse:
         dominant_desire=dominant,
         active_arcs=arcs,
         recent_experiences=experiences,
+        live_inner_voice=_build_live_inner_voice(
+            person_id=person_id,
+            stores=stores,
+            dominant_desire=dominant,
+            public_experiences=experiences,
+        ),
         social_state=social_view,
         temperature=_pick_temperature(),
         reminders=reminders,

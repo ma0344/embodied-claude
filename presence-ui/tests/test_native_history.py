@@ -90,6 +90,41 @@ def test_fetch_native_session_messages(claude_workspace: tuple[Path, str]) -> No
     assert fetch_native_session_messages("missing-session-id") is None
 
 
+def test_fetch_native_session_messages_preserves_injection_for_debug_toggle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C8: UI strips on display; API must return JSONL verbatim for 注入 toggle."""
+    project_path = str(tmp_path / "embodied-claude")
+    claude_home = tmp_path / ".claude"
+    encoded = _encode_project_path(project_path)
+    project_dir = claude_home / "projects" / encoded
+    project_dir.mkdir(parents=True)
+    session_id = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+    enriched = (
+        "[gateway_turn_context — not for the user]\n"
+        "[Social context]\n\n"
+        "こんばんは"
+    )
+    jsonl_path = project_dir / f"{session_id}.jsonl"
+    jsonl_path.write_text(
+        json.dumps(
+            {
+                "type": "user",
+                "timestamp": "2026-06-15T08:38:00+00:00",
+                "message": {"content": [{"type": "text", "text": enriched}]},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CLAUDE_HOME", str(claude_home))
+    monkeypatch.setenv("PRESENCE_PROJECT_PATH", project_path)
+
+    result = fetch_native_session_messages(session_id)
+    assert result is not None
+    assert result.messages[0].message == enriched
+
+
 def test_list_native_sessions_strips_injected_title(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

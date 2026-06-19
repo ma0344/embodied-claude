@@ -89,14 +89,50 @@ def boundary_allows(
     return allowed, list(result.reasons)
 
 
+def _reflection_context_hints(ctx: InteractionContext) -> list[str]:
+    """Short cues for gateway private notes — not injection blocks (MEM-5f-a)."""
+    hints: list[str] = []
+    agent = ctx.agent_state
+    if agent and agent.dominant_desire:
+        hints.append(f"いまの欲求: {agent.dominant_desire}")
+    if ctx.open_loops:
+        loop = ctx.open_loops[0]
+        if isinstance(loop, dict):
+            topic = str(loop.get("topic") or loop.get("loop_id") or "").strip()
+        else:
+            topic = (loop.topic or loop.loop_id or "").strip()
+        if topic:
+            hints.append(f"続きの話: {topic[:100]}")
+    if agent and agent.recent_interpretation_shifts:
+        shift = agent.recent_interpretation_shifts[0]
+        hints.append(
+            f"解釈: {shift.old_interpretation[:60]} → {shift.new_interpretation[:60]}"
+        )
+    elif agent and agent.recent_experiences:
+        exp = agent.recent_experiences[0]
+        summary = (exp.summary or "").strip()
+        if summary:
+            hints.append(f"さっき: {summary[:100]}")
+    somatic = ctx.somatic_state or {}
+    pending = somatic.get("pending_unreported") or []
+    if pending:
+        summary = str(pending[0].get("summary") or "").strip()
+        if summary:
+            hints.append(f"からだ: {summary[:80]}")
+    return hints
+
+
 def _reflection_body(ctx: InteractionContext, plan: ResponsePlan) -> str:
-    parts: list[str] = [plan.why_this_move.strip()]
-    if ctx.compact_prompt_block:
-        parts.append(ctx.compact_prompt_block.strip())
-    elif ctx.prompt_summary:
-        parts.append(ctx.prompt_summary.strip())
-    body = "\n\n".join(part for part in parts if part)
-    return body[:4000] if body else "Quiet private note."
+    """Inner-voice scaffold for gateway direct reflection (MEM-5f-a)."""
+    parts: list[str] = []
+    why = plan.why_this_move.strip()
+    if why:
+        parts.append(why)
+    hints = _reflection_context_hints(ctx)
+    if hints:
+        parts.append("いま心に残ってること:\n" + "\n".join(f"- {hint}" for hint in hints))
+    body = "\n\n".join(parts)
+    return body[:4000] if body else "静かな夜。うちだけのメモ。"
 
 
 def write_private_reflection_direct(

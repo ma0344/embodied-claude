@@ -513,8 +513,74 @@ promote_score = 0.25*recency + 0.20*frequency + 0.30*emotion + 0.25*interest
 | MEM-5b | `metadata_json` 充填（episode_close / experience_mirror 時） | **済** |
 | MEM-5c | Dreaming が `stm_scoring` を使う（`entries_to_promote`） | **済** |
 | MEM-5d | LTM 忘却・重複統合（低頻度ジョブ） | 未 |
+| MEM-5e | **digest 分割** — `[dream_digest]`（外向き episodic）と reflection 除外 + 優先順 | **済** |
+| MEM-5f | **心の声 2 系統** — ライブ（UI）+ 夜間内省（LLM 合成） | 未 |
 
 **手計算メモ（2026-06-18 `social.db`）**: `scripts/score-stm-entries.py --day 2026-06-18` で再現。
+
+##### MEM-5e — Dream digest 分割（合意 2026-06-19）
+
+**問題**: `build_dream_digest()` が undreamed STM を時系列で 2400 字切り。15 分 tick の `agent_private_reflection` が先頭を占領し、`episode_close` / 約束 / ホームヘルパーが digest から落ちる。
+
+**方針**: 朝 compose 用は **2 チャンネル**。文字数を上げる前に **入れるものを分ける**。
+
+| チャンネル | 役割 | 含める | 含めない |
+|-----------|------|--------|----------|
+| `[dream_digest]` | 昨日、外の世界で何があったか | `episode_summary` / `episode_close`、`open_loop_progress`、`interpretation_shift`、`body_affliction`、somatic 未報告 | 生の `agent_private_reflection` 行 |
+| `[overnight_inner_voice]` | 夜、振り返った心の声（MEM-5f） | Dreaming 夜間 LLM 合成（2〜4 テーマ） | 15 分 tick の羅列 |
+
+**文字数（目安・独立 budget）**
+
+| ブロック | 目安 | 備考 |
+|----------|------|------|
+| `[dream_digest]` | 2400〜2800 | episode 優先 + merge（`open_loop_progress` 同日重複） |
+| `[overnight_inner_voice]` | 1200〜1800 | 段落 2〜3、一人称 |
+| `compact_prompt_block` 全体 | 12000 上限 | 現状維持（`truncate_prompt_text`） |
+
+**実装メモ**
+
+- `build_dream_digest()` — kind フィルタ + salience 順（episode 先）
+- `last_dream_digest.json` — `summary` のみ → `episodic_summary` + `inner_voice_summary`（または別ファイル `last_overnight_inner_voice.json`）
+- `memory_context.enrich_memory_context` — morning window で両ブロック注入
+- UI / 注入トグル — `[overnight_inner_voice]` タグを `cc-messages.js` / `user_prompt.py` に追加
+
+**依存**: MEM-5f（inner voice 合成）と同時でも可。5e だけ先に reflection 除外でも digest 品質は改善する。
+
+##### MEM-5f — 心の声 2 系統（合意 2026-06-19）
+
+**概念（まー合意）**: 「心の声」は 2 本立て。**前者があって、後者が深みを持つ**。両方強化する。
+
+| 系統 | タイミング | 例 | 載せ方 |
+|------|-----------|-----|--------|
+| **ライブ心の声** | その時々の感じ・考え | 状態カード「いまの気持ち」「さっきまで」、欲求の言い換え、自律 tick 直後の一言 | **UI に常時**（`koyori-voice.js` + status API） |
+| **振り返り心の声** | 夜・朝の内省 | テーマ合成「まーの体調が心配で…」、daybook と interpretation 接続 | **`[overnight_inner_voice]`**（朝 compose のみ） |
+
+**ライブ強化（Phase A — 優先）**
+
+- `_reflection_body()` から `compact_prompt_block` / `prompt_summary` の貼り付けをやめる（`why_this_move` + 自由記述のみ）
+- `write_private_reflection` の plan 契約 — 一人称・感覚・比喩 OK；ツール名・注入タグ禁止
+- UI: `agent_private_reflection` / 最新 desire を **「心の声」カード**として明示（`formatExperiences` 拡張 or 専用 `live_inner_voice` API）
+- 自律 tick 後、status poll で **短い live phrase**（80 字以内）を surface — キオスクでも「今考えてること」が見える
+
+**振り返り強化（Phase B — Dreaming 拡張）**
+
+- Dreaming 末尾: 当日 `private_reflections` 全文 → **LLM 1 回**で thematic summary（夜間 LLM 使用 **許容** — ニュアンス落ちより合成優先）
+- 15 分 tick は STM に監査用残置；朝は **合成版のみ** inject
+- `interpretation_shift` があれば inner voice に「解釈が変わった点」を 1 行添付
+- `may_surface_later=true` の reflection は、日中 compose に **短いフレーズ**（任意）で surface 可
+
+**Phase C（育ち — MEM-6 接続）**
+
+- daybook `noticed_changes` ↔ inner voice 突合
+- 週次 arc 候補 → SOUL パッチは人間承認
+
+**実装 ID**
+
+| ID | 内容 | 状態 |
+|----|------|------|
+| MEM-5f-a | `_reflection_body` + plan 契約（記録品質） | **済** |
+| MEM-5f-b | UI live 心の声カード / status API | **済** |
+| MEM-5f-c | Dreaming `synthesize_overnight_inner_voice()` + 朝注入 | 未 |
 
 ##### MEM-7 — Native 会話 JSONL のデータ管理（合意 2026-06-18）
 
@@ -705,7 +771,7 @@ MVP チェックリスト:
 - [x] **C5** キャンセル UI（「止める」ボタン + AbortController）
 - [x] **C6** Markdown 表示（marked + DOMPurify、`static/vendor/` 同梱）
 - [x] **C7** 画面構成・レイアウト（900px+ 2カラム: 会話｜視界+状態、`?kiosk=1`、キオスク URL 自動付与）
-- [x] **C8** デバッグ注入の非表示（既定 OFF・会話ヘッダ右下「注入」トグルで表示切替）
+- [x] **C8** デバッグ注入の非表示（既定 OFF・会話ヘッダ「注入」トグルで表示切替。**2026-06-19 fix**: messages API が strip して返していたためトグル ON でも空 — JSONL 生文を返し strip は UI のみ）
 - [x] **C9** 8080 optional 化（`post-logon-smoke` / `verify-mission-a` Native 経路、`install-webui-task` 任意明記）
 - [x] **C10** JSONL 正本の履歴同期（`GET /api/v1/native/sessions` + messages、`app.js` 7s ポール・PC/キオスク共有）
 
@@ -735,8 +801,8 @@ MVP チェックリスト:
   - **自動復帰**: 消灯中の say / 着信（outbound・room_say）で画面を戻す — **UI で ON/OFF 可変**
   - **実装メモ**: キオスクは SSE で着信・リマインドは `document.hidden` でも届くが、ポール fallback は hidden 時スキップ中 → 自動復帰 ON 時は `wakeLock.request` + 音声再生で復帰を試みる
 - [x] **C11h** チャットコピー — 各 `ma` / `koyori` bubble に「コピー」ボタン（プレーンテキスト、`clipboard` + fallback）。キオスク 44px タップ対象
-- [ ] **C11g-reg** 画面消灯が効かない — **修正 2026-06-19**: 原因は `koyori-kiosk.sh` の `xset -dpms`（DPMS 無効化）。`+dpms` + `koyori-screen-idle-server`（`:18790`）+ `app.js` から `screen-off` 呼び出し。Surface で `install-koyori-kiosk.sh` 再実行後リブート。任意: `KOYORI_CONSOLEBLANK_SEC=900` で GRUB `consoleblank`（[メモ](https://intinfinity.com/index.php/archives/1084)）
-- [ ] **C11-pc** `?kiosk=0` で会話・サイドバーが空（**回帰** 2026-06-18）— ma-home ブラウザ（PC レイアウト）でチャット履歴・右レールが表示されない。`isKioskLayout()` と session マウント / native history ポールの分岐を確認
+- [x] **C11g-reg** 画面消灯が効かない — **済 2026-06-19**（実機確認: install + reboot 後、無操作で消灯・タッチで復帰）
+- [x] **C11-pc** `?kiosk=0` で会話・サイドバーが空（**回帰** 2026-06-18）— **済 2026-06-19**: (1) `STATUS_EXPAND_KEY` 欠落 (2) PC レイアウトで `crypto.randomUUID()` が `http://ma-home.local` 非 secure context で throw → `initSessions` 未到達。`newRandomToken()` フォールバック + outbound setup try/catch
 
 | 優先 | 項目 | メモ |
 |------|------|------|

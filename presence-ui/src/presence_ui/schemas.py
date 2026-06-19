@@ -260,12 +260,22 @@ class PlanPreviewView(BaseModel):
     preview_at: str
 
 
+class LiveInnerVoiceView(BaseModel):
+    """Short live inner-voice phrase for status UI (MEM-5f-b)."""
+
+    phrase: str
+    source: Literal["private_reflection", "desire", "experience", "idle"] = "idle"
+    source_label: str = "心の声"
+    ts: str | None = None
+
+
 class KoyoriStatusResponse(BaseModel):
     updated_at: str
     desires: list[DesireItem]
     dominant_desire: str | None = None
     active_arcs: list[ActiveArc]
     recent_experiences: list[RecentExperience]
+    live_inner_voice: LiveInnerVoiceView | None = None
     social_state: SocialStateView | None = None
     temperature: TemperatureView
     reminders: list[ReminderCardItem] = Field(default_factory=list)

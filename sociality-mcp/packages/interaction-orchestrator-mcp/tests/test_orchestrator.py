@@ -318,6 +318,27 @@ class TestPlan:
         assert plan.voice.speak is False
         assert "camera_speaker_audio" in plan.initiative.forbidden_actions
 
+    def test_write_private_reflection_inner_voice_contract(self, stores):
+        stores["social_state"].ingest_social_event(
+            {
+                "ts": "2026-04-18T16:30:00Z",  # 01:30 JST
+                "source": "camera",
+                "kind": "scene_parse",
+                "person_id": "ma",
+                "confidence": 0.8,
+                "payload": {"scene_summary": "Dim room, no speech."},
+            }
+        )
+        ctx = _compose(stores, user_text=None, channel="autonomous")
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text=None)
+        )
+        assert plan.primary_move == "write_private_reflection"
+        joined_in = " ".join(plan.must_include)
+        joined_avoid = " ".join(plan.must_avoid)
+        assert "inner voice" in joined_in or "うち" in joined_in
+        assert "injection tags" in joined_avoid or "gateway_turn_context" in joined_avoid
+
     def test_autonomous_quiet_inward_cognitive_load(self, stores, monkeypatch, tmp_path):
         import json as _json
 

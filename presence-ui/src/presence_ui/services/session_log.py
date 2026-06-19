@@ -88,7 +88,7 @@ def _record_kind(record: dict[str, Any]) -> str | None:
     return str(kind) if kind else None
 
 
-def _messages_from_jsonl(path: Path) -> list[ChatMessage]:
+def _messages_from_jsonl(path: Path, *, strip_user_injection: bool = True) -> list[ChatMessage]:
     messages: list[ChatMessage] = []
     for record in _read_jsonl(path):
         rec_type = _record_kind(record)
@@ -101,7 +101,8 @@ def _messages_from_jsonl(path: Path) -> list[ChatMessage]:
             text = "\n".join(prompts)
             if _should_skip_user_text(text):
                 continue
-            text = strip_enriched_user_prompt(text)
+            if strip_user_injection:
+                text = strip_enriched_user_prompt(text)
             if not text.strip():
                 continue
             messages.append(ChatMessage(sender="ma", message=text, timestamp=ts))

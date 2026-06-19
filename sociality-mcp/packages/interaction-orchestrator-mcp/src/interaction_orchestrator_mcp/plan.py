@@ -350,7 +350,18 @@ def _pick_must_lists(
             "respect the most recent interpretation shift (do not regress to old interpretation)"
         )
     if primary_move == "write_private_reflection":
-        must_include.append("explain why this was a reflection, not a nudge")
+        must_include.extend(
+            [
+                "write as Koyori inner voice (first person うち/私; felt sense OK)",
+                "explain why this was a reflection, not a nudge",
+            ]
+        )
+        must_avoid.extend(
+            [
+                "paste compact_prompt_block or injection tags verbatim",
+                "tool names, MCP identifiers, or [gateway_turn_context] blocks",
+            ]
+        )
     if not user_text and primary_move != "stay_silent":
         must_avoid.append("responding as if the human just spoke")
     somatic = ctx.somatic_state or {}

@@ -114,8 +114,7 @@ def run_dreaming_job(
     except Exception as exc:
         logger.warning("Dreaming daybook failed: %s", exc)
 
-    digest_entries = entries
-    digest_summary = build_dream_digest(digest_entries)
+    digest_summary = build_dream_digest(entries)
     dreamed_at = utc_now()
     marked = stm.mark_dreamed([entry.entry_id for entry in entries], dreamed_at=dreamed_at)
 

@@ -98,5 +98,5 @@ def fetch_native_session_messages(
     path = resolve_session_jsonl_path(session_id, project_path=project_path)
     if path is None:
         return None
-    messages: list[ChatMessage] = _messages_from_jsonl(path)
+    messages: list[ChatMessage] = _messages_from_jsonl(path, strip_user_injection=False)
     return NativeSessionMessagesResponse(session_id=session_id, messages=messages)

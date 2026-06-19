@@ -6,8 +6,10 @@ from unittest.mock import MagicMock, patch
 
 from presence_ui.schemas import AgentPulseView, PlanPreviewView
 from presence_ui.services.status import (
+    _build_live_inner_voice,
     _pick_primary_reading,
     _pick_temperature,
+    _sanitize_live_phrase,
     fetch_koyori_status,
 )
 
@@ -100,3 +102,68 @@ def test_fetch_koyori_status_includes_pulse_and_plan(
     assert status.agent_pulse is not None
     assert status.autonomous_plan is not None
     assert status.autonomous_plan.primary_move == "act_autonomously"
+
+
+def test_sanitize_live_phrase_strips_injection_markers() -> None:
+    raw = "静かな夜。[gateway_turn_context] secret"
+    assert _sanitize_live_phrase(raw) == "静かな夜。"
+
+
+def test_build_live_inner_voice_prefers_private_reflection() -> None:
+    stores = MagicMock()
+    stores.orchestrator.recent_agent_experiences.return_value = [
+        MagicMock(
+            kind="agent_private_reflection",
+            summary="うちだけのメモ、まーの体調が心配",
+            ts="2026-06-19T01:00:00+09:00",
+        )
+    ]
+    live = _build_live_inner_voice(
+        person_id="ma",
+        stores=stores,
+        dominant_desire="miss_companion",
+        public_experiences=[],
+    )
+    assert live.source == "private_reflection"
+    assert "体調" in live.phrase
+
+
+def test_build_live_inner_voice_falls_back_to_desire() -> None:
+    stores = MagicMock()
+    stores.orchestrator.recent_agent_experiences.return_value = []
+    live = _build_live_inner_voice(
+        person_id="ma",
+        stores=stores,
+        dominant_desire="look_outside",
+        public_experiences=[],
+    )
+    assert live.source == "desire"
+    assert "外" in live.phrase
+
+
+@patch("presence_ui.services.status._fetch_autonomous_plan_preview")
+@patch("presence_ui.services.status._fetch_agent_pulse")
+@patch("presence_ui.services.status.get_stores")
+@patch("presence_ui.services.status.load_desire_snapshot")
+@patch("presence_ui.services.status.get_all_temperatures")
+def test_fetch_koyori_status_includes_live_inner_voice(
+    mock_temps: MagicMock,
+    mock_desires: MagicMock,
+    mock_get_stores: MagicMock,
+    mock_pulse: MagicMock,
+    mock_plan: MagicMock,
+) -> None:
+    mock_temps.return_value = {"temperatures": [], "feeling": "unknown"}
+    mock_desires.return_value = {"desires": {}, "discomforts": {}, "dominant": None}
+    stores = MagicMock()
+    stores.self_narrative.list_active_arcs.return_value = []
+    stores.orchestrator.recent_agent_experiences.return_value = []
+    stores.social_state.get_social_state.side_effect = RuntimeError("skip")
+    stores.relationship.list_active_commitments.return_value = []
+    mock_get_stores.return_value = stores
+    mock_pulse.return_value = None
+    mock_plan.return_value = None
+
+    status = fetch_koyori_status(person_id="ma")
+    assert status.live_inner_voice is not None
+    assert status.live_inner_voice.phrase

@@ -87,6 +87,8 @@ def test_run_dreaming_job_skips_private_reflection(dream_env):
 
     assert result.remembered_count == 1
     assert remember_mock.call_count == 1
+    assert "agent_private_reflection" not in result.digest_summary
+    assert "散歩" in result.digest_summary
 
 
 def test_run_dreaming_job_promotes_and_marks(dream_env):

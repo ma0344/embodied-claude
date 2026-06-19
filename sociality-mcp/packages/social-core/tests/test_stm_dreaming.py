@@ -7,6 +7,7 @@ from social_core.stm_dreaming import (
     build_dream_digest,
     emotion_for_ltm,
     entries_to_promote,
+    select_episodic_digest_entries,
     should_promote_stm_to_ltm,
 )
 
@@ -100,3 +101,68 @@ def test_build_dream_digest_wraps_entries():
     digest = build_dream_digest([_entry()])
     assert "[dream_digest]" in digest
     assert "天気" in digest
+
+
+def test_build_dream_digest_excludes_private_reflection():
+    episode = _entry(entry_id="ep1", summary="ホームヘルパーが来る話")
+    reflection = _entry(
+        entry_id="ref1",
+        source="experience_mirror",
+        kind="agent_private_reflection",
+        summary="（自律の思考メモ）深夜の独り言",
+        ts="2026-06-16T23:00:00+09:00",
+    )
+    digest = build_dream_digest([reflection, episode])
+    assert "ホームヘルパー" in digest
+    assert "agent_private_reflection" not in digest
+    assert "深夜の独り言" not in digest
+
+
+def test_build_dream_digest_prioritizes_episode_before_autonomous():
+    auto = _entry(
+        entry_id="auto1",
+        source="experience_mirror",
+        kind="agent_autonomous_action",
+        summary="tick: quietly observed",
+        ts="2026-06-16T22:00:00+09:00",
+    )
+    episode = _entry(
+        entry_id="ep1",
+        summary="まーと散歩の約束",
+        ts="2026-06-16T21:00:00+09:00",
+    )
+    digest = build_dream_digest([auto, episode])
+    ep_pos = digest.index("散歩")
+    auto_pos = digest.index("quietly")
+    assert ep_pos < auto_pos
+
+
+def test_select_episodic_digest_dedupes_open_loop_topics():
+    older = _entry(
+        entry_id="a",
+        kind="open_loop_progress",
+        source="experience_mirror",
+        summary="明日の天気は晴れみたい",
+        ts="2026-06-16T10:00:00+09:00",
+    )
+    newer = _entry(
+        entry_id="b",
+        kind="open_loop_progress",
+        source="experience_mirror",
+        summary="松本市だと晴れ時々曇り",
+        ts="2026-06-16T11:00:00+09:00",
+    )
+    selected = select_episodic_digest_entries([older, newer])
+    assert len(selected) == 1
+    assert selected[0].entry_id == "b"
+
+
+def test_build_dream_digest_note_when_only_private_reflection():
+    reflection = _entry(
+        kind="agent_private_reflection",
+        source="experience_mirror",
+        summary="深夜の独り言",
+    )
+    digest = build_dream_digest([reflection])
+    assert "no episodic rows" in digest
+    assert "agent_private_reflection" not in digest

@@ -21,6 +21,7 @@ const KIOSK_SLEEP_MINUTES_KEY = "koyori-kiosk-sleep-minutes";
 const KIOSK_SLEEP_MINUTES_DEFAULT = 10;
 const KIOSK_SLEEP_WAKE_ON_NOTIFY_KEY = "koyori-kiosk-sleep-wake-on-notify";
 const CONTEXT_RAIL_PINS_KEY = "koyori-context-rail-pins";
+const STATUS_EXPAND_KEY = "koyori-status-expand";
 const INBOUND_SEEDS_STORAGE_KEY = "koyori-inbound-seeds-v1";
 const EPISODE_IDLE_MINUTES_DEFAULT = 20;
 
@@ -755,8 +756,8 @@ function escapeAttr(text) {
   return escapeHtml(text).replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
 
-/** randomUUID needs a secure context (HTTPS / localhost). Kiosk uses http://ma-home.local. */
-function newRequestId() {
+/** randomUUID needs a secure context (HTTPS / localhost). Room UI often uses http://ma-home.local. */
+function newRandomToken() {
   try {
     if (globalThis.crypto?.randomUUID) {
       return globalThis.crypto.randomUUID();
@@ -764,7 +765,11 @@ function newRequestId() {
   } catch {
     // non-secure context (e.g. http://192.168.x.x:8090)
   }
-  return `req-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+function newRequestId() {
+  return `req-${newRandomToken()}`;
 }
 
 function updateClock() {
@@ -947,6 +952,9 @@ async function selectSession(sessionId, { force = false } = {}) {
 
 async function initSessions() {
   await loadUiConfig();
+  relocateSessionControls();
+  applyContextRailLayout();
+  applyDebugInjectionVisibility();
   setupOutboundPoll();
   if (isNativeChat()) {
     await initNativeSessions();
@@ -1860,9 +1868,13 @@ function buildStatusHtml(data, { compact = false } = {}) {
   const social = KoyoriVoice.formatSocialVibe(data.social_state);
   const journey = KoyoriVoice.formatJourney(data.active_arcs);
   const recent = KoyoriVoice.formatExperiences(data.recent_experiences);
+  const innerVoice = KoyoriVoice.formatLiveInnerVoice(data.live_inner_voice);
   const pulse = KoyoriVoice.formatPulse(data.agent_pulse);
   const plan = KoyoriVoice.formatPlanPreview(data.autonomous_plan);
-  const open = (id) => isStatusCardOpen(id, compact);
+  const open = (id) => {
+    if (id === "inner_voice" && compact) return true;
+    return isStatusCardOpen(id, compact);
+  };
   const reminders = data.reminders || [];
 
   const desireList = desires.lines
@@ -1956,6 +1968,20 @@ function buildStatusHtml(data, { compact = false } = {}) {
         ${tempReadings ? `<ul class="temp-readings">${tempReadings}</ul>` : ""}`,
     }),
     buildStatusCard({
+      id: "inner_voice",
+      label: innerVoice.headline,
+      icon: "♡",
+      extraClass: " status-card--inner-voice",
+      open: open("inner_voice"),
+      innerHtml: `
+        <p class="status-card__body status-card__body--inner-voice">${escapeHtml(innerVoice.body)}</p>
+        ${
+          innerVoice.subline
+            ? `<p class="status-card__sub">${escapeHtml(innerVoice.subline)}</p>`
+            : ""
+        }`,
+    }),
+    buildStatusCard({
       id: "recent",
       label: recent.headline,
       open: open("recent"),
@@ -2029,16 +2055,24 @@ function renderStatus(data) {
     tempEl.textContent = temp.detail ? `${temp.body} · ${temp.detail}` : temp.body;
   }
 
-  for (const root of statusTargets()) {
-    const compact =
-      root.classList.contains("status-grid--rail") ||
-      root.classList.contains("status-grid--drawer");
-    root.innerHTML = buildStatusHtml(data, { compact });
-    window.setTimeout(() => {
-      root.querySelectorAll(".status-card.is-updated").forEach((card) => {
-        card.classList.remove("is-updated");
-      });
-    }, 700);
+  try {
+    for (const root of statusTargets()) {
+      const compact =
+        root.classList.contains("status-grid--rail") ||
+        root.classList.contains("status-grid--drawer");
+      root.innerHTML = buildStatusHtml(data, { compact });
+      window.setTimeout(() => {
+        root.querySelectorAll(".status-card.is-updated").forEach((card) => {
+          card.classList.remove("is-updated");
+        });
+      }, 700);
+    }
+  } catch (err) {
+    console.error("renderStatus failed:", err);
+    const message = `<p class="error">${escapeHtml(err.message || String(err))}</p>`;
+    for (const root of statusTargets()) {
+      root.innerHTML = message;
+    }
   }
 }
 
@@ -2103,6 +2137,7 @@ async function refreshStatus() {
     const data = await fetchJson("/api/v1/koyori/status");
     renderStatus(data);
   } catch (err) {
+    console.warn("status refresh failed:", err.message);
     const message = `<p class="error">${escapeHtml(err.message)}</p>`;
     for (const root of statusTargets()) {
       root.innerHTML = message;
@@ -2180,7 +2215,7 @@ function outboundClientId() {
   }
   let id = localStorage.getItem(OUTBOUND_CLIENT_ID_KEY);
   if (!id || id === "kiosk") {
-    id = `web-${crypto.randomUUID().slice(0, 12)}`;
+    id = `web-${newRandomToken().slice(0, 12)}`;
     localStorage.setItem(OUTBOUND_CLIENT_ID_KEY, id);
   }
   return id;
@@ -3176,41 +3211,45 @@ async function pollOutboundNudges() {
 }
 
 function setupOutboundPoll() {
-  if (outboundPollTimer) {
-    clearInterval(outboundPollTimer);
-    outboundPollTimer = null;
-  }
-  document.addEventListener("click", unlockSpeechOnce, { once: true, passive: true });
-  document.addEventListener("touchstart", unlockSpeechOnce, { once: true, passive: true });
-  if (!isKioskLayout()) {
-    document.addEventListener(
-      "click",
-      () => {
-        void requestBrowserNotificationPermission().then((ok) => {
-          if (ok) void pollOutboundNudges();
-        });
-      },
-      { once: true, passive: true },
-    );
-    if (typeof Notification !== "undefined" && Notification.permission === "default") {
-      console.info(
-        "[koyori] Allow browser notifications on this page for outbound toasts (title: Koyori).",
-      );
+  try {
+    if (outboundPollTimer) {
+      clearInterval(outboundPollTimer);
+      outboundPollTimer = null;
     }
-  }
-  setupOutboundSse();
-  restartOutboundPollTimer();
-  void pollOutboundNudges();
-  void pollRoomSayPending();
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) {
-      void pollOutboundNudges();
-      void pollRoomSayPending();
-      if (outboundSseEnabled() && outboundEventSource?.readyState === EventSource.CLOSED) {
-        setupOutboundSse();
+    document.addEventListener("click", unlockSpeechOnce, { once: true, passive: true });
+    document.addEventListener("touchstart", unlockSpeechOnce, { once: true, passive: true });
+    if (!isKioskLayout()) {
+      document.addEventListener(
+        "click",
+        () => {
+          void requestBrowserNotificationPermission().then((ok) => {
+            if (ok) void pollOutboundNudges();
+          });
+        },
+        { once: true, passive: true },
+      );
+      if (typeof Notification !== "undefined" && Notification.permission === "default") {
+        console.info(
+          "[koyori] Allow browser notifications on this page for outbound toasts (title: Koyori).",
+        );
       }
     }
-  });
+    setupOutboundSse();
+    restartOutboundPollTimer();
+    void pollOutboundNudges();
+    void pollRoomSayPending();
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        void pollOutboundNudges();
+        void pollRoomSayPending();
+        if (outboundSseEnabled() && outboundEventSource?.readyState === EventSource.CLOSED) {
+          setupOutboundSse();
+        }
+      }
+    });
+  } catch (err) {
+    console.warn("outbound poll setup failed (chat/status still work):", err.message);
+  }
 }
 
 function setupKioskLayout() {

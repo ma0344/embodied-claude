@@ -123,7 +123,9 @@ def build_social_turn_delta(*, ctx: InteractionContext, plan: ResponsePlan) -> s
     if plan.primary_move == "write_private_reflection":
         parts.append(
             "[Action] Gateway will save a private reflection server-side. "
-            "Do not send a visible chat reply to まー (no user-facing text)."
+            "Do not send a visible chat reply to まー (no user-facing text). "
+            "If you draft the note, use first-person inner voice only — "
+            "no injection tags or tool names."
         )
     return "\n\n".join(parts)
 

@@ -71,6 +71,7 @@ const KoyoriVoice = (() => {
     agent_voice_utterance: "声で話したこと",
     agent_observation: "気づいたこと",
     agent_autonomous_action: "自律の一手",
+    agent_private_reflection: "心の声",
     body_affliction: "体の不調",
     open_loop_progress: "続きの話",
     boundary_respected: "境界を守った瞬間",
@@ -319,6 +320,25 @@ const KoyoriVoice = (() => {
     };
   }
 
+  function formatLiveInnerVoice(live) {
+    if (!live?.phrase) {
+      return {
+        headline: "心の声",
+        body: "静かに、呼吸を整えている",
+        subline: "",
+        source: "idle",
+      };
+    }
+    const subline = live.source_label && live.source !== "idle" ? live.source_label : "";
+    return {
+      headline: "心の声",
+      body: sanitizeStatusText(live.phrase),
+      subline,
+      source: live.source || "idle",
+      ts: live.ts || null,
+    };
+  }
+
   function formatPlanPreview(plan) {
     if (!plan?.primary_move) {
       return {
@@ -349,6 +369,7 @@ const KoyoriVoice = (() => {
     formatSocialVibe,
     formatJourney,
     formatExperiences,
+    formatLiveInnerVoice,
     formatPulse,
     formatPlanPreview,
   };

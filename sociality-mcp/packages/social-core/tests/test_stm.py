@@ -115,6 +115,19 @@ def test_mirror_experience_auto_kind(social_db):
     assert entry.kind == kind
 
 
+def test_append_anchors_relative_dates(social_db):
+    stm = StmStore(social_db)
+    entry = stm.append(
+        summary="明日の天気を確認した",
+        kind="open_loop_progress",
+        source="experience_mirror",
+        ts="2026-06-18T22:00:00+09:00",
+        person_id="ma",
+    )
+    assert entry.summary.startswith("2026年6月19日")
+    assert "明日" not in entry.summary
+
+
 def test_mirror_experience_high_importance(social_db):
     stm = StmStore(social_db)
     with social_db.transaction() as conn:

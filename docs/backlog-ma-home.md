@@ -814,6 +814,9 @@ MVP チェックリスト:
 | 低 | **OL4** ノイズ loop 運用 | `purge-noise-open-loops.py` |
 
 - [x] **OL1** Open Loops 日付解決 — ingest `resolved_date`、期限過ぎ auto-close、`date_resolution.py`（2026-06-16）
+- [x] **OL1b** 記憶時日付アンカー — `明日/今日` → `2026年6月19日` 形式で open loop / STM / experience に保存、compose に `Calendar today`（2026-06-19）
+- [x] **OL1c** 日曜始まり週界 + 曜日 lookup — `来週の火曜` / `一週間後` / `来月の頭` / `今週末` 等（コードのみ）→ `social_core.date_resolution`
+- [x] **OL2（temporal）** — `次の/今度の{曜}`、曖昧スパン（`来週中`）は **確認キュー**（`needs_date_confirmation` + compose/plan）。`ja_timex_bridge`（任意）+ ベンチ `--ja-timex`。**ランタイム LLM 日付却下**（utility 5–6/10）
 - [x] **OL2+** リマインド仕様 — `N分後` / `「」`→`speak_line` / `delivery` metadata、`remind_commitment_direct` が speak_line 優先（2026-06-16）
 - [x] **OL0** stale open loop 掃除（`purge-stale-open-loops.py`、ingest/tick でも自動 close）
 

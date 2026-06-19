@@ -1,0 +1,10 @@
+{
+  "id": "09_next_week_vague",
+  "description": "来週中",
+  "text": "来週中にPRのレビュー終わらせたい",
+  "anchor_ts": "2026-06-19T10:00:00+09:00",
+  "expected_dates": ["2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26", "2026-06-27"],
+  "expected_any_of": true,
+  "rule_should_anchor": false,
+  "note": "来週=Sun Jun22–Sat Jun28; 来週中=Mon–Fri in that block"
+}

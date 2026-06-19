@@ -9,6 +9,7 @@ from joint_attention_mcp.store import JointAttentionStore
 from relationship_mcp.store import RelationshipStore
 from self_narrative_mcp.store import SelfNarrativeStore
 from social_core import DEFAULT_POLICY_TIMEZONE, local_view, utc_now
+from social_core.date_resolution import calendar_anchor_line
 from social_state_mcp.store import SocialStateStore
 
 from .desire_source import load_desire_snapshot
@@ -82,6 +83,8 @@ def compose_interaction_context(
                 topic=item.get("topic", ""),
                 status=item.get("status", ""),
                 updated_at=item.get("updated_at"),
+                needs_date_confirmation=bool(item.get("needs_date_confirmation")),
+                ambiguous_phrases=list(item.get("ambiguous_phrases") or []),
             )
             for item in _optional_list(
                 relationship_store, "list_open_loops", person_id=payload.person_id
@@ -175,6 +178,7 @@ def compose_interaction_context(
 
     prompt_summary = _build_prompt_summary(
         local_time=local_time_text,
+        calendar_anchor=calendar_anchor_line(ts=ts, tz_name=policy_timezone),
         person_id=payload.person_id,
         person_name=person_name,
         social_state=_to_plain(social_state),
@@ -439,6 +443,7 @@ def _pick_contract(
 def _build_prompt_summary(
     *,
     local_time: str,
+    calendar_anchor: str,
     person_id: str | None,
     person_name: str | None,
     social_state: dict[str, Any] | None,
@@ -478,7 +483,7 @@ def _build_prompt_summary(
         else "Relevant memories: none surfaced."
     )
     return (
-        f"Now {local_time} • {who} seems {availability}, {activity}, phase={phase}. "
+        f"{calendar_anchor} Now {local_time} • {who} seems {availability}, {activity}, phase={phase}. "
         f"{desire_text} {open_loop_text} {quiet_text} {memory_text} "
         f"Recent agent experiences: {len(agent_state.recent_experiences)}; "
         f"interpretation_shifts so far: {agent_state.interpretation_shifts}."
@@ -650,7 +655,29 @@ def _format_open_loops_section(
     lines = ["[open_loops]"]
     for loop in open_loops[:max_items]:
         status = loop.status or "open"
-        lines.append(f"- {loop.topic} ({status})")
+        if loop.needs_date_confirmation:
+            phrases = ", ".join(loop.ambiguous_phrases) or "?"
+            lines.append(
+                f"- {loop.topic} ({status}; needs_date_confirmation: {phrases})"
+            )
+        else:
+            lines.append(f"- {loop.topic} ({status})")
+    return lines
+
+
+def _format_date_confirmation_section(
+    open_loops: list[OpenLoopSummary], *, max_items: int = 3
+) -> list[str]:
+    pending = [loop for loop in open_loops if loop.needs_date_confirmation][:max_items]
+    if not pending:
+        return []
+    lines = ["[date_confirmation_needed]"]
+    for loop in pending:
+        phrases = ", ".join(loop.ambiguous_phrases) or loop.topic
+        lines.append(
+            f"- loop: {loop.topic[:120]} — ask まー for concrete date "
+            f"(ambiguous: {phrases}); do not guess"
+        )
     return lines
 
 
@@ -748,6 +775,7 @@ def _compact_block(
             discomforts=discomforts or {},
         ),
         *_format_open_loops_section(open_loops or []),
+        *_format_date_confirmation_section(open_loops or []),
         *_format_commitments_due_section(commitments_due or []),
         *_format_shifts_section(recent_shifts or []),
         *_format_experiences_section(recent_experiences or []),

@@ -16,7 +16,13 @@ from social_core import (
     parse_timestamp,
 )
 
-from .date_resolution import DEFAULT_TIMEZONE, as_of_date, is_stale, resolve_relative_date
+from .date_resolution import (
+    DEFAULT_TIMEZONE,
+    anchor_temporal_in_text,
+    as_of_date,
+    is_stale,
+    stale_from_detail_json,
+)
 from .inference import (
     FUTURE_MARKERS,
     STRESS_KEYWORDS,
@@ -168,7 +174,7 @@ class RelationshipStore:
         as_of_day = as_of_date(as_of_ts=as_of, tz_name=timezone)
         rows = self.db.fetchall(
             """
-            SELECT loop_id, topic, updated_at
+            SELECT loop_id, topic, updated_at, detail_json
             FROM open_loops
             WHERE person_id = ? AND status = 'open'
             ORDER BY updated_at DESC
@@ -176,14 +182,20 @@ class RelationshipStore:
             (person_id,),
         )
         closed_topics: list[str] = []
-        for loop_id, topic, updated_at in rows:
-            passed = is_stale(
-                topic=str(topic),
-                updated_at=str(updated_at),
-                tz_name=timezone,
+        for loop_id, topic, updated_at, detail_json in rows:
+            passed = stale_from_detail_json(
+                str(detail_json or ""),
                 as_of=as_of_day,
                 include_today=include_today,
             )
+            if passed is None:
+                passed = is_stale(
+                    topic=str(topic),
+                    updated_at=str(updated_at),
+                    tz_name=timezone,
+                    as_of=as_of_day,
+                    include_today=include_today,
+                )
             if passed is None:
                 continue
             detail = {
@@ -548,7 +560,7 @@ class RelationshipStore:
     def list_open_loops(self, *, person_id: str, limit: int = 10) -> list[OpenLoopRecord]:
         rows = self.db.fetchall(
             """
-            SELECT loop_id, topic, status
+            SELECT loop_id, topic, status, updated_at, detail_json
             FROM open_loops
             WHERE person_id = ? AND status = 'open'
             ORDER BY updated_at DESC
@@ -556,10 +568,79 @@ class RelationshipStore:
             """,
             (person_id, limit),
         )
-        return [
-            OpenLoopRecord(id=row["loop_id"], topic=row["topic"], status=row["status"])
-            for row in rows
-        ]
+        records: list[OpenLoopRecord] = []
+        for row in rows:
+            topic = self._ensure_anchored_loop_topic(
+                loop_id=str(row["loop_id"]),
+                topic=str(row["topic"]),
+                updated_at=str(row["updated_at"]),
+                detail_json=str(row["detail_json"] or ""),
+                persist=True,
+            )
+            detail = self._parse_loop_detail(str(row["detail_json"] or ""))
+            records.append(
+                OpenLoopRecord(
+                    id=row["loop_id"],
+                    topic=topic,
+                    status=row["status"],
+                    needs_date_confirmation=bool(detail.get("needs_date_confirmation")),
+                    ambiguous_phrases=list(detail.get("ambiguous_phrases") or []),
+                )
+            )
+        return records
+
+    @staticmethod
+    def _parse_loop_detail(detail_json: str) -> dict:
+        if not detail_json:
+            return {}
+        try:
+            return json.loads(detail_json)
+        except json.JSONDecodeError:
+            return {}
+
+    def _ensure_anchored_loop_topic(
+        self,
+        *,
+        loop_id: str,
+        topic: str,
+        updated_at: str,
+        detail_json: str,
+        persist: bool,
+        timezone: str = DEFAULT_TIMEZONE,
+    ) -> str:
+        anchored_result = anchor_temporal_in_text(
+            topic, updated_at=updated_at, tz_name=timezone
+        )
+        if anchored_result.needs_date_confirmation:
+            return topic
+
+        anchored = anchored_result.text
+        resolved = anchored_result.resolved_date
+        if anchored == topic:
+            return topic
+
+        detail = self._parse_loop_detail(detail_json)
+        if not detail.get("original_topic"):
+            detail["original_topic"] = topic
+        if resolved is not None:
+            detail["resolved_date"] = resolved.isoformat()
+        detail.setdefault("kind", "future_task_or_question")
+
+        if persist:
+            with self.db.transaction() as connection:
+                connection.execute(
+                    """
+                    UPDATE open_loops
+                    SET topic = ?, detail_json = ?
+                    WHERE loop_id = ?
+                    """,
+                    (
+                        anchored,
+                        json.dumps(detail, ensure_ascii=False),
+                        loop_id,
+                    ),
+                )
+        return anchored
 
     def record_boundary(
         self,
@@ -780,6 +861,15 @@ class RelationshipStore:
         topic = self._extract_topic(text, direction=direction)
         if topic is None:
             return
+        anchored_result = anchor_temporal_in_text(
+            topic, updated_at=ts, tz_name=timezone
+        )
+        if anchored_result.needs_date_confirmation:
+            anchored_topic = topic
+            resolved = None
+        else:
+            anchored_topic = anchored_result.text
+            resolved = anchored_result.resolved_date
         today = as_of_date(as_of_ts=ts, tz_name=timezone)
         stale_day = is_stale(
             topic=topic,
@@ -792,7 +882,7 @@ class RelationshipStore:
             SELECT loop_id FROM open_loops
             WHERE person_id = ? AND topic = ? AND status = 'open'
             """,
-            (person_id, topic),
+            (person_id, anchored_topic),
         )
         if stale_day is not None:
             if existing is not None:
@@ -801,6 +891,7 @@ class RelationshipStore:
                     "reason": "relative_date_passed",
                     "resolved_date": stale_day.isoformat(),
                     "source_topic": topic[:200],
+                    "original_topic": topic[:200],
                 }
                 with self.db.transaction() as connection:
                     connection.execute(
@@ -819,10 +910,14 @@ class RelationshipStore:
                     )
             return
 
-        resolved = resolve_relative_date(topic=topic, updated_at=ts, tz_name=timezone)
-        detail: dict[str, str] = {"kind": "future_task_or_question"}
-        if resolved is not None:
+        detail: dict[str, object] = {"kind": "future_task_or_question"}
+        if anchored_result.needs_date_confirmation:
+            detail["needs_date_confirmation"] = True
+            detail["ambiguous_phrases"] = list(anchored_result.ambiguous_phrases)
+        elif resolved is not None:
             detail["resolved_date"] = resolved.isoformat()
+        if anchored_topic != topic:
+            detail["original_topic"] = topic[:200]
 
         with self.db.transaction() as connection:
             if existing is not None:
@@ -856,7 +951,7 @@ class RelationshipStore:
                 (
                     f"loop_{uuid.uuid4().hex[:10]}",
                     person_id,
-                    topic,
+                    anchored_topic,
                     source_event_id,
                     ts,
                     json.dumps(detail, ensure_ascii=False),

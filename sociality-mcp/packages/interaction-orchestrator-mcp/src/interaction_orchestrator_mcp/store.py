@@ -46,6 +46,21 @@ class InteractionOrchestratorStore:
     def record_agent_experience(self, payload: RecordAgentExperienceInput) -> StoredExperience:
         experience_id = f"exp_{uuid.uuid4().hex[:12]}"
         ts = payload.ts or utc_now()
+        from social_core.date_resolution import anchor_relative_dates_in_text
+
+        summary, _ = anchor_relative_dates_in_text(
+            payload.summary, updated_at=ts, tz_name="Asia/Tokyo"
+        )
+        private_summary = payload.private_summary
+        if private_summary:
+            private_summary, _ = anchor_relative_dates_in_text(
+                private_summary, updated_at=ts, tz_name="Asia/Tokyo"
+            )
+        public_summary = payload.public_summary
+        if public_summary:
+            public_summary, _ = anchor_relative_dates_in_text(
+                public_summary, updated_at=ts, tz_name="Asia/Tokyo"
+            )
         with self.db.transaction() as conn:
             conn.execute(
                 """
@@ -63,9 +78,9 @@ class InteractionOrchestratorStore:
                     ts,
                     payload.person_id,
                     payload.kind,
-                    payload.summary,
-                    payload.private_summary,
-                    payload.public_summary,
+                    summary,
+                    private_summary,
+                    public_summary,
                     payload.why,
                     json.dumps(payload.felt_state or {}, ensure_ascii=False, sort_keys=True),
                     json.dumps(payload.desires_before or {}, ensure_ascii=False, sort_keys=True),

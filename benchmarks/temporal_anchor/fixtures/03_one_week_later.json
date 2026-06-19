@@ -1,0 +1,8 @@
+{
+  "id": "03_one_week_later",
+  "description": "一週間後",
+  "text": "一週間後にもう一度聞いてな",
+  "anchor_ts": "2026-06-19T10:00:00+09:00",
+  "expected_dates": ["2026-06-26"],
+  "rule_should_anchor": true
+}

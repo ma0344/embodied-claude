@@ -1,0 +1,8 @@
+{
+  "id": "04_next_month_start",
+  "description": "来月の頭",
+  "text": "来月の頭に旅行に行く予定やねん",
+  "anchor_ts": "2026-06-19T10:00:00+09:00",
+  "expected_dates": ["2026-07-01"],
+  "rule_should_anchor": true
+}

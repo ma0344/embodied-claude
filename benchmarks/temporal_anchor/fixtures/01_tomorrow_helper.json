@@ -1,0 +1,8 @@
+{
+  "id": "01_tomorrow_helper",
+  "description": "18日の「明日」= 19日ヘルパー（まー実例）",
+  "text": "明日は昼ごろからホームヘルパーのお仕事をするんだよ。入浴介助をするんだ",
+  "anchor_ts": "2026-06-18T21:30:00+09:00",
+  "expected_dates": ["2026-06-19"],
+  "rule_should_anchor": true
+}

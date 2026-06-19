@@ -96,6 +96,12 @@ class StmStore:
             raise ValueError("summary must not be empty")
         now = utc_now()
         entry_ts = ts or now
+        from social_core.date_resolution import anchor_relative_dates_in_text
+
+        anchored, _ = anchor_relative_dates_in_text(
+            text, updated_at=entry_ts, tz_name=timezone
+        )
+        text = anchored
         entry_id = f"stm_{uuid.uuid4().hex[:12]}"
         local_day = local_day_for_ts(entry_ts, timezone)
         with self.db.transaction() as conn:

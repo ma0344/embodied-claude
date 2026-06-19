@@ -10,8 +10,11 @@
 ### OL1 — 日付解決
 
 - ingest 時に open loop の `detail_json.resolved_date`（`明日` / `今日` / `明後日` → JST カレンダー日）
-- 期限切れ loop は ingest / 自律 tick 前の `close_stale_open_loops` で `status=closed`
-- 手動掃除: `scripts/purge-stale-open-loops.py`（共有ロジックは `relationship_mcp.date_resolution`）
+- **OL1b（2026-06-19）**: 保存時に相対日を **具体日**（`2026年6月19日`）へ置換 — open loop `topic`、STM `summary`、`agent_experiences.summary`。`original_topic` は `detail_json` に残す。compose 先頭に `Calendar today (Asia/Tokyo): …`
+- **OL1c（2026-06-19）**: 日曜始まりの週界 + 曜日 lookup（コードのみ）— `来週の火曜` / `再来週の月曜` / `一週間後` / `N日後` / `来月の頭` / `今週末` / `6月20日` など
+- **OL2（temporal）（2026-06-19）**: `次の{曜}` / `今度の{曜}`（同義・次に来るその曜日）、`来週中` 等の曖昧スパンはアンカーせず `needs_date_confirmation` → compose `[date_confirmation_needed]` / plan `must_include` でまーに聞く。`social_core.ja_timex_bridge`（任意・PoC/ベンチ用）
+- 期限切れ loop は ingest / 自律 tick 前の `close_stale_open_loops` で `status=closed`（アンカー後は `resolved_date` でも判定）
+- 手動掃除: `scripts/purge-stale-open-loops.py`（共有ロジックは `social_core.date_resolution`）
 
 ### OL2 — リマインド
 

@@ -239,9 +239,80 @@ def test_open_loop_detail_has_resolved_date(store):
         ts="2026-04-15T10:00:00+09:00",
     )
     row = store.db.fetchone(
-        "SELECT detail_json FROM open_loops WHERE person_id = ? AND status = 'open'",
+        "SELECT topic, detail_json FROM open_loops WHERE person_id = ? AND status = 'open'",
         ("ma",),
     )
     assert row is not None
     detail = json.loads(row["detail_json"])
     assert detail.get("resolved_date") == "2026-04-16"
+    assert row["topic"].startswith("2026年4月16日")
+    assert detail.get("original_topic") == "明日は会議がある"
+
+
+def test_open_loop_ambiguous_span_flags_confirmation(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.ingest_interaction(
+        person_id="ma",
+        channel="chat",
+        direction="human_to_ai",
+        text="来週中に会議の準備をしたい",
+        ts="2026-06-19T10:00:00+09:00",
+    )
+    row = store.db.fetchone(
+        "SELECT topic, detail_json FROM open_loops WHERE person_id = ? AND status = 'open'",
+        ("ma",),
+    )
+    assert row is not None
+    assert row["topic"] == "来週中に会議の準備をしたい"
+    detail = json.loads(row["detail_json"])
+    assert detail.get("needs_date_confirmation") is True
+    assert "来週中" in detail.get("ambiguous_phrases", [])
+    loops = store.list_open_loops(person_id="ma")
+    assert loops[0].needs_date_confirmation is True
+
+
+def test_close_stale_anchored_loop_uses_resolved_date(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.ingest_interaction(
+        person_id="ma",
+        channel="chat",
+        direction="human_to_ai",
+        text="明日は会議がある",
+        ts="2026-04-15T10:00:00+09:00",
+    )
+    closed = store.close_stale_open_loops(
+        person_id="ma",
+        as_of="2026-04-17T10:00:00+09:00",
+    )
+    assert closed
+    assert store.list_open_loops(person_id="ma") == []
+
+
+def test_list_open_loops_reanchors_legacy_topic(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.db.execute(
+        """
+        INSERT INTO open_loops(
+            loop_id, person_id, topic, status, source_event_id, updated_at, detail_json
+        )
+        VALUES (?, ?, ?, 'open', ?, ?, ?)
+        """,
+        (
+            "loop_legacy",
+            "ma",
+            "明日の天気ってどう",
+            "evt1",
+            "2026-06-18T20:00:00+09:00",
+            '{"kind":"future_task_or_question","resolved_date":"2026-06-19"}',
+        ),
+    )
+    loops = store.list_open_loops(person_id="ma")
+    assert len(loops) == 1
+    assert loops[0].topic.startswith("2026年6月19日")
+    row = store.db.fetchone(
+        "SELECT topic, detail_json FROM open_loops WHERE loop_id = ?",
+        ("loop_legacy",),
+    )
+    assert row["topic"].startswith("2026年6月19日")
+    detail = json.loads(row["detail_json"])
+    assert detail.get("original_topic") == "明日の天気ってどう"

@@ -337,6 +337,20 @@ def _pick_must_lists(
         )
     if ctx.open_loops and primary_move in {"answer_directly", "write_private_reflection"}:
         must_include.append("reference at least one concrete open loop if relevant")
+    pending_dates = [loop for loop in ctx.open_loops if loop.needs_date_confirmation]
+    if pending_dates and primary_move in {
+        "answer_directly",
+        "answer_with_empathy",
+        "ask_one_clarifying_question",
+    }:
+        samples = [
+            ", ".join(loop.ambiguous_phrases) or loop.topic[:60]
+            for loop in pending_dates[:2]
+        ]
+        must_include.append(
+            "open loop has ambiguous date — ask まー one short question for the "
+            f"concrete day (e.g. {samples[0]}); do not infer or anchor yourself"
+        )
     if ctx.agent_state.recent_interpretation_shifts and primary_move != "stay_silent":
         latest = ctx.agent_state.recent_interpretation_shifts[0]
         must_include.append(

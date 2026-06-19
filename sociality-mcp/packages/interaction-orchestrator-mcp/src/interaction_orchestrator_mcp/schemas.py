@@ -82,6 +82,8 @@ class OpenLoopSummary(BaseModel):
     topic: str
     status: str
     updated_at: str | None = None
+    needs_date_confirmation: bool = False
+    ambiguous_phrases: list[str] = Field(default_factory=list)
 
 
 class CommitmentSummary(BaseModel):

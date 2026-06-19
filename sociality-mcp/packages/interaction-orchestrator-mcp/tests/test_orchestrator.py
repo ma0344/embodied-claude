@@ -259,6 +259,11 @@ class TestRecord:
         assert "どないしたん" not in ctx.prompt_summary
         assert "どないしたん" not in ctx.compact_prompt_block
 
+    def test_compose_includes_calendar_anchor(self, stores):
+        ctx = _compose(stores, user_text="今日の日付って？")
+        assert "Calendar today" in ctx.prompt_summary
+        assert "年" in ctx.prompt_summary
+
     def test_append_private_reflection_counts_up(self, stores):
         stores["orchestrator"].append_private_reflection(
             AppendPrivateReflectionInput(

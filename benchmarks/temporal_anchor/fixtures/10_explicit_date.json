@@ -1,0 +1,8 @@
+{
+  "id": "10_explicit_date",
+  "description": "明示日付（ルール不要）",
+  "text": "6月20日の午後にホームヘルパーさんが来る",
+  "anchor_ts": "2026-06-19T10:00:00+09:00",
+  "expected_dates": ["2026-06-20"],
+  "rule_should_anchor": true
+}

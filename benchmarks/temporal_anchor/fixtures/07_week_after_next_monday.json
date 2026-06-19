@@ -1,0 +1,8 @@
+{
+  "id": "07_week_after_next_monday",
+  "description": "再来週の月曜",
+  "text": "再来週の月曜から新しいルーティン始める",
+  "anchor_ts": "2026-06-19T10:00:00+09:00",
+  "expected_dates": ["2026-06-29"],
+  "rule_should_anchor": true
+}

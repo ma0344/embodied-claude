@@ -1,0 +1,8 @@
+{
+  "id": "05_today",
+  "description": "今日",
+  "text": "今日の予定はなんだっけな？",
+  "anchor_ts": "2026-06-19T10:54:00+09:00",
+  "expected_dates": ["2026-06-19"],
+  "rule_should_anchor": true
+}

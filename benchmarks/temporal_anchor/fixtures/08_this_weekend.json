@@ -1,0 +1,9 @@
+{
+  "id": "08_this_weekend",
+  "description": "今週末（金曜基準→土日の先頭）",
+  "text": "今週末はのんびりしたいな",
+  "anchor_ts": "2026-06-19T10:00:00+09:00",
+  "expected_dates": ["2026-06-20", "2026-06-21"],
+  "expected_any_of": true,
+  "rule_should_anchor": true
+}

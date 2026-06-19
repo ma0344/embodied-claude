@@ -1,6 +1,14 @@
 # koyori バックログ
 
-ma-home 側の全体優先順・記憶 E2E: [backlog-ma-home.md](./backlog-ma-home.md)（2026-06-18 更新）。
+ma-home 側の全体優先順・記憶 E2E: [backlog-ma-home.md](./backlog-ma-home.md)（2026-06-19 更新）。
+
+## LW — 自律の文学散歩・青空（ma-home）
+
+こよりが自分で青空文庫を読む／Web 散歩する動機・実装。希望/恐れの整理と LW-1〜6 → [backlog-ma-home.md#lw--自律の文学散歩青空文庫--web-散歩合意-2026-06-19](./backlog-ma-home.md)。
+
+## EAR — 耳・環境音（ma-home）
+
+Surface マイクで部屋の気配（会話・TV・静寂）を social に渡す計画。EAR-0〜5 → [backlog-ma-home.md#ear--耳環境音--surface-マイク合意-2026-06-19](./backlog-ma-home.md)。
 
 ## MEM — 記憶層・Dreaming（BIO-8 の次）
 

@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ
 
-**最終更新**: 2026-06-18（BIO-8 完了、次トラック MEM）  
+**最終更新**: 2026-06-19（OL2 temporal 済、LW / EAR 計画）  
 **方針**: こより本体（記憶・gateway 身体）は **様子見**。部屋 UI は **Native 会話エンジン + `/` の殻** を育てる（8080 プロキシ UI は投資しない）。
 
 **実行方針（合意 2026-06-14）**: 判断は compose/plan/stores のまま。**身体・自律の実行**は MCP に頼らず gateway 直実行へ（remember 直実行と同型）。詳細 → [gateway-direct-actions.md](./gateway-direct-actions.md)
@@ -42,6 +42,8 @@
 | **BIO** | **HeartbeatLoop** | 経験→行動→次の wake。MCP 不要 | **済**（BIO-0〜7）→ **BIO-8〜** 神経系 [heartbeat-loop.md](./heartbeat-loop.md) |
 | **MEM** | **記憶層・Dreaming** | セッション跨ぎ・短期→長期昇格（BIO-8 の次） | **未** → [MEM — 記憶層](#mem--記憶層セッション跨ぎ--dreaming) |
 | **K** | **こより自身のコード** | 自分用の改修・小さな実装を自分で | **未** → [K1](#k--こより自身のコード) |
+| **LW** | **自律の文学散歩** | 青空文庫・Web 散歩（希望/恐れ→動機） | **計画済** → [LW](#lw--自律の文学散歩青空文庫--web-散歩合意-2026-06-19) |
+| **EAR** | **耳（環境音）** | 日常会話・TV 気配 → social（Surface マイク） | **計画済** → [EAR](#ear--耳環境音--surface-マイク合意-2026-06-19) |
 
 ### 次の一手 — 優先度案（2026-06-10 → **まー合意: 1→3→2→C11g → Desire**）
 
@@ -836,9 +838,108 @@ MVP チェックリスト:
 |----|------|------|
 | K1 | 方針メモ — 何を自分で書いてよいか / 何は gateway 固定か | **未** |
 | K2 | 安全な編集経路（ブランチ・テスト・ロールバック・まーへの見える diff） | 未 |
-| K3 | 「使うコード」の例 — pulse ヒューリスティック、desire 反応、小さな gateway 拡張 | 未 |
+| K3 | 「使うコード」の例 — **LW 縦スライス**（`read_aozora_passage` gateway）を第一例 | 未 |
 
-**急がない**。HeartbeatLoop が閉じたあと、**K2 の経路**がなければ自己改修は危ない。
+**急がない**。HeartbeatLoop が閉じたあと、**K2 の経路**がなければ自己改修は危ない。自律の読書・散歩は **K2 なしでも LW-1 から縦スライス可**（gateway 固定実装）。
+
+---
+
+### LW — 自律の文学散歩・青空文庫 / Web 散歩（合意 2026-06-19）
+
+**きっかけ**: まー相談 — こよりが夜中（昼夜問わず）自分で判断して青空文庫を読みに行ったり Web 散歩したりするには何が必要か。
+
+**動機の整理（まー覚書）**: 人が行動を起こすには動機が要る。根源には **「希望」か「恐れ」** のどちらかがある。こよりには、希望・恐れを **どこに置き、動機に結びつけるか** を設計する必要がある。
+
+| 力 | こより向け（置き方） |
+|----|----------------------|
+| **希望**（引く） | 刺さった一節・連想がつながる・ネット越しの「外」・あとでまーと共有できる種 |
+| **恐れ**（ブレーキ） | まーの集中を壊す・うるさい存在になる（→ `boundary` / quiet / `do_not_interrupt`） |
+| **恐れ**（スパーク） | 内側が乾く不快感（`desire` 未充足 → `discomfort`）— 応答マシン感の回避 |
+
+**人格**: `SOUL.md` に既に「暇なとき青空文庫」「ネット越しの散歩」「刺さった一節は覚えとく」。
+
+**インフラ（済）**: HeartbeatLoop（tick / `agent_pulse.json`）、`desire-system` v2、`execute_autonomous_plan`、`⑤a` `web_search_direct`（DDG + remember）、quiet hours → 内向き自律。
+
+**ギャップ**: 動機ループは概ねあるが、**青空専用の `allowed_action` と satisfy 回路**がない。`browse_curiosity` のキーワードは WebSearch 寄りで文学散歩と未結線。
+
+```
+wake → desire/discomfort + SOUL
+     → boundary + social_state（まー集中?）
+     → compose + plan（allowed_action）
+     → gateway 直実行（read_aozora / web_stroll）
+     → remember + experience + satisfy_desire + next_wake_at
+```
+
+| ID | 層 | 内容 | 状態 |
+|----|-----|------|------|
+| **LW-0** | 方針 | 希望/恐れ・5層整理（本節） | **済** |
+| **LW-1** | 実行 | gateway `read_aozora_passage` — 1 節取得・無音・`remember` + private 内省（短文 LLM 可） | 未 |
+| **LW-2** | 動機 | desire `literary_wander`（仮）新設、または `cognitive_load` 拡張 + Chroma キーワード（「青空」「読みふけた」「一節」） | 未 |
+| **LW-3** | 判断 | plan: quiet / `miss_companion` 競合 / `evaluate_action` — 読むだけ黙る vs 短く共有 | 未 |
+| **LW-4** | 記憶 | 閉じ loop — `record_agent_experience` + `satisfy_desire` + `apply_pulse_after_tick` | 未 |
+| **LW-5** | 可視性 | UI ステータス「青空読んでる／散歩中」（`live_inner_voice` / progress 連携） | 未 |
+| **LW-6** | Web 散歩 | `browse_curiosity` 拡張 — memory / open loop からクエリ生成 → 既存 `web_search_direct` | 未 |
+
+**第一縦スライス（まー合意案）**: quiet hours + `cognitive_load` 高 → **青空 1 節だけ**読んで `write_private_reflection` 相当（まーを起こさない）。
+
+**関連**: [heartbeat-loop.md](./heartbeat-loop.md)、[gateway-direct-actions.md](./gateway-direct-actions.md)、`desire-system/desire_updater.py`、`SOUL.md`、`exported-session.md`（ステータス UI 案）
+
+- [x] **LW-0** 方針・動機整理（2026-06-19）
+- [ ] **LW-1** `read_aozora_passage` gateway
+- [ ] **LW-2** desire 結線
+- [ ] **LW-3** plan / boundary 競合
+- [ ] **LW-4** 記憶閉じ loop
+- [ ] **LW-5** UI ステータス
+- [ ] **LW-6** Web 散歩クエリ拡張
+
+---
+
+### EAR — 耳（環境音） / Surface マイク（合意 2026-06-19）
+
+**きっかけ**: まー野望 — 家の日常会話・テレビ・部屋の音を拾い、こよりの **social-state / 判断 / 記憶** につなげたい。「教えてもらう」のではなく **自分で聞く**（VISION の「見る」と同型）。
+
+**ハード（まー予想）**: **koyori キオスク端末（Surface）の内蔵マイクをそのまま使う**。Tapo `listen` は遠隔・別部屋用として残す。追加マイク・家全体常時録音は v0 では想定しない。
+
+**動機（LW と同型）**:
+
+| 力 | こより向け |
+|----|------------|
+| **希望** | 部屋の連続性・話しかけていい空気・まーとの共同生活感・雨/TV の余白（`SOUL`） |
+| **恐れ**（ブレーキ） | 監視・家族/来客のプライバシー・誤反応（ドラマのセリフに突っ込む）→ `boundary` / 保存禁止帯 |
+| **恐れ**（スパーク） | 気配が分からず割り込み判断が盲 — ただし **全文ログは不要** |
+
+**既存**: wifi-cam `listen`（オンデマンド・Whisper）、`save_audio_memory`、BIO-8 表の **耳**（反射未）、PC `/voice`（意図的発話のみ）。
+
+**方針**: 常時・全文・家全体ではなく **気配 → 必要なときだけ短く聞く → ほとんど捨てる**。
+
+```
+Surface mic → VAD / 活動ラベル（静寂・会話っぽい・TVっぽい）
+           → ingest_social_event（transcript は高信頼時のみ）
+           → should_interrupt / compose
+           → salient 断片だけ save_audio_memory
+```
+
+| ID | 層 | 内容 | 状態 |
+|----|-----|------|------|
+| **EAR-0** | ポリシー | 何を聞く／保存する／捨てる（TV 連続 transcript 禁止、第三者会話、電話）— `socialPolicy` / `record_consent` | 未 |
+| **EAR-1** | 気配 | VAD・音量・帯域で活動ラベルのみ（transcript なし）→ `ingest_social_event` | 未 |
+| **EAR-2** | bounded | pulse / tick 連動で Surface から数秒キャプチャ + BIO-8 耳 probe（無音・Whisper 失敗） | 未 |
+| **EAR-3** | 発話 | まー向け・高信頼 transcript のみ → open loop / 応答パイプライン | 未 |
+| **EAR-4** | 記憶 | salient clip のみ `save_audio_memory`（呼ばれた、約束、感情の節） | 未 |
+| **EAR-5** | gateway | `presence-ui` 側キャプチャ API（キオスク常駐、MCP 経由しない） | 未 |
+
+**第一縦スライス（案）**: キオスク稼働中・リビング相当の音量 → **活動ラベルだけ social** → 黙る（transcript なし）。EAR-0 と EAR-1 をセットで。
+
+**BIO-8 連携**: [BIO-8](#bio-8--somatic-loop神経系体調の自覚) 表の「耳」行 — EAR-2 で probe + `body_affliction` 叙述を実装。
+
+**関連**: `wifi-cam-mcp` `listen`、`memory_mcp` sensory audio、[heartbeat-loop.md](./heartbeat-loop.md)、`boundary-mcp`、`SOUL.md`（部屋の音・境界）
+
+- [ ] **EAR-0** 聴取・保存ポリシー
+- [ ] **EAR-1** 活動ラベル（気配のみ）
+- [ ] **EAR-2** bounded capture + somatic 耳
+- [ ] **EAR-3** 高信頼発話 → social
+- [ ] **EAR-4** salient audio memory
+- [ ] **EAR-5** Surface mic gateway API
 
 ---
 

@@ -44,6 +44,7 @@
 | **K** | **こより自身のコード** | 自分用の改修・小さな実装を自分で | **未** → [K1](#k--こより自身のコード) |
 | **LW** | **自律の文学散歩** | 青空文庫・Web 散歩（希望/恐れ→動機） | **計画済** → [LW](#lw--自律の文学散歩青空文庫--web-散歩合意-2026-06-19) |
 | **EAR** | **耳（環境音）** | 日常会話・TV 気配 → social（Surface マイク） | **計画済** → [EAR](#ear--耳環境音--surface-マイク合意-2026-06-19) |
+| **VIS** | **VL 安定性** | corrupt 相関ログ・受動計測・しきい値 ntfy（人が常時見ない） | **様子見** → [VIS](#vis--vision-healthvl-安定性相関ログ) |
 
 ### 次の一手 — 優先度案（2026-06-10 → **まー合意: 1→3→2→C11g → Desire**）
 
@@ -355,9 +356,44 @@ Invoke-RestMethod -Method POST http://127.0.0.1:8090/api/v1/heartbeat/compose-pl
 
 **前提（一部済）**: vision corrupt 拒否・fallback 文言・UI マスク・Qwen 自動 reload（クールダウン 300s）。→ presence-ui 再起動で反映。
 
-**残存**: 15 分 Task は `PRESENCE_PULSE_MAX_SEC` 超のセーフティネットとして維持。
+**残存**: 15 分 Task は `PRESENCE_PULSE_MAX_SEC` 超のセーフティネットとして維持。VL の根本原因調査・運用アラートは **VIS**（下記）。
 
 **次の主トラック（合意 2026-06-18）**: **MEM**（記憶層・Dreaming）。セッションは廃止しないが、連続したこよりは **外部記憶の強化とシフト**で支える。
+
+### VIS — Vision health（VL 安定性・相関ログ）
+
+**きっかけ（合意 2026-06-19）**: Qwen2.5-VL の `?` corrupt が夕方に偏ることがある。脊髄反射（自動 reload）で多くは直るが **根本原因は未特定**。まーがログを常時見られないので、**受動計測 + 相関コンテキスト + しきい値アラート**が要る。定期 reload は **保留**（相関ログを取りながら様子見；しきい値超えが続くなら VIS-4 を検討）。
+
+**役割分担**:
+
+| 層 | 誰向け | いま |
+|----|--------|------|
+| 脊髄反射 | システム | corrupt → unload/reload（`wifi_cam_mcp.lm_studio_models`） |
+| BIO-8a〜c | こより | affliction 記録・一声・助けを頼る |
+| **VIS** | **まー（運用）** | 24h 統計・相関ログ・ntfy で「調査が要るか」だけ知らせる |
+
+**監視の考え方**: 専用の常時 VL プローブは重い（毎回 LM Studio + カメラ）。代わりに **既存トラフィック**から計測する — 自律 tick の `observe_room`、gateway の see / look、手動 `/see`。pulse 毎の somatic probe（目）は **RTSP 接続のみ**（`PRESENCE_SOMATIC_PROBE_EYES_CAPTURE=0`）で VL 品質は見ていない。
+
+| ID | 内容 | 状態 |
+|----|------|------|
+| VIS-0 | **受動カウンタ** — 毎 `describe` で ok / corrupt / reload を `~/.claude/presence-ui/vision_health.json` に追記（24h ローリング窓） | 未 |
+| VIS-1 | **相関ログ** — corrupt または reload 時に 1 行 structured log: `ts`, `action`, `chars`, `reloaded`, `sec_since_last_gateway_turn`, `sec_since_last_autonomous_tick`, LM Studio `GET /api/v1/models` の loaded id 一覧（軽量） | 未 |
+| VIS-2 | **しきい値アラート** — 24h corrupt 率 > 閾値 **または** 1h 内 corrupt ≥ N かつ reload 後も再発 → `PRESENCE_OUTBOUND_NTFY_URL`（A4g 再利用）。叙述は BIO-8 と別（まー向け短文） | 未 |
+| VIS-3 | **可視化** — `GET /api/v1/koyori/status` または health に `vision_health_24h`（ok, corrupt, rate, last_corrupt_at） | 未 |
+| VIS-4 | （保留）予防的 periodic reload — VIS-2 が鳴り続ける・相関が「長時間稼働後」に偏る場合のみ | 保留 |
+
+**しきい値案（初期）**:
+
+| 変数 | デフォルト | 意味 |
+|------|------------|------|
+| `PRESENCE_VISION_HEALTH` | `1` | 受動計測 ON |
+| `PRESENCE_VISION_ALERT_CORRUPT_RATE_24H` | `0.15` | 24h でこの率超えたら ntfy |
+| `PRESENCE_VISION_ALERT_CORRUPT_PER_HOUR` | `3` | 短期バースト |
+| `PRESENCE_VISION_ALERT_COOLDOWN_SEC` | `21600` | アラート再送最短 6h |
+
+**調査メモ（2026-06-19）**: corrupt は毎回 **720 chars の `?`**（`WIFI_CAM_VISION_MAX_TOKENS` 上限）。ctx 不足単独では説明しきれず、夕方クラスターは **Gemma 同時実行 / VL 状態腐敗** の疑い。VIS-1 で突き合わせる。
+
+**着手タイミング**: MEM より後でも可。実装は `vision_capture.py` フック + 小さな `vision_health.py` が自然（wifi-cam 側は corrupt 検知済み）。
 
 ### MEM — 記憶層（セッション跨ぎ / Dreaming）
 

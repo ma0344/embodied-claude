@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ
 
-**最終更新**: 2026-06-20（RP Phase 1 運用、recent_experiences 続き問題修正）  
+**最終更新**: 2026-06-20（OBS 能動観察、CAM Tapo PTZ 調査起票）  
 **方針**: こより本体（記憶・gateway 身体）は **様子見**。部屋 UI は **Native 会話エンジン + `/` の殻** を育てる（8080 プロキシ UI は投資しない）。
 
 **実行方針（合意 2026-06-14）**: 判断は compose/plan/stores のまま。**身体・自律の実行**は MCP に頼らず gateway 直実行へ（remember 直実行と同型）。詳細 → [gateway-direct-actions.md](./gateway-direct-actions.md)
@@ -44,6 +44,8 @@
 | **RP** | **人格基底化（SOUL→重み）** | SOUL.core / LM Studio system / persona LoRA | **Phase 0–1 済** → [RP — 人格基底化](#rp--人格基底化soul--deep) |
 | **K** | **こより自身のコード** | 自分用の改修・小さな実装を自分で | **未** → [K1](#k--こより自身のコード) |
 | **LW** | **自律の文学散歩** | 青空文庫・Web 散歩（希望/恐れ→動機） | **計画済** → [LW](#lw--自律の文学散歩青空文庫--web-散歩合意-2026-06-19) |
+| **OBS** | **能動観察 `/observe`** | slash 完遂不能の整理 + gateway フェーズ化 | **計画済** → [OBS](#obs--能動観察observe-完遂不能--gateway-フェーズ化合意-2026-06-20) |
+| **CAM** | **Tapo PTZ / ONVIF** | 細かい pan/tilt が効かない切り分け（SS でも不可） | **調査** → [CAM](#cam--tapo-ptz--onvif-細かい操作が効かない合意-2026-06-20) |
 | **EAR** | **耳（環境音）** | 日常会話・TV 気配 → social（Surface マイク） | **計画済** → [EAR](#ear--耳環境音--surface-マイク合意-2026-06-19) |
 | **VIS** | **VL 安定性** | corrupt 相関ログ・受動計測・しきい値 ntfy（人が常時見ない） | **様子見** → [VIS](#vis--vision-healthvl-安定性相関ログ) |
 
@@ -650,7 +652,7 @@ promote_score = 0.25*recency + 0.20*frequency + 0.30*emotion + 0.25*interest
 
 **対応**: `looks_like_agent_slash_command()` — `# /word` 先頭（+ frontmatter 付き）をチャット履歴・persona export から除外。**JSONL 本体は残る**（監査用）。
 
-**未**: 観察そのものを gateway `observe_room_direct` に寄せて CC slash 依存を減らす — RP/身体の別論点。
+**未**: 観察そのものを gateway `observe_room_direct` に寄せて CC slash 依存を減らす — → [OBS-4](#obs--能動観察observe-完遂不能--gateway-フェーズ化合意-2026-06-20)
 
 ##### MEM-5j — 会話中 WebSearch（LM Studio + CC `WebSearch`）（2026-06-20）
 
@@ -1006,6 +1008,80 @@ wake → desire/discomfort + SOUL
 - [ ] **LW-4** 記憶閉じ loop
 - [ ] **LW-5** UI ステータス
 - [ ] **LW-6** Web 散歩クエリ拡張
+
+---
+
+### OBS — 能動観察（`/observe` 完遂不能 + gateway フェーズ化）（合意 2026-06-20）
+
+**きっかけ**: まー報告 — 「こよりは何かしないの？」→ `/observe` → 初手 `look_around` までで止まる。「続けて」で **同じ前置き + look_around を再起動**（完遂しない）。
+
+**`/see` との差**: `/see` は `allowed-tools: [mcp__wifi-cam__see]` で **1 ツール完結**。`/observe` は `.claude/commands/observe.md` 上 **初手 → 5〜8 ループ → 記憶 → sociality → 経験則 Edit** の多段ワークフローだが、**チェックポイント・再開・完了 API がない**（LLM 自己 orchestration のみ）。
+
+**gateway との差**: `observe_room_direct` は bounded で正しいが **`/observe` 設計の初手サブセット**（look_around + Center caption + remember）。ループ / predict / recall / save_visual_memory は未実装。
+
+**CC slash 問題（MEM-5i 関連）**: 会話中に agent が `/observe` を叩くと skill 全文が `type:user` で JSONL に載り、**新タスクとして再起動**しやすい。
+
+```
+設計（observe.md）          実装
+─────────────────────────────────────────
+初手 look_around            slash / gateway どちらも可
+5〜8 ループ（見る/予測/思い出す）  なし（止まりやすい）
+覚える save_visual_memory    gateway は remember のみ
+研ぐ observe.md Edit         未到達・Edit 権限なし
+再開「続けて」               なし → 初手から
+```
+
+| ID | 層 | 内容 | 状態 |
+|----|-----|------|------|
+| **OBS-0** | 整理 | 上記ギャップの文書化（本節） | **済** |
+| **OBS-1** | 構造 | **`/observe` 完遂不能の原因整理** + **gateway フェーズ化** — `observe_state.json` + `POST /api/v1/observe/step`（aozora state と同型）；`/talk` の compose/finalize パターン | 未 |
+| **OBS-2** | slash | `/observe` を **フェーズ分割**（`scan` / `dig` / `close`）または初手のみにスコープ honest 化 | 未 |
+| **OBS-3** | 会話 | 「続けて」「その続き」→ gateway が `observe_state` を読んで **次フェーズ** を注入（初手再実行禁止） | 未 |
+| **OBS-4** | 身体 | 会話から CC `/observe` 依存を減らし gateway 経由に（MEM-5i「未」） | 未 |
+| **OBS-5** | CAM 連携 | PTZ が効かない環境では **preset ベース観察** に設計を寄せる（→ [CAM](#cam--tapo-ptz--onvif-細かい操作が効かない合意-2026-06-20)） | 未 |
+
+**第一縦スライス（案）**: OBS-1 — `observe/step` で **scan 1 回完結** + state 保存；「続けて」で **dig 1 ブロック**（OBS-3 最小）。
+
+**関連**: [gateway-direct-actions.md](./gateway-direct-actions.md) `observe_room_direct`、`.claude/commands/observe.md`、MEM-5i、[intent-bucket-flow.md](./intent-bucket-flow.md) see/observe バケツ
+
+- [x] **OBS-0** 構造整理（2026-06-20）
+- [ ] **OBS-1** gateway フェーズ化
+- [ ] **OBS-2** slash 分割 / スコープ
+- [ ] **OBS-3** 「続けて」再開
+- [ ] **OBS-4** CC slash 依存削減
+- [ ] **OBS-5** preset 観察（CAM 連携）
+
+---
+
+### CAM — Tapo PTZ / ONVIF 細かい操作が効かない（合意 2026-06-20）
+
+**きっかけ**: まー — Tapo の pan/tilt が **細かく効かない**。Synology **Surveillance Station** でも ONVIF パン/チルトが効かない。
+
+**切り分けの含意**: SS でも同症状 → **embodied-claude の `TAPO_PTZ_MODE` だけの問題ではない**可能性が高い。Tapo 本体の ONVIF PTZ 実装・ファーム・機種・**Camera Account（Tapo アプリのローカルアカウント）** の有無を疑う。
+
+**コード側（参考）**: `wifi-cam-mcp` — `RelativeMove` / `ContinuousMove`（`ptz_mode=auto|relative|continuous`）、`look_around` は `pan_left(45)` → `pan_right(90)` → `tilt_up(20)` の **連続 relative 移動**に依存。`camera_go_to_preset` は別経路（`GotoPreset`）。
+
+| 仮説 | 説明 | 確認 |
+|------|------|------|
+| **H1 機種/firmware** | 一部 Tapo は ONVIF で **preset のみ**、RelativeMove は no-op または粗い | SS 再現 → 有力 |
+| **H2 アカウント** | TP-Link クラウドアカウントでは ONVIF PTZ 不可。**Camera Account** 要 | Tapo アプリ設定 |
+| **H3 ポート/profile** | ONVIF 2020、profile token 不一致 | `camera_info` / GetProfiles |
+| **H4 マウント** | `mount_mode`（desk/ceiling）で方向反転 — 動かないのではなく **逆** の可能性 | `mcpBehavior.toml` |
+| **H5 見かけの成功** | ONVIF は成功を返すがモーター不動 → **4 方向 capture が同一視野**、LLM が `/observe` テンプレで Left/Right を **叙述だけ**する | 画像 diff 比較 |
+
+**OBS への影響**: `/observe` の「見る」ブロック（look_left + see × N）が **PTZ 前提**。細かい首振りが無いと能動観察の設計自体が **preset 運用**（窓/デスク/ダイニング）に寄せる必要（OBS-5）。
+
+| ID | 内容 | 状態 |
+|----|------|------|
+| **CAM-1** | **実機切り分け** — 機種名・FW・Camera Account・ONVIF GetStatus 前後で pan 値変化、`look_left` 後の JPEG hash diff、SS と同条件メモ | 未 |
+| **CAM-2** | **preset-only 運用** — `TAPO_*_PRESET` / `camera_go_to_preset` で observe を再設計（look_around relative 依存をやめる） | 未 |
+| **CAM-3** | **ドキュメント** — ma-home 向け「Tapo ONVIF PTZ 限界」節（CLAUDE.md / wifi-cam README） | 未 |
+
+**関連**: `wifi-cam-mcp/.env.example`、`presence-ui` `look_preset_direct`、Imou は `continuous` 必須（CLAUDE.md）— Tapo は別制約の可能性
+
+- [ ] **CAM-1** 実機切り分け
+- [ ] **CAM-2** preset-only observe
+- [ ] **CAM-3** ドキュメント
 
 ---
 

@@ -6,6 +6,14 @@ ma-home 側の全体優先順・記憶 E2E: [backlog-ma-home.md](./backlog-ma-ho
 
 こよりが自分で青空文庫を読む／Web 散歩する動機・実装。希望/恐れの整理と LW-1〜6 → [backlog-ma-home.md#lw--自律の文学散歩青空文庫--web-散歩合意-2026-06-19](./backlog-ma-home.md)。
 
+## OBS — 能動観察 `/observe`（ma-home）
+
+`/observe` 完遂不能（初手で止まる・「続けて」で再起動）の構造整理と gateway フェーズ化。OBS-0〜5 → [backlog-ma-home.md#obs--能動観察observe-完遂不能--gateway-フェーズ化合意-2026-06-20](./backlog-ma-home.md)。
+
+## CAM — Tapo PTZ / ONVIF（ma-home）
+
+細かい pan/tilt が効かない（Surveillance Station でも再現）。preset 運用への寄せ。CAM-1〜3 → [backlog-ma-home.md#cam--tapo-ptz--onvif-細かい操作が効かない合意-2026-06-20](./backlog-ma-home.md)。
+
 ## EAR — 耳・環境音（ma-home）
 
 Surface マイクで部屋の気配（会話・TV・静寂）を social に渡す計画。EAR-0〜5 → [backlog-ma-home.md#ear--耳環境音--surface-マイク合意-2026-06-19](./backlog-ma-home.md)。

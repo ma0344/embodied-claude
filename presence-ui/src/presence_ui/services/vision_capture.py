@@ -77,7 +77,7 @@ async def capture_and_describe(*, mode: SeeMode, label: str = "") -> VisionCaptu
         )
 
     capture = outcome.capture
-    view_label = label or outcome.view_label or mode
+    view_label = outcome.view_label or label or mode
     caption: str | None = None
     vision_corrupt = False
     vision_reloaded = False
@@ -216,7 +216,8 @@ def vision_prefetch_note(
         "[Gateway directive — not for the user]\n"
         "Gateway already captured the camera view above (MCP-equivalent text).\n"
         "Answer まー from VISION_CAPTION only when present; never invent details.\n"
-        "Do NOT call mcp__wifi-cam__see, look_around, or other wifi-cam tools.\n"
+        "Do NOT call mcp__wifi-cam__see, look_around, mcp__usb-webcam__see, "
+        "or other camera tools.\n"
         "Reply naturally in Koyori voice; do not mention gateway_turn_context."
     )
 

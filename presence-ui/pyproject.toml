@@ -22,6 +22,7 @@ dependencies = [
     "joint-attention-mcp",
     "system-temperature-mcp",
     "wifi-cam-mcp",
+    "usb-webcam-mcp",
     "tts-mcp",
     "tzdata>=2024.1; sys_platform == 'win32'",
 ]
@@ -53,6 +54,7 @@ relationship-mcp = { path = "../sociality-mcp/packages/relationship-mcp" }
 joint-attention-mcp = { path = "../sociality-mcp/packages/joint-attention-mcp" }
 system-temperature-mcp = { path = "../system-temperature-mcp" }
 wifi-cam-mcp = { path = "../wifi-cam-mcp" }
+usb-webcam-mcp = { path = "../usb-webcam-mcp" }
 tts-mcp = { path = "../tts-mcp" }
 
 [tool.ruff]

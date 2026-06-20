@@ -172,6 +172,22 @@ async def capture_for_mode(mode: SeeMode, *, save_to_file: bool | None = None) -
     """Capture one frame (or look_around center) with optional window preset."""
     if save_to_file is None:
         save_to_file = _camera_save_to_disk()
+
+    if mode == "window":
+        from presence_ui.services.usb_camera import capture_usb_frame, usb_camera_enabled
+
+        if usb_camera_enabled():
+            try:
+                capture = await capture_usb_frame(save_to_file=save_to_file)
+                return CaptureOutcome(
+                    ok=True,
+                    capture=capture,
+                    view_label="外 (USB webcam)",
+                )
+            except Exception as exc:
+                msg = str(exc) or type(exc).__name__
+                logger.warning("USB outside capture failed (%s); trying Tapo window preset", msg)
+
     preset_id: str | None = None
     view_label = "current"
     if is_preset_location(mode):

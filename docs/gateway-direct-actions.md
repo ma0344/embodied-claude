@@ -26,7 +26,7 @@ plan の `initiative.allowed_actions`（`plan.py`）を gateway が解釈し、*
 | allowed_action | 直実行候補 | 備考 |
 |----------------|-----------|------|
 | `camera_look_around` | wifi-cam `look_around` + `see` | observe_room |
-| `camera_look_outside` | PTZ preset / pan + `see` | look_outside |
+| `camera_look_outside` | USB webcam（外・窓）優先、失敗時 Tapo preset | look_outside |
 | `talk_to_companion` | tts `say`（boundary OK 時） | miss_companion |
 | `remind_commitment` | outbound + tts、then `complete_commitment` | OL2、due commitment 優先 |
 | `write_private_reflection` | orchestrator `append_private_reflection` | quiet hours |
@@ -91,7 +91,7 @@ TAPO_DINING_PRESET=3
 | まーのデスク | 「まーのデスク見て」 | `TAPO_MADESK_PRESET` |
 | ダイニング | 「ダイニングの様子どう？」 | `TAPO_DINING_PRESET` |
 
-`look_outside` desire と会話 see は preset 移動後に capture。未設定時は現位置のまま。
+`look_outside` desire と会話の「外／窓／天気」は **ma-home USB webcam**（`PRESENCE_USB_CAMERA_ENABLED=1`, 既定 `USB_CAMERA_INDEX=1` = Logitech QuickCam Pro 9000）を優先。USB 失敗時のみ Tapo window preset。部屋・見渡しは Tapo のまま。
 
 ### 「忘れて」→ open loop を閉じる
 

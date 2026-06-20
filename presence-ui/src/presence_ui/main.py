@@ -643,6 +643,25 @@ def create_app() -> FastAPI:
     def get_koyori_status(person_id: str = DEFAULT_PERSON_ID) -> JSONResponse:
         return utf8_json(fetch_koyori_status(person_id=person_id))
 
+    @app.get("/api/v1/training/persona")
+    def get_persona_training_review(offset: int = 0, limit: int = 50) -> JSONResponse:
+        """Paginated review of persona LoRA training JSONL (ma-home)."""
+        from presence_ui.training.persona_review import fetch_persona_training_review
+
+        return utf8_json(
+            fetch_persona_training_review(
+                offset=offset,
+                limit=limit,
+            ).model_dump()
+        )
+
+    @app.get("/training/persona")
+    async def training_persona_page() -> FileResponse:
+        return FileResponse(
+            STATIC_DIR / "training-persona.html",
+            media_type="text/html; charset=utf-8",
+        )
+
     @app.get("/api/v1/camera/snapshot", response_model=CameraSnapshotResponse)
     async def get_camera_snapshot() -> CameraSnapshotResponse:
         return await fetch_camera_snapshot()

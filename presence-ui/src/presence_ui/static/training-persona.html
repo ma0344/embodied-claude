@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Persona LoRA 学習データ</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f0eb;
+      --card: #fff;
+      --text: #1a1a1a;
+      --muted: #666;
+      --ma: #e8f0ff;
+      --koyori: #fff5eb;
+      --border: #ddd;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #141414;
+        --card: #1e1e1e;
+        --text: #eee;
+        --muted: #aaa;
+        --ma: #1a2433;
+        --koyori: #2a2218;
+        --border: #333;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", "Hiragino Sans", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 1rem 1.25rem 3rem;
+      line-height: 1.55;
+    }
+    header {
+      max-width: 920px;
+      margin: 0 auto 1rem;
+    }
+    h1 { font-size: 1.35rem; margin: 0 0 0.35rem; }
+    .meta { color: var(--muted); font-size: 0.9rem; }
+    .meta code { font-size: 0.85rem; }
+    .toolbar {
+      max-width: 920px;
+      margin: 0 auto 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    input[type="search"], button {
+      font: inherit;
+      padding: 0.45rem 0.65rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+    }
+    input[type="search"] { flex: 1 1 220px; min-width: 180px; }
+    button { cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: default; }
+    details.system {
+      max-width: 920px;
+      margin: 0 auto 1rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.65rem 0.9rem;
+    }
+    details.system pre {
+      white-space: pre-wrap;
+      margin: 0.5rem 0 0;
+      font-size: 0.85rem;
+    }
+    #list {
+      max-width: 920px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+    .pair {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.75rem 0.9rem;
+    }
+    .pair-head {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+    .bubble {
+      border-radius: 10px;
+      padding: 0.65rem 0.8rem;
+      margin: 0.35rem 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .bubble.ma { background: var(--ma); }
+    .bubble.koyori { background: var(--koyori); }
+    .label { font-size: 0.78rem; font-weight: 600; opacity: 0.75; margin-bottom: 0.15rem; }
+    .empty, .error {
+      max-width: 920px;
+      margin: 1rem auto;
+      padding: 1rem;
+      border-radius: 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+    }
+    .error { border-color: #c44; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Persona LoRA 学習データ</h1>
+    <p class="meta" id="meta">読み込み中…</p>
+  </header>
+
+  <div class="toolbar">
+    <input type="search" id="q" placeholder="まー / こより の文面で絞り込み" />
+    <button type="button" id="prev">← 前</button>
+    <button type="button" id="next">次 →</button>
+    <button type="button" id="reload">再読込</button>
+  </div>
+
+  <details class="system" id="systemBox" hidden>
+    <summary>System（SOUL.core プレビュー）</summary>
+    <pre id="systemPreview"></pre>
+  </details>
+
+  <div id="list"></div>
+  <div id="message" class="empty" hidden></div>
+
+  <script>
+    const PAGE = 30;
+    let offset = 0;
+    let total = 0;
+    let lastPayload = null;
+
+    const metaEl = document.getElementById("meta");
+    const listEl = document.getElementById("list");
+    const msgEl = document.getElementById("message");
+    const qEl = document.getElementById("q");
+    const systemBox = document.getElementById("systemBox");
+    const systemPreview = document.getElementById("systemPreview");
+    const prevBtn = document.getElementById("prev");
+    const nextBtn = document.getElementById("next");
+
+    function showMessage(text, isError) {
+      msgEl.hidden = false;
+      msgEl.className = isError ? "error" : "empty";
+      msgEl.textContent = text;
+      listEl.innerHTML = "";
+    }
+
+    function hideMessage() {
+      msgEl.hidden = true;
+    }
+
+    function renderPairs(pairs) {
+      const q = (qEl.value || "").trim().toLowerCase();
+      const filtered = q
+        ? pairs.filter((p) =>
+            p.user.toLowerCase().includes(q) || p.assistant.toLowerCase().includes(q))
+        : pairs;
+      listEl.innerHTML = "";
+      if (!filtered.length) {
+        showMessage(q ? "このページに一致するペアがありません。" : "ペアがありません。");
+        return;
+      }
+      hideMessage();
+      for (const p of filtered) {
+        const card = document.createElement("article");
+        card.className = "pair";
+        card.innerHTML =
+          `<div class="pair-head">Pair ${p.index} · JSONL line ${p.line_no}</div>` +
+          `<div class="label">まー</div><div class="bubble ma"></div>` +
+          `<div class="label">こより</div><div class="bubble koyori"></div>`;
+        card.querySelector(".bubble.ma").textContent = p.user;
+        card.querySelector(".bubble.koyori").textContent = p.assistant;
+        listEl.appendChild(card);
+      }
+    }
+
+    function updatePager() {
+      prevBtn.disabled = offset <= 0;
+      nextBtn.disabled = offset + PAGE >= total;
+    }
+
+    async function load() {
+      hideMessage();
+      metaEl.textContent = "読み込み中…";
+      try {
+        const res = await fetch(
+          `/api/v1/training/persona?offset=${offset}&limit=${PAGE}`
+        );
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        lastPayload = data;
+        total = data.total || 0;
+        if (!data.exists) {
+          showMessage(
+            "学習 JSONL がまだありません。\n" +
+              data.path +
+              "\n\nexport:\n" +
+              data.export_command,
+            false
+          );
+          metaEl.textContent = "ファイルなし";
+          systemBox.hidden = true;
+          updatePager();
+          return;
+        }
+        metaEl.innerHTML =
+          `<code>${data.path}</code> · ${data.total} pairs · ` +
+          `表示 ${data.offset + 1}–${Math.min(data.offset + data.pairs.length, data.total)}`;
+        if (data.system_preview) {
+          systemBox.hidden = false;
+          systemPreview.textContent =
+            data.system_preview +
+            (data.system_chars > data.system_preview.length
+              ? `\n\n(${data.system_chars} chars total)`
+              : "");
+        }
+        renderPairs(data.pairs);
+        updatePager();
+      } catch (err) {
+        showMessage(String(err), true);
+        metaEl.textContent = "読み込み失敗";
+      }
+    }
+
+    prevBtn.addEventListener("click", () => {
+      offset = Math.max(0, offset - PAGE);
+      load();
+    });
+    nextBtn.addEventListener("click", () => {
+      if (offset + PAGE < total) {
+        offset += PAGE;
+        load();
+      }
+    });
+    document.getElementById("reload").addEventListener("click", () => load());
+    qEl.addEventListener("input", () => {
+      if (lastPayload && lastPayload.pairs) renderPairs(lastPayload.pairs);
+    });
+
+    load();
+  </script>
+</body>
+</html>

@@ -57,6 +57,10 @@ uv run python ..\scripts\export-persona-lora-jsonl.py --dry-run
 
    **JSONL の system 行**: 1 ペアごとに SOUL.core が載るのは SFT データセットの一般的な形（学習ツールが行単位で読むため）。推論時は LM Studio の固定 system + LoRA なので**二重にはならない**。ファイルサイズを減らしたい場合は学習設定側で `system` テンプレを1回だけ指定し、export を `--messages-only` 化する拡張は RP-2b で検討可。
 
+   **ブラウザで確認（ma-home）**:
+
+   `http://localhost:8090/training/persona` — 30 件ずつページング・検索。API: `GET /api/v1/training/persona?offset=0&limit=30`
+
    **プレビュー（Markdown）**:
 
 ```powershell
@@ -67,6 +71,9 @@ uv run python ..\scripts\preview-persona-lora-jsonl.py -o preview.md --limit 20
 ```
 
 3. **学習（RP-2b 未）**: bf16 ベースで LoRA → マージ → Q4/QAT GGUF
+
+   **更新 cadence（合意）**: 日次 LoRA 再学習はしない。週次 or 節目で export → ブラウザ/`preview` で目視 → **良いペア +30〜50** または月1で再学習。SOUL パッチ承認後は LoRA v2（Phase 3）。
+
 4. **モデル id**: 例 `google/koyori-gemma-4-12b-qat` を LM Studio 常駐
 5. **評価セット**: 敬語率、三人称、assistant 口調、まー呼称
 
@@ -93,3 +100,4 @@ uv run python ..\scripts\preview-persona-lora-jsonl.py -o preview.md --limit 20
 | `PRESENCE_SOUL_CORE_PATH` | `presets/koyori-SOUL.core.md` | stable append 用 core |
 | `PRESENCE_SOUL_CORE_IN_APPEND` | `1` | `0` で Phase 1 移行後に append から core を外す |
 | `PRESENCE_SOUL_PATH` | プロジェクト `SOUL.md` | 全文 prefetch 用 |
+| `PERSONA_TRAINING_JSONL` | `~/.claude/memories/training/koyori-persona.jsonl` | LoRA 学習 JSONL（ブラウザ review API） |

@@ -148,7 +148,7 @@ class Episode:
     start_time: str  # ISO 8601
     end_time: str | None
     memory_ids: tuple[str, ...]  # このエピソードに含まれる記憶ID群
-    participants: tuple[str, ...]  # 関与した人物 ("幼馴染", etc.)
+    participants: tuple[str, ...]  # 関与した人物 ("仲の良い隣人", etc.)
     location_context: str | None  # カメラ位置の説明
     summary: str  # エピソード全体のサマリー
     emotion: str  # エピソード全体の感情

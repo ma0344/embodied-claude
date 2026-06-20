@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ
 
-**最終更新**: 2026-06-19（OL2 temporal 済、LW / EAR 計画）  
+**最終更新**: 2026-06-20（RP 人格基底化 Phase 0 着手、03:00 dream wake）  
 **方針**: こより本体（記憶・gateway 身体）は **様子見**。部屋 UI は **Native 会話エンジン + `/` の殻** を育てる（8080 プロキシ UI は投資しない）。
 
 **実行方針（合意 2026-06-14）**: 判断は compose/plan/stores のまま。**身体・自律の実行**は MCP に頼らず gateway 直実行へ（remember 直実行と同型）。詳細 → [gateway-direct-actions.md](./gateway-direct-actions.md)
@@ -40,7 +40,8 @@
 | **IBF** | **Intent→Bucket→Flow** | LLM にツール名を選ばせない | **計画済** → [intent-bucket-flow.md](./intent-bucket-flow.md) |
 | **C12** | intent router | 曖昧な「見て」分類 | **済** — `hybrid_intent.py` |
 | **BIO** | **HeartbeatLoop** | 経験→行動→次の wake。MCP 不要 | **済**（BIO-0〜7）→ **BIO-8〜** 神経系 [heartbeat-loop.md](./heartbeat-loop.md) |
-| **MEM** | **記憶層・Dreaming** | セッション跨ぎ・短期→長期昇格（BIO-8 の次） | **未** → [MEM — 記憶層](#mem--記憶層セッション跨ぎ--dreaming) |
+| **MEM** | **記憶層・Dreaming** | セッション跨ぎ・短期→長期昇格（BIO-8 の次） | **5a–5c・MEM-2/3/4 済** → [MEM — 記憶層](#mem--記憶層セッション跨ぎ--dreaming) |
+| **RP** | **人格基底化（SOUL→重み）** | SOUL.core / LM Studio system / persona LoRA | **Phase 0 済** → [RP — 人格基底化](#rp--人格基底化soul--deep) |
 | **K** | **こより自身のコード** | 自分用の改修・小さな実装を自分で | **未** → [K1](#k--こより自身のコード) |
 | **LW** | **自律の文学散歩** | 青空文庫・Web 散歩（希望/恐れ→動機） | **計画済** → [LW](#lw--自律の文学散歩青空文庫--web-散歩合意-2026-06-19) |
 | **EAR** | **耳（環境音）** | 日常会話・TV 気配 → social（Surface マイク） | **計画済** → [EAR](#ear--耳環境音--surface-マイク合意-2026-06-19) |
@@ -877,6 +878,31 @@ MVP チェックリスト:
 | K3 | 「使うコード」の例 — **LW 縦スライス**（`read_aozora_passage` gateway）を第一例 | 未 |
 
 **急がない**。HeartbeatLoop が閉じたあと、**K2 の経路**がなければ自己改修は危ない。自律の読書・散歩は **K2 なしでも LW-1 から縦スライス可**（gateway 固定実装）。
+
+---
+
+### RP — 人格基底化（SOUL → Deep）
+
+**問題（2026-06-20）**: キオスク native chat では full `SOUL.md` が毎ターン載らず、短い `SOUL_VOICE_ANCHOR` のみ → 敬語化・三人称・assistant 口調が出やすい。
+
+**方針**: Deep 層を **SOUL.core → stable append → LM Studio system → persona LoRA** の順で重み側へ移す。詳細 → [role-persistence-ma-home.md](./role-persistence-ma-home.md)
+
+| Phase | 内容 | 状態 |
+|-------|------|------|
+| **0** | `presets/koyori-SOUL.core.md` + `build_gateway_stable_append()` | **済** |
+| **1** | LM Studio default system = core（`PRESENCE_SOUL_CORE_IN_APPEND=0` で二重回避） | 未 |
+| **2** | persona LoRA + 学習 JSONL export | 未 |
+| **3** | MEM-6 — arc → SOUL パッチ提案 → LoRA v2（人間承認） | 未 |
+
+| ID | 内容 | 状態 |
+|----|------|------|
+| RP-0 | core ファイル + `load_soul_core()` + stable append 注入 | **済** |
+| RP-1 | LM Studio 手順 + env フラグ | 未 |
+| RP-2a | 良い会話 → `{system, messages}` export 脚本 | 未 |
+| RP-2b | LoRA 学習・GGUF マージ・評価セット | 未 |
+| RP-3 | MEM-6 パッチ提案 UI / 承認フロー | 未 |
+
+**環境変数**: `PRESENCE_SOUL_CORE_PATH` / `PRESENCE_SOUL_CORE_IN_APPEND`（既定 `1`）
 
 ---
 

@@ -161,7 +161,7 @@ class TestEpisode:
             start_time="2026-02-01T07:52:00+00:00",
             end_time="2026-02-01T07:53:00+00:00",
             memory_ids=("mem1", "mem2", "mem3"),
-            participants=("幼馴染",),
+            participants=("仲の良い隣人",),
             location_context="Balcony",
             summary="Found the morning sky after searching",
             emotion="excited",
@@ -171,7 +171,7 @@ class TestEpisode:
         assert episode.id == "ep1"
         assert episode.title == "Morning sky search"
         assert len(episode.memory_ids) == 3
-        assert episode.participants == ("幼馴染",)
+        assert episode.participants == ("仲の良い隣人",)
         assert episode.importance == 5
 
     def test_episode_to_metadata(self):

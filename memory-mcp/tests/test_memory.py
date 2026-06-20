@@ -20,13 +20,13 @@ class TestMemorySave:
     async def test_save_basic(self, memory_store: MemoryStore):
         """Test basic memory save."""
         memory = await memory_store.save(
-            content="幼馴染と初めて会った日",
+            content="仲の良い隣人と初めて会った日",
             emotion="happy",
             importance=5,
             category="memory",
         )
 
-        assert memory.content == "幼馴染と初めて会った日"
+        assert memory.content == "仲の良い隣人と初めて会った日"
         assert memory.emotion == "happy"
         assert memory.importance == 5
         assert memory.category == "memory"
@@ -60,9 +60,9 @@ class TestMemorySearch:
         """Test basic semantic search."""
         await memory_store.save(content="カメラで部屋を見た", category="observation")
         await memory_store.save(content="コードを書いた", category="technical")
-        await memory_store.save(content="幼馴染と話した", category="memory")
+        await memory_store.save(content="仲の良い隣人と話した", category="memory")
 
-        results = await memory_store.search("幼馴染との会話")
+        results = await memory_store.search("仲の良い隣人との会話")
 
         assert len(results) > 0
 

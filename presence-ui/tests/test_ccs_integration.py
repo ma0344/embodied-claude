@@ -74,7 +74,11 @@ def test_config_factory_injects_stable_gateway_append(
     mock_stores: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from presence_ui.services.llm import SOUL_VOICE_ANCHOR, build_gateway_stable_append
+    from presence_ui.services.llm import (
+        SOUL_VOICE_ANCHOR,
+        build_gateway_stable_append,
+        load_soul_core,
+    )
 
     monkeypatch.setattr(
         social_chat,
@@ -90,7 +94,12 @@ def test_config_factory_injects_stable_gateway_append(
     cfg = factory(ChatRequest(prompt="hello", session_id="sess-1"))
 
     assert cfg.append_system_prompt == build_gateway_stable_append()
-    assert SOUL_VOICE_ANCHOR in (cfg.append_system_prompt or "")
+    core = load_soul_core()
+    if core:
+        assert "[SOUL core — mandatory for every reply]" in (cfg.append_system_prompt or "")
+        assert "うち" in (cfg.append_system_prompt or "")
+    else:
+        assert SOUL_VOICE_ANCHOR in (cfg.append_system_prompt or "")
     assert cfg.permission_mode == "acceptEdits"
 
 

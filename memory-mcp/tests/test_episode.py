@@ -54,12 +54,12 @@ class TestEpisodeCreation:
         episode = await episode_manager.create_episode(
             title="Morning sky search",
             memory_ids=[mem1.id, mem2.id, mem3.id],
-            participants=["幼馴染"],
+            participants=["仲の良い隣人"],
         )
 
         assert episode.title == "Morning sky search"
         assert len(episode.memory_ids) == 3
-        assert episode.participants == ("幼馴染",)
+        assert episode.participants == ("仲の良い隣人",)
         assert episode.emotion == "excited"  # From highest importance memory
         assert episode.importance == 5
         assert episode.start_time == mem1.timestamp

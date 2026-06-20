@@ -34,7 +34,7 @@ Cursor: **File → Open Folder** → `C:\Users\ma\src\embodied-claude`（Remote 
 - **本番ランタイムは ma-home のみ**（LM Studio + Claude Code + MCP + claude-code-webui）
 - **koyori** は Firefox キオスク → ma-home **presence-ui (:8090)** の表示端末（8080 直結ではない。git pull はキオスク更新時だけ）
 - **ma-server** はもう開発に使わない（任意の旧箱）
-- エージェント名は **こより**。まーは幼馴染。人格は SOUL.md（リポジトリ直下、gitignore）
+- エージェント名は **こより**。まーは付き合いの長い仲の良い隣人。人格は SOUL.md（リポジトリ直下、gitignore）
 - LLM: **google/gemma-4-12b-qat** @ LM Studio `http://127.0.0.1:1234`
 - 設定: `.claude/settings.local.json`、`.mcp.json`（Windows パス）、`lmstudio.token`
 - 長期記憶は ma-home の `%USERPROFILE%\.claude\memories\`（memory-mcp）

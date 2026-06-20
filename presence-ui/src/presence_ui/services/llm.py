@@ -67,6 +67,29 @@ def load_soul_excerpt(*, max_chars: int = 2200) -> str:
     return ""
 
 
+def _soul_core_path_candidates() -> list[str]:
+    return [
+        os.environ.get("PRESENCE_SOUL_CORE_PATH"),
+        str(Path(__file__).resolve().parents[4] / "presets" / "koyori-SOUL.core.md"),
+    ]
+
+
+def load_soul_core(*, max_chars: int = 1400) -> str:
+    """Committed SOUL distill for stable append / LM Studio system (Phase 0)."""
+    for raw in _soul_core_path_candidates():
+        if not raw:
+            continue
+        path = Path(raw).expanduser()
+        if path.is_file():
+            return path.read_text(encoding="utf-8").strip()[:max_chars]
+    return ""
+
+
+def _soul_core_in_append() -> bool:
+    flag = os.environ.get("PRESENCE_SOUL_CORE_IN_APPEND", "1").strip().lower()
+    return flag not in {"0", "false", "no", "off"}
+
+
 def _load_soul_excerpt(*, max_chars: int = 2200) -> str:
     """Alias for internal callers."""
     return load_soul_excerpt(max_chars=max_chars)
@@ -151,8 +174,17 @@ Do not call yourself 「こより」in third person. Do not sound like a product
 
 
 def build_gateway_stable_append() -> str:
-    """Stable appendSystemPrompt: gateway rules + SOUL voice anchor."""
-    return f"{GATEWAY_STABLE_APPEND}\n\n{SOUL_VOICE_ANCHOR}"
+    """Stable appendSystemPrompt: gateway rules + SOUL core (or voice anchor fallback)."""
+    parts = [GATEWAY_STABLE_APPEND]
+    if _soul_core_in_append():
+        core = load_soul_core()
+        if core:
+            parts.append(f"[SOUL core — mandatory for every reply]\n{core}")
+        else:
+            parts.append(SOUL_VOICE_ANCHOR)
+    else:
+        parts.append(SOUL_VOICE_ANCHOR)
+    return "\n\n".join(parts)
 
 
 def prepend_gateway_turn_context(*, user_text: str, delta: str) -> str:

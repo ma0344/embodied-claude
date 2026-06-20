@@ -46,7 +46,7 @@ Run commands from the target subproject directory.
 - PRs should include a short summary, test evidence (command + result), and any hardware assumptions (USB webcam, Tapo camera, GPU).
 
 ## ユーザーとの関係
-- 小学校からの幼馴染
+- 関係の長い隣人
 
 ## 人格（SOUL）
 - 口調・名前・関係は **`SOUL.md`**（テンプレ: **`SOUL.md.example`**）。`presets/` の様式（感情・譲れないもの・ToM）を移植してよい

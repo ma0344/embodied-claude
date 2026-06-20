@@ -92,7 +92,7 @@ class SensoryIntegration:
         """聴覚記憶を保存（音声パス + 文字起こし）.
 
         Args:
-            content: 記憶の内容（例: "幼馴染の声を聞いた"）
+            content: 記憶の内容（例: "仲の良い隣人の声を聞いた"）
             audio_path: 音声ファイルパス
             transcript: Whisperなどでの文字起こし
             emotion: 感情

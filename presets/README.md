@@ -8,6 +8,7 @@ embodied-claude を使うあなた自身の AI キャラクターを作るため
 | ファイル | 役割 |
 |----------|------|
 | **`SOUL.md`**（プロジェクト直下） | **人格・関係・口調**。`SOUL.md.example` をコピーして育てる |
+| **`presets/koyori-SOUL.core.md`** | **常時注入用の核**（口調・関係・譲れないもの）。presence-ui stable append / LM Studio system 用 |
 | **`CLAUDE.md`**（プロジェクト直下） | **MCP・開発・カメラ手順**。置き換えない |
 | **`presets/*/CLAUDE.md`** | 上記 SOUL に**移植する章**の参考（感情・譲れないもの・ToM など） |
 

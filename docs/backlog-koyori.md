@@ -12,7 +12,7 @@ ma-home 側の全体優先順・記憶 E2E: [backlog-ma-home.md](./backlog-ma-ho
 
 ## CAM — Tapo PTZ / ONVIF（ma-home）
 
-細かい pan/tilt が効かない（Surveillance Station でも再現）。preset 運用への寄せ。CAM-1〜3 → [backlog-ma-home.md#cam--tapo-ptz--onvif-細かい操作が効かない合意-2026-06-20](./backlog-ma-home.md)。
+細かい pan/tilt。**DS Cam では PTZ 可・SS Web ブラウザでは不可**（経路差）。直 ONVIF は embodied-claude 別問題。CAM-1〜3 → [backlog-ma-home.md#cam--tapo-ptz--onvif-細かい操作が効かない合意-2026-06-20](./backlog-ma-home.md)。
 
 ## EAR — 耳・環境音（ma-home）
 

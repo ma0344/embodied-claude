@@ -45,7 +45,7 @@
 | **K** | **こより自身のコード** | 自分用の改修・小さな実装を自分で | **未** → [K1](#k--こより自身のコード) |
 | **LW** | **自律の文学散歩** | 青空文庫・Web 散歩（希望/恐れ→動機） | **計画済** → [LW](#lw--自律の文学散歩青空文庫--web-散歩合意-2026-06-19) |
 | **OBS** | **能動観察 `/observe`** | slash 完遂不能の整理 + gateway フェーズ化 | **計画済** → [OBS](#obs--能動観察observe-完遂不能--gateway-フェーズ化合意-2026-06-20) |
-| **CAM** | **Tapo PTZ / ONVIF** | 細かい pan/tilt が効かない切り分け（SS でも不可） | **調査** → [CAM](#cam--tapo-ptz--onvif-細かい操作が効かない合意-2026-06-20) |
+| **CAM** | **Tapo PTZ / ONVIF** | 細かい pan/tilt；**DS Cam PTZ OK / SS Web NG** → 直 ONVIF 別問題 | **調査** → [CAM](#cam--tapo-ptz--onvif-細かい操作が効かない合意-2026-06-20) |
 | **EAR** | **耳（環境音）** | 日常会話・TV 気配 → social（Surface マイク） | **計画済** → [EAR](#ear--耳環境音--surface-マイク合意-2026-06-19) |
 | **VIS** | **VL 安定性** | corrupt 相関ログ・受動計測・しきい値 ntfy（人が常時見ない） | **様子見** → [VIS](#vis--vision-healthvl-安定性相関ログ) |
 
@@ -1055,29 +1055,50 @@ wake → desire/discomfort + SOUL
 
 ### CAM — Tapo PTZ / ONVIF 細かい操作が効かない（合意 2026-06-20）
 
-**きっかけ**: まー — Tapo の pan/tilt が **細かく効かない**。Synology **Surveillance Station** でも ONVIF パン/チルトが効かない。
+**きっかけ**: まー — Tapo の pan/tilt が **細かく効かない**。Synology **Surveillance Station** 経由の ONVIF 検証も実施。
 
-**切り分けの含意**: SS でも同症状 → **embodied-claude の `TAPO_PTZ_MODE` だけの問題ではない**可能性が高い。Tapo 本体の ONVIF PTZ 実装・ファーム・機種・**Camera Account（Tapo アプリのローカルアカウント）** の有無を疑う。
+**追記（2026-06-20）— SS Web vs DS Cam**:
+
+| クライアント | PTZ | 意味 |
+|--------------|-----|------|
+| **DS Cam（スマホ）** | **動く** | カメラのモーター・SS ドライバ経路は **生きている** |
+| **SS Web（PC ブラウザ）** | **動かない** | **同じ NAS・同じカメラでもクライアントで挙動が違う** |
+| **wifi-cam-mcp（ma-home 直 ONVIF）** | 未確認 / 細かく効かない報告 | Synology **を通さない** 別経路（RelativeMove 等） |
+
+**誤解しやすい結論**: 「SS でも PTZ 不可 → Tapo の ONVIF は死んでいる」は **早い**。正しくは **SS Web の PTZ UI/API が Tapo と相性悪い or 非表示** で、**DS Cam 経路では PTZ 可能**。
+
+**3 本の経路（整理）**:
+
+```
+DS Cam ──▶ Surveillance Station (NAS) ──▶ Tapo   … PTZ OK（ドライバ経由）
+SS Web ──▶ 同 SS ──▶ Tapo                        … PTZ NG（Web クライアント制約）
+wifi-cam-mcp ── ONVIF 直 (:2020) ──▶ Tapo         … embodied-claude / look_around
+```
+
+SS Web で効かない典型要因（カメラ無罪のことが多い）: PTZ パネル非表示（Monitor Center の青 PTZ アイコン）、H.265 + ブラウザコーデック、リバプロで WebSocket 不足、サードパーティカメラの Web PTZ バグ。**DS Cam 動作はカメラ判定に使う。SS Web 不可はカメラ判定に使わない。**
+
+**切り分けの含意**: embodied-claude の `TAPO_PTZ_MODE` だけの問題ではない。**直 ONVIF RelativeMove** が DS Cam が送る命令と違う可能性。Tapo **Camera Account**・機種・FW も引き続き確認。
 
 **コード側（参考）**: `wifi-cam-mcp` — `RelativeMove` / `ContinuousMove`（`ptz_mode=auto|relative|continuous`）、`look_around` は `pan_left(45)` → `pan_right(90)` → `tilt_up(20)` の **連続 relative 移動**に依存。`camera_go_to_preset` は別経路（`GotoPreset`）。
 
 | 仮説 | 説明 | 確認 |
 |------|------|------|
-| **H1 機種/firmware** | 一部 Tapo は ONVIF で **preset のみ**、RelativeMove は no-op または粗い | SS 再現 → 有力 |
+| **H1 機種/firmware** | 一部 Tapo は ONVIF **直** では preset のみ／RelativeMove no-op（SS ドライバは別命令で動く） | DS Cam OK なら **直 ONVIF 側**を疑う |
 | **H2 アカウント** | TP-Link クラウドアカウントでは ONVIF PTZ 不可。**Camera Account** 要 | Tapo アプリ設定 |
 | **H3 ポート/profile** | ONVIF 2020、profile token 不一致 | `camera_info` / GetProfiles |
 | **H4 マウント** | `mount_mode`（desk/ceiling）で方向反転 — 動かないのではなく **逆** の可能性 | `mcpBehavior.toml` |
-| **H5 見かけの成功** | ONVIF は成功を返すがモーター不動 → **4 方向 capture が同一視野**、LLM が `/observe` テンプレで Left/Right を **叙述だけ**する | 画像 diff 比較 |
+| **H5 見かけの成功** | 直 ONVIF は成功を返すがモーター不動 → **4 方向 capture が同一視野**、LLM が `/observe` テンプレで Left/Right を **叙述だけ**する | JPEG hash diff |
+| **H6 クライアント経路差** | SS Web PTZ 失敗 ≠ カメラ不可。**DS Cam → SS ドライバ** と **ma-home 直 ONVIF** は別プロトコル | DS Cam 操作直後に `look_left` diff |
 
-**OBS への影響**: `/observe` の「見る」ブロック（look_left + see × N）が **PTZ 前提**。細かい首振りが無いと能動観察の設計自体が **preset 運用**（窓/デスク/ダイニング）に寄せる必要（OBS-5）。
+**OBS への影響**: `/observe` の「見る」ブロック（look_left + see × N）が **直 ONVIF PTZ 前提**。DS Cam で動いても embodied-claude 経路が no-op なら **preset 運用**（窓/デスク/ダイニング）に寄せる（OBS-5）。
 
 | ID | 内容 | 状態 |
 |----|------|------|
-| **CAM-1** | **実機切り分け** — 機種名・FW・Camera Account・ONVIF GetStatus 前後で pan 値変化、`look_left` 後の JPEG hash diff、SS と同条件メモ | 未 |
+| **CAM-1** | **実機切り分け** — 機種・FW・Camera Account；**DS Cam PTZ 直後**に ma-home `look_left` → JPEG diff；`TAPO_PTZ_MODE=continuous` 試行；GetStatus 前後 pan 値 | 未 |
 | **CAM-2** | **preset-only 運用** — `TAPO_*_PRESET` / `camera_go_to_preset` で observe を再設計（look_around relative 依存をやめる） | 未 |
-| **CAM-3** | **ドキュメント** — ma-home 向け「Tapo ONVIF PTZ 限界」節（CLAUDE.md / wifi-cam README） | 未 |
+| **CAM-3** | **ドキュメント** — ma-home 向け「Tapo PTZ: DS Cam OK / SS Web NG / 直 ONVIF 別問題」（CLAUDE.md / wifi-cam README） | 未 |
 
-**関連**: `wifi-cam-mcp/.env.example`、`presence-ui` `look_preset_direct`、Imou は `continuous` 必須（CLAUDE.md）— Tapo は別制約の可能性
+**関連**: `wifi-cam-mcp/.env.example`、`presence-ui` `look_preset_direct`、Imou は `continuous` 必須（CLAUDE.md）— Tapo は **SS 経由と直 ONVIF で挙動が分かれる**可能性
 
 - [ ] **CAM-1** 実機切り分け
 - [ ] **CAM-2** preset-only observe

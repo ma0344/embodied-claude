@@ -17,6 +17,13 @@ from presence_ui.services.session_log import (
     list_project_jsonl_files,
 )
 
+_ASSISTANT_REJECT_EXACT = frozenset(
+    {
+        "no response requested.",
+        "no response needed.",
+        "(no response)",
+    }
+)
 _KEIGO_MARKERS = ("です", "ます", "でしょうか", "ござい", "いただけ", "お役に")
 _TOOL_MARKERS = ("mcp__", "gateway_turn_context", "appendSystemPrompt")
 _TRIVIAL_USER_EXACT = frozenset(
@@ -34,6 +41,14 @@ _TRIVIAL_USER_EXACT = frozenset(
         "おはよう",
     }
 )
+
+
+@dataclass(frozen=True, slots=True)
+class PersonaTrainingExample:
+    system: str
+    user: str
+    assistant: str
+    line_no: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +82,8 @@ def _is_trivial_user(text: str) -> bool:
 def _assistant_usable(text: str) -> bool:
     body = (text or "").strip()
     if len(body) < 2:
+        return False
+    if body.lower() in _ASSISTANT_REJECT_EXACT:
         return False
     if _has_tool_markers(body):
         return False
@@ -155,3 +172,99 @@ def export_persona_jsonl(
         pairs_written=written,
         pairs_skipped=skipped,
     )
+
+
+def _message_content(messages: list[dict[str, str]], role: str) -> str:
+    for item in messages:
+        if str(item.get("role") or "") == role:
+            return str(item.get("content") or "").strip()
+    return ""
+
+
+def load_persona_jsonl(path: Path) -> list[PersonaTrainingExample]:
+    """Load training JSONL produced by export_persona_jsonl."""
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing training JSONL: {path}")
+
+    examples: list[PersonaTrainingExample] = []
+    with path.open(encoding="utf-8") as handle:
+        for line_no, raw in enumerate(handle, start=1):
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"{path}:{line_no}: invalid JSON: {exc}") from exc
+            messages = record.get("messages")
+            if not isinstance(messages, list):
+                raise ValueError(f"{path}:{line_no}: missing messages[]")
+            examples.append(
+                PersonaTrainingExample(
+                    system=_message_content(messages, "system"),
+                    user=_message_content(messages, "user"),
+                    assistant=_message_content(messages, "assistant"),
+                    line_no=line_no,
+                )
+            )
+    return examples
+
+
+def format_persona_markdown(
+    examples: list[PersonaTrainingExample],
+    *,
+    source_path: Path | None = None,
+    show_full_system: bool = False,
+    system_preview_chars: int = 320,
+) -> str:
+    """Human-readable Markdown review for LoRA training pairs."""
+    source = str(source_path) if source_path else "(unknown)"
+    lines = [
+        "# Koyori persona training preview",
+        "",
+        f"- source: `{source}`",
+        f"- pairs: {len(examples)}",
+        "",
+        "---",
+        "",
+    ]
+
+    system_text = examples[0].system if examples else ""
+    if system_text:
+        lines.extend(["## System (SOUL.core)", ""])
+        if show_full_system:
+            lines.append(system_text)
+        else:
+            preview = system_text[:system_preview_chars]
+            if len(system_text) > system_preview_chars:
+                preview += "…"
+            lines.append(preview)
+            lines.append("")
+            lines.append(
+                f"_({len(system_text)} chars total — use `--full-system` to show all)_"
+            )
+        lines.extend(["", "---", ""])
+
+    for index, example in enumerate(examples, start=1):
+        lines.extend(
+            [
+                f"## Pair {index} · line {example.line_no}",
+                "",
+                "### まー",
+                "",
+                example.user,
+                "",
+                "### こより",
+                "",
+                example.assistant,
+                "",
+                "---",
+                "",
+            ]
+        )
+
+    if not examples:
+        lines.append("_No training pairs in file._")
+        lines.append("")
+
+    return "\n".join(lines).rstrip() + "\n"

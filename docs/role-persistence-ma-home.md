@@ -53,7 +53,18 @@ uv run python ..\scripts\export-persona-lora-jsonl.py
 uv run python ..\scripts\export-persona-lora-jsonl.py --dry-run
 ```
 
-   gateway 注入・敬語・tool 名・挨拶だけのターンは除外。
+   gateway 注入・敬語・tool 名・挨拶だけのターンは除外。**Claude CLI の `No response requested.` も除外**。
+
+   **JSONL の system 行**: 1 ペアごとに SOUL.core が載るのは SFT データセットの一般的な形（学習ツールが行単位で読むため）。推論時は LM Studio の固定 system + LoRA なので**二重にはならない**。ファイルサイズを減らしたい場合は学習設定側で `system` テンプレを1回だけ指定し、export を `--messages-only` 化する拡張は RP-2b で検討可。
+
+   **プレビュー（Markdown）**:
+
+```powershell
+cd C:\Users\ma\src\embodied-claude\presence-ui
+uv run python ..\scripts\preview-persona-lora-jsonl.py
+# 既定: 同じ JSONL 隣の koyori-persona.md に出力
+uv run python ..\scripts\preview-persona-lora-jsonl.py -o preview.md --limit 20
+```
 
 3. **学習（RP-2b 未）**: bf16 ベースで LoRA → マージ → Q4/QAT GGUF
 4. **モデル id**: 例 `google/koyori-gemma-4-12b-qat` を LM Studio 常駐

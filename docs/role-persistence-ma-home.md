@@ -44,8 +44,18 @@
 ## Phase 2 — Persona LoRA
 
 1. **学習データ**: `{system: SOUL.core, messages: [...]}` — tool call なしの良い会話のみ
-2. **export 脚本**（未）: `social.db` / JSONL から persona ターン抽出
-3. **学習**: bf16 ベースで LoRA → マージ → Q4/QAT GGUF
+2. **export 脚本（RP-2a 済）**:
+
+```powershell
+cd C:\Users\ma\src\embodied-claude\presence-ui
+uv run python ..\scripts\export-persona-lora-jsonl.py
+# 既定出力: %USERPROFILE%\.claude\memories\training\koyori-persona.jsonl
+uv run python ..\scripts\export-persona-lora-jsonl.py --dry-run
+```
+
+   gateway 注入・敬語・tool 名・挨拶だけのターンは除外。
+
+3. **学習（RP-2b 未）**: bf16 ベースで LoRA → マージ → Q4/QAT GGUF
 4. **モデル id**: 例 `google/koyori-gemma-4-12b-qat` を LM Studio 常駐
 5. **評価セット**: 敬語率、三人称、assistant 口調、まー呼称
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from boundary_mcp.store import BoundaryStore
@@ -715,6 +716,70 @@ def _format_shifts_section(
     return lines
 
 
+_VISUAL_EXPERIENCE_KINDS = frozenset({"agent_observation", "agent_autonomous_action"})
+
+
+def _visual_scene_tokens(text: str) -> frozenset[str]:
+    normalized = re.sub(r"\s+", "", (text or "")[:240])
+    return frozenset(re.findall(r"[\u4e00-\u9fff]{2,}", normalized)[:24])
+
+
+def _visual_scenes_similar(a: str, b: str, *, threshold: float = 0.5) -> bool:
+    left, right = _visual_scene_tokens(a), _visual_scene_tokens(b)
+    if not left or not right:
+        return False
+    return len(left & right) / min(len(left), len(right)) >= threshold
+
+
+def _format_visual_experience_cluster(cluster: list[RecentExperienceRef]) -> str:
+    latest = cluster[0]
+    if len(cluster) == 1:
+        summary = latest.summary[:72] + ("…" if len(latest.summary) > 72 else "")
+        return f"- [{latest.kind}] {summary}"
+    kinds = ", ".join(sorted({item.kind for item in cluster}))
+    snippet = latest.summary[:60] + ("…" if len(latest.summary) > 60 else "")
+    return (
+        f"- [room_view] same scene ×{len(cluster)} ({kinds}); "
+        f"layout unchanged: {snippet}"
+    )
+
+
+def _format_single_experience(exp: RecentExperienceRef) -> str:
+    if exp.kind == "agent_response" and _looks_like_dialogue_prose(exp.summary):
+        return (
+            f"- [{exp.kind}] prior reply logged "
+            "(answer THIS turn fresh; do not continue prior wording)"
+        )
+    summary = exp.summary[:100] + ("…" if len(exp.summary) > 100 else "")
+    return f"- [{exp.kind}] {summary}"
+
+
+def _build_experience_bullets(
+    experiences: list[RecentExperienceRef], *, max_items: int
+) -> list[str]:
+    lines: list[str] = []
+    index = 0
+    while index < len(experiences) and len(lines) < max_items:
+        exp = experiences[index]
+        if exp.kind in _VISUAL_EXPERIENCE_KINDS:
+            cluster = [exp]
+            scan = index + 1
+            while scan < len(experiences):
+                nxt = experiences[scan]
+                if nxt.kind not in _VISUAL_EXPERIENCE_KINDS:
+                    break
+                if not _visual_scenes_similar(nxt.summary, cluster[0].summary):
+                    break
+                cluster.append(nxt)
+                scan += 1
+            lines.append(_format_visual_experience_cluster(cluster))
+            index = scan
+            continue
+        lines.append(_format_single_experience(exp))
+        index += 1
+    return lines
+
+
 def _looks_like_dialogue_prose(text: str) -> bool:
     """Heuristic: stored agent_response that reads like spoken reply, not audit metadata."""
     if text.startswith("Replied to まー"):
@@ -729,15 +794,7 @@ def _format_experiences_section(
     if not experiences:
         return []
     lines = ["[recent_experiences]"]
-    for exp in experiences[:max_items]:
-        if exp.kind == "agent_response" and _looks_like_dialogue_prose(exp.summary):
-            lines.append(
-                f"- [{exp.kind}] prior reply logged "
-                "(answer THIS turn fresh; do not continue prior wording)"
-            )
-            continue
-        summary = exp.summary[:100] + ("…" if len(exp.summary) > 100 else "")
-        lines.append(f"- [{exp.kind}] {summary}")
+    lines.extend(_build_experience_bullets(experiences, max_items=max_items))
     return lines
 
 

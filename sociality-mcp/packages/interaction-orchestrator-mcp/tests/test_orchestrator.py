@@ -253,6 +253,37 @@ class TestRecord:
         assert "急に来た" not in block
         assert "do not continue prior wording" in block
 
+    def test_similar_visual_experiences_collapsed_in_compose(self, stores):
+        room = (
+            "部屋には、赤いソファと木製のテーブルが見えます。"
+            "テーブルの上には、ティッシュボックスがあります。"
+        )
+        variant = (
+            "部屋には、赤いソファと木製のテーブルが見えます。"
+            "テーブルの上には、ティッシュボックスと透明な容器があります。"
+        )
+        stores["orchestrator"].record_agent_experience(
+            RecordAgentExperienceInput(
+                person_id="ma",
+                kind="agent_observation",
+                summary=variant,
+                importance=3,
+            )
+        )
+        stores["orchestrator"].record_agent_experience(
+            RecordAgentExperienceInput(
+                person_id="ma",
+                kind="agent_autonomous_action",
+                summary=room,
+                importance=3,
+            )
+        )
+        ctx = _compose(stores, user_text="こんにちは")
+        block = ctx.compact_prompt_block
+        assert "[room_view]" in block
+        assert "same scene ×2" in block
+        assert block.count("赤いソファ") == 1
+
     def test_noise_open_loops_filtered_from_compose(self, stores):
         stores["relationship"].upsert_person(
             person_id="ma", canonical_name="まー", aliases=[], role="companion"

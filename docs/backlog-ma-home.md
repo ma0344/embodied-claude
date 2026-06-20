@@ -632,6 +632,14 @@ promote_score = 0.25*recency + 0.20*frequency + 0.30*emotion + 0.25*interest
 
 **関連**: `recent_experiences` 続き問題は **6d850c1** で別修正済み。
 
+##### MEM-5h — 視覚 experience の compose 圧縮（2026-06-20）
+
+**症状**: `agent_observation` / `agent_autonomous_action` が毎 tick ほぼ同じ部屋描写で `[recent_experiences]` を埋める。
+
+**対応**: compose で類似シーンを `[room_view] same scene ×N` に畳む（**済**）。
+
+**未**: 記録時 dedup（同一 fingerprint なら DB に書かない）— 必要なら後追い。
+
 ##### MEM-7 — Native 会話 JSONL のデータ管理（合意 2026-06-18）
 
 **現状（C10 済）**
@@ -902,14 +910,14 @@ MVP チェックリスト:
 |-------|------|------|
 | **0** | `presets/koyori-SOUL.core.md` + `build_gateway_stable_append()` | **済** |
 | **1** | LM Studio default system = core（`PRESENCE_SOUL_CORE_IN_APPEND=0`） | **済**（ma-home 2026-06-20） |
-| **2** | persona LoRA + 学習 JSONL export | 未 |
+| **2** | persona LoRA + 学習 JSONL export | **2a 済**（export 脚本） / 2b 未 |
 | **3** | MEM-6 — arc → SOUL パッチ提案 → LoRA v2（人間承認） | 未 |
 
 | ID | 内容 | 状態 |
 |----|------|------|
 | RP-0 | core ファイル + `load_soul_core()` + stable append 注入 | **済** |
 | RP-1 | LM Studio 手順 + `enable-rp-phase1-ma-home.ps1` + env フラグ | **済** |
-| RP-2a | 良い会話 → `{system, messages}` export 脚本 | 未 |
+| RP-2a | 良い会話 → `{system, messages}` export 脚本 | **済** — `scripts/export-persona-lora-jsonl.py` |
 | RP-2b | LoRA 学習・GGUF マージ・評価セット | 未 |
 | RP-3 | MEM-6 パッチ提案 UI / 承認フロー | 未 |
 

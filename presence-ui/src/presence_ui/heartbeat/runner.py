@@ -11,7 +11,7 @@ from presence_ui.heartbeat.schedule import (
     mark_consolidated,
     mark_dreamed,
     pulse_runner_enabled,
-    seconds_until_wake,
+    seconds_until_next_sleep,
     should_run_consolidate_now,
     should_run_dream_now,
 )
@@ -73,9 +73,8 @@ async def _pulse_cycle(*, person_id: str) -> None:
             await run_somatic_probes()
         except Exception as exc:
             logger.warning("Somatic probe failed: %s", exc)
-    dreamed = await _maybe_dream(person_id=person_id)
-    if not dreamed:
-        await _maybe_consolidate()
+    await _maybe_dream(person_id=person_id)
+    await _maybe_consolidate()
     result = await run_autonomous_tick(person_id=person_id, trigger="pulse_wake")
     logger.info(
         "BIO pulse tick ok=%s action=%s next=%s summary=%s",
@@ -89,7 +88,7 @@ async def _pulse_cycle(*, person_id: str) -> None:
 async def _pulse_loop(*, person_id: str) -> None:
     while True:
         try:
-            delay = seconds_until_wake(load_pulse_state())
+            delay = seconds_until_next_sleep(load_pulse_state())
             if delay > 0:
                 await asyncio.sleep(delay)
             await _pulse_cycle(person_id=person_id)

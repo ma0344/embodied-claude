@@ -217,23 +217,108 @@ def seconds_until_wake(state: AgentPulseState | None = None) -> float:
     return min(float(pulse_max_seconds()), delta)
 
 
-def should_run_consolidate_now(state: AgentPulseState | None = None) -> bool:
-    """Once per day during 02:00-04:00 local if not done recently."""
+def _maintenance_hour() -> int:
+    return max(0, min(23, int(os.getenv("PRESENCE_NIGHTLY_MAINTENANCE_HOUR", "3"))))
+
+
+def _maintenance_catchup_hour() -> int:
+    catchup = int(os.getenv("PRESENCE_NIGHTLY_MAINTENANCE_CATCHUP_HOUR", "7"))
+    return max(_maintenance_hour() + 1, min(24, catchup))
+
+
+def _auto_dream_enabled() -> bool:
+    return os.getenv("PRESENCE_AUTO_DREAM", "1").lower() not in {"0", "false", "no"}
+
+
+def _auto_consolidate_enabled() -> bool:
+    return os.getenv("PRESENCE_AUTO_CONSOLIDATE", "1").lower() not in {"0", "false", "no"}
+
+
+def _maintenance_recently_done(
+    now: datetime,
+    last_iso: str | None,
+    *,
+    min_hours: int = 20,
+) -> bool:
+    if not last_iso:
+        return False
+    try:
+        last = parse_iso(last_iso, tz=now.tzinfo or policy_timezone())
+        return (now - last).total_seconds() < min_hours * 3600
+    except ValueError:
+        return False
+
+
+def _in_nightly_maintenance_window(now: datetime) -> bool:
+    """03:00 slot plus catch-up until quiet hours end (~07:00)."""
+    return _maintenance_hour() <= now.hour < _maintenance_catchup_hour()
+
+
+def _needs_nightly_dream(pulse: AgentPulseState | None, now: datetime) -> bool:
+    if not _auto_dream_enabled():
+        return False
+    last = pulse.last_dream_at if pulse else None
+    return not _maintenance_recently_done(now, last)
+
+
+def _needs_nightly_consolidate(pulse: AgentPulseState | None, now: datetime) -> bool:
+    if not _auto_consolidate_enabled():
+        return False
+    last = pulse.last_consolidate_at if pulse else None
+    return not _maintenance_recently_done(now, last)
+
+
+def seconds_until_maintenance_wake(state: AgentPulseState | None = None) -> float | None:
+    """Seconds until the fixed nightly maintenance slot (default 03:00 JST).
+
+    Returns None when dream and consolidate were both done recently.
+    Returns 0 during the catch-up window if maintenance was missed.
+    """
+    if not _auto_dream_enabled() and not _auto_consolidate_enabled():
+        return None
+    from presence_ui.heartbeat.pulse_state import load_pulse_state
+
+    pulse = state or load_pulse_state()
     tz = policy_timezone()
     now = datetime.now(tz)
-    if not (2 <= now.hour < 4):
+    need_dream = _needs_nightly_dream(pulse, now)
+    need_consolidate = _needs_nightly_consolidate(pulse, now)
+    if not need_dream and not need_consolidate:
+        return None
+
+    if _in_nightly_maintenance_window(now):
+        return 0.0
+
+    hour = _maintenance_hour()
+    target = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+    if now >= target:
+        target = (now + timedelta(days=1)).replace(
+            hour=hour, minute=0, second=0, microsecond=0
+        )
+    return max(0.0, (target - now).total_seconds())
+
+
+def seconds_until_next_sleep(state: AgentPulseState | None = None) -> float:
+    """Sleep until the sooner of the next pulse or nightly maintenance wake."""
+    pulse_delay = seconds_until_wake(state)
+    maint_delay = seconds_until_maintenance_wake(state)
+    if maint_delay is None:
+        return pulse_delay
+    return min(pulse_delay, maint_delay)
+
+
+def should_run_consolidate_now(state: AgentPulseState | None = None) -> bool:
+    """Once per day at the nightly maintenance slot if not done recently."""
+    if not _auto_consolidate_enabled():
+        return False
+    tz = policy_timezone()
+    now = datetime.now(tz)
+    if not _in_nightly_maintenance_window(now):
         return False
     from presence_ui.heartbeat.pulse_state import load_pulse_state
 
     pulse = state or load_pulse_state()
-    if pulse and pulse.last_consolidate_at:
-        try:
-            last = parse_iso(pulse.last_consolidate_at, tz=tz)
-            if (now - last).total_seconds() < 20 * 3600:
-                return False
-        except ValueError:
-            pass
-    return os.getenv("PRESENCE_AUTO_CONSOLIDATE", "1").lower() not in {"0", "false", "no"}
+    return _needs_nightly_consolidate(pulse, now)
 
 
 def mark_consolidated() -> None:
@@ -256,22 +341,17 @@ def mark_consolidated() -> None:
 
 
 def should_run_dream_now(state: AgentPulseState | None = None) -> bool:
-    """Once per day during 02:00-04:00 local if not dreamed recently."""
+    """Once per day at the nightly maintenance slot if not dreamed recently."""
+    if not _auto_dream_enabled():
+        return False
     tz = policy_timezone()
     now = datetime.now(tz)
-    if not (2 <= now.hour < 4):
+    if not _in_nightly_maintenance_window(now):
         return False
     from presence_ui.heartbeat.pulse_state import load_pulse_state
 
     pulse = state or load_pulse_state()
-    if pulse and pulse.last_dream_at:
-        try:
-            last = parse_iso(pulse.last_dream_at, tz=tz)
-            if (now - last).total_seconds() < 20 * 3600:
-                return False
-        except ValueError:
-            pass
-    return os.getenv("PRESENCE_AUTO_DREAM", "1").lower() not in {"0", "false", "no"}
+    return _needs_nightly_dream(pulse, now)
 
 
 def mark_dreamed(*, summary: str = "") -> None:

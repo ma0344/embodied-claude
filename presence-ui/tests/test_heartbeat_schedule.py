@@ -14,6 +14,8 @@ from presence_ui.heartbeat.pulse_state import AgentPulseState, load_pulse_state,
 from presence_ui.heartbeat.schedule import (
     apply_pulse_schedule,
     compute_next_pulse,
+    seconds_until_maintenance_wake,
+    seconds_until_next_sleep,
     seconds_until_wake,
     should_run_consolidate_now,
     should_run_dream_now,
@@ -143,3 +145,55 @@ def test_pulse_state_roundtrip(tmp_path: Path, monkeypatch) -> None:
     loaded = load_pulse_state()
     assert loaded is not None
     assert loaded.last_action == "agent_response"
+
+
+def test_maintenance_wake_before_long_quiet_defer(tmp_path: Path, monkeypatch) -> None:
+    """23:38 outward pulse defers to ~05:38, but maintenance must fire at 03:00."""
+    tz = ZoneInfo("Asia/Tokyo")
+    now = datetime(2026, 6, 19, 23, 38, 27, tzinfo=tz)
+    path = tmp_path / "pulse.json"
+    monkeypatch.setenv("PRESENCE_AGENT_PULSE_PATH", str(path))
+    save_pulse_state(
+        AgentPulseState(
+            next_wake_at="2026-06-20T05:38:27.435662+09:00",
+            reason="autonomous; quiet_hours",
+        )
+    )
+    with patch("presence_ui.heartbeat.schedule.datetime") as mock_dt:
+        mock_dt.now.return_value = now
+        pulse_delay = seconds_until_wake()
+        maint_delay = seconds_until_maintenance_wake()
+        sleep_delay = seconds_until_next_sleep()
+    assert pulse_delay == 6 * 3600
+    assert maint_delay is not None
+    expected_maint = (
+        datetime(2026, 6, 20, 3, 0, 0, tzinfo=tz) - now
+    ).total_seconds()
+    assert maint_delay == expected_maint
+    assert sleep_delay == maint_delay
+    assert sleep_delay < pulse_delay
+
+
+def test_should_run_dream_catchup_after_missed_slot(tmp_path: Path, monkeypatch) -> None:
+    tz = ZoneInfo("Asia/Tokyo")
+    now = datetime(2026, 6, 20, 5, 38, 27, tzinfo=tz)
+    path = tmp_path / "pulse.json"
+    monkeypatch.setenv("PRESENCE_AGENT_PULSE_PATH", str(path))
+    save_pulse_state(AgentPulseState(next_wake_at=now.isoformat(), reason="x"))
+    with patch("presence_ui.heartbeat.schedule.datetime") as mock_dt:
+        mock_dt.now.return_value = now
+        assert should_run_dream_now() is True
+        assert should_run_consolidate_now() is True
+        assert seconds_until_maintenance_wake() == 0.0
+
+
+def test_should_not_run_maintenance_outside_window(tmp_path: Path, monkeypatch) -> None:
+    tz = ZoneInfo("Asia/Tokyo")
+    now = datetime(2026, 6, 20, 14, 0, 0, tzinfo=tz)
+    path = tmp_path / "pulse.json"
+    monkeypatch.setenv("PRESENCE_AGENT_PULSE_PATH", str(path))
+    save_pulse_state(AgentPulseState(next_wake_at=now.isoformat(), reason="x"))
+    with patch("presence_ui.heartbeat.schedule.datetime") as mock_dt:
+        mock_dt.now.return_value = now
+        assert should_run_dream_now() is False
+        assert should_run_consolidate_now() is False

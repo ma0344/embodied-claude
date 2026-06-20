@@ -30,11 +30,14 @@
 
 ---
 
-## Phase 1 — LM Studio 固定 system
+## Phase 1 — LM Studio 固定 system（**済 — ma-home 2026-06-20**）
 
-1. LM Studio で chat モデルの **default system prompt** = `presets/koyori-SOUL.core.md` 本文
-2. presence-ui の stable append と **二重にならない**ようどちらか一方に統一（推奨: **LM Studio のみ** に移したら append から core を外すフラグ `PRESENCE_SOUL_CORE_IN_APPEND=0`）
-3. `set-lmstudio-model.ps1` / 手順を [lmstudio-model-change.md](./lmstudio-model-change.md) に追記
+1. LM Studio chat モデルの **System Prompt** = `presets/koyori-SOUL.core.md` 全文
+2. `.\scripts\enable-rp-phase1-ma-home.ps1` → `PRESENCE_SOUL_CORE_IN_APPEND=0`
+3. `.\scripts\restart-presence-ui.ps1`
+4. 手順: [lmstudio-model-change.md](./lmstudio-model-change.md) § SOUL.core
+
+**確認**: append に `[SOUL core — mandatory` が**出ない**こと（gateway + voice anchor のみ）。口調は LM Studio system から維持されること。
 
 ---
 

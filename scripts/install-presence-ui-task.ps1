@@ -72,6 +72,9 @@ if (-not (Test-Path $LocalEnvFile)) {
         "# presence-ui optional flags (loaded by run-presence-ui-worker.ps1)"
         "PRESENCE_NATIVE_CHAT=1"
         "# PRESENCE_CCS_PASSWORD=koyori-poc"
+        "# RP Phase 1 (after SOUL.core in LM Studio System Prompt):"
+        "# PRESENCE_SOUL_CORE_IN_APPEND=0"
+        "# Or: .\scripts\enable-rp-phase1-ma-home.ps1"
     ) | Set-Content -Path $LocalEnvFile -Encoding UTF8
     Write-Host "Created $LocalEnvFile (PRESENCE_NATIVE_CHAT=1)"
 }

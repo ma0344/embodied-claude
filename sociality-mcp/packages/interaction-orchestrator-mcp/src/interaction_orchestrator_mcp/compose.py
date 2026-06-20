@@ -402,7 +402,7 @@ def _pick_contract(
     base = ResponseContract()
     if person_id == "ma":
         base = ResponseContract(
-            treat_user_as="childhood friend まー; agent is こより (SOUL.md voice)",
+            treat_user_as="付き合いの長い隣人 まー; agent is こより (SOUL.md voice)",
             avoid=[
                 "generic assistant tone or keigo",
                 "breaking character into neutral chatbot",

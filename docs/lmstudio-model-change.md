@@ -68,6 +68,36 @@ API リクエストだけ非 QAT モデルになることがある。`set-lmstud
 
 **二モデル構成（2026-06〜）:** チャット = `google/gemma-4-12b-qat`、vision = **Qwen2.5-VL-3B** など別ロード。KV キャッシュを分離する。
 
+## SOUL.core — チャットモデルの System Prompt（RP Phase 1）
+
+人格の Deep 層を LM Studio 側に置く。**Vision モデルには貼らない**（チャット用 Gemma のみ）。
+
+| 項目 | 値 |
+|------|------|
+| ファイル | `presets/koyori-SOUL.core.md`（リポジトリ内・コミット可） |
+| 貼り付け先 | LM Studio → `google/gemma-4-12b-qat` を Load → **System Prompt** |
+| 二重回避 | `PRESENCE_SOUL_CORE_IN_APPEND=0`（presence-ui の append から core を外す） |
+
+```powershell
+cd C:\Users\ma\src\embodied-claude
+
+# 1) ファイルを開いて LM Studio System Prompt に全文コピペ
+.\scripts\open-soul-core-for-lmstudio.ps1
+# またはクリップボード: .\scripts\open-soul-core-for-lmstudio.ps1 -CopyToClipboard
+
+# 2) LM Studio でモデル再ロード / Local Server 再起動
+
+# 3) presence-ui 側の二重注入を止める（presence-ui.local.env に書く）
+.\scripts\enable-rp-phase1-ma-home.ps1
+.\scripts\restart-presence-ui.ps1
+```
+
+**残る append（毎ターン）:** `[Gateway — stable]`（compose/plan・memory ツール禁止）+ 短い voice anchor。SOUL 全文は LM Studio system のみ。
+
+**ロールバック:** `PRESENCE_SOUL_CORE_IN_APPEND=1` に戻して presence-ui 再起動（LM Studio の system は空にしても可）。
+
+詳細 → [role-persistence-ma-home.md](./role-persistence-ma-home.md)
+
 ## Vision スロット（こよりの目）
 
 チャット（Gemma）と **別モデルを LM Studio に同時ロード**し、`:1234` の `"model"` フィールドで振り分ける。

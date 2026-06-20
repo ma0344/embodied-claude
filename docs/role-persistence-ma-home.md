@@ -49,17 +49,22 @@
 ```powershell
 cd C:\Users\ma\src\embodied-claude\presence-ui
 uv run python ..\scripts\export-persona-lora-jsonl.py
-# 既定出力: %USERPROFILE%\.claude\memories\training\koyori-persona.jsonl
+# 既定出力: candidates → curated（%USERPROFILE%\.claude\memories\training\）
 uv run python ..\scripts\export-persona-lora-jsonl.py --dry-run
 ```
 
-   gateway 注入・敬語・tool 名・挨拶だけのターンは除外。**Claude CLI の `No response requested.` も除外**。
+   gateway 注入・敬語・tool 名・挨拶だけのターンは除外。**Claude CLI の `No response requested.` も除外**。**メタ報告**（括弧だけの「（今、もう一回言ったで！）」等）・**声/TTS テスト依頼**（「言ってみて」「もう一回」等）・**手続き報告**（短い「言った/試した/聞こえた」系）も除外。**近い assistant 重複**はクラスタごと全部落とす（1 件だけ残さない）。
 
    **JSONL の system 行**: 1 ペアごとに SOUL.core が載るのは SFT データセットの一般的な形（学習ツールが行単位で読むため）。推論時は LM Studio の固定 system + LoRA なので**二重にはならない**。ファイルサイズを減らしたい場合は学習設定側で `system` テンプレを1回だけ指定し、export を `--messages-only` 化する拡張は RP-2b で検討可。
 
+   **export 出力（2 ファイル + manifest）**:
+   - `koyori-persona-candidates.jsonl` — フィルタ済み候補（再 export で上書き）
+   - `koyori-persona.jsonl` — **LoRA 学習用**（候補 − 人手除外）
+   - `koyori-persona-rejected.json` — 除外 fingerprint（再 export 後も維持）
+
    **ブラウザで確認（ma-home）**:
 
-   `http://localhost:8090/training/persona` — 30 件ずつページング・検索。API: `GET /api/v1/training/persona?offset=0&limit=30`
+   `http://localhost:8090/training/persona` — チェックで選択 → **選択を学習から除外**。候補 / 学習用 / 除外件数を表示。ページ送りは上下両方。API: `GET /api/v1/training/persona`, `POST /api/v1/training/persona/reject`
 
    **プレビュー（Markdown）**:
 
@@ -100,4 +105,6 @@ uv run python ..\scripts\preview-persona-lora-jsonl.py -o preview.md --limit 20
 | `PRESENCE_SOUL_CORE_PATH` | `presets/koyori-SOUL.core.md` | stable append 用 core |
 | `PRESENCE_SOUL_CORE_IN_APPEND` | `1` | `0` で Phase 1 移行後に append から core を外す |
 | `PRESENCE_SOUL_PATH` | プロジェクト `SOUL.md` | 全文 prefetch 用 |
-| `PERSONA_TRAINING_JSONL` | `~/.claude/memories/training/koyori-persona.jsonl` | LoRA 学習 JSONL（ブラウザ review API） |
+| `PERSONA_TRAINING_JSONL` | `~/.claude/memories/training/koyori-persona.jsonl` | LoRA 学習 JSONL（候補 − 人手除外） |
+| `PERSONA_TRAINING_CANDIDATES_JSONL` | `~/.claude/memories/training/koyori-persona-candidates.jsonl` | export 候補（review 対象） |
+| `PERSONA_TRAINING_REJECTED_JSON` | `~/.claude/memories/training/koyori-persona-rejected.json` | 人手除外 manifest |

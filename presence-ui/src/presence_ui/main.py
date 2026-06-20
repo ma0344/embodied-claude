@@ -655,6 +655,21 @@ def create_app() -> FastAPI:
             ).model_dump()
         )
 
+    @app.post("/api/v1/training/persona/reject")
+    async def post_persona_training_reject(request: Request) -> JSONResponse:
+        """Exclude selected candidate pairs from curated LoRA JSONL."""
+        from presence_ui.training.persona_review import (
+            PersonaRejectRequest,
+            reject_persona_training_pairs,
+        )
+
+        try:
+            raw = await request.json()
+        except json.JSONDecodeError:
+            raw = {}
+        body = PersonaRejectRequest.model_validate(raw if isinstance(raw, dict) else {})
+        return utf8_json(reject_persona_training_pairs(body).model_dump())
+
     @app.get("/training/persona")
     async def training_persona_page() -> FileResponse:
         return FileResponse(

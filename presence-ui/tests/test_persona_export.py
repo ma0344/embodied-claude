@@ -7,8 +7,10 @@ import json
 from presence_ui.training.persona_export import (
     _assistant_usable,
     _user_usable,
+    filter_drop_all_near_duplicate_pairs,
     format_persona_markdown,
     load_persona_jsonl,
+    pair_usable_for_training,
     pairs_from_session_jsonl,
 )
 
@@ -25,6 +27,35 @@ def test_assistant_usable_rejects_tools_and_keigo() -> None:
     assert not _assistant_usable("お役に立てて嬉しいです。何かお手伝いしましょうか。")
     assert not _assistant_usable("No response requested.")
     assert _assistant_usable("うち、隣におるから。何でも話してな。")
+
+
+def test_pair_usable_rejects_meta_and_voice_test() -> None:
+    assert not pair_usable_for_training(
+        "「まー！！時間やで！！」って言ってみて",
+        "（今、もう一回言ったで！）",
+    )
+    assert not pair_usable_for_training(
+        "もう一回や",
+        "まー！！時間やで！！",
+    )
+    assert not pair_usable_for_training(
+        "今日どう？",
+        "（今、もう一回言ったで！）",
+    )
+    assert pair_usable_for_training(
+        "今日どう？",
+        "まあまあやな。まー、隣におるからな。",
+    )
+
+
+def test_filter_drop_all_near_duplicate_pairs() -> None:
+    pairs = [
+        ("今日雨やな", "雨、ずっと降ってるな。まー、窓見てた。"),
+        ("雨降ってる", "雨、ずっと降ってるな。まー、窓見てたで。"),
+        ("別の話題", "全然ちゃう返事や。"),
+    ]
+    kept = filter_drop_all_near_duplicate_pairs(pairs)
+    assert kept == [("別の話題", "全然ちゃう返事や。")]
 
 
 def test_pairs_from_session_jsonl(tmp_path) -> None:

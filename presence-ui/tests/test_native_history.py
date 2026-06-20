@@ -90,6 +90,80 @@ def test_fetch_native_session_messages(claude_workspace: tuple[Path, str]) -> No
     assert fetch_native_session_messages("missing-session-id") is None
 
 
+def test_fetch_native_session_messages_skips_agent_slash_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project_path = str(tmp_path / "embodied-claude")
+    claude_home = tmp_path / ".claude"
+    encoded = _encode_project_path(project_path)
+    project_dir = claude_home / "projects" / encoded
+    project_dir.mkdir(parents=True)
+    session_id = "dddddddd-dddd-dddd-dddd-dddddddddddd"
+    jsonl_path = project_dir / f"{session_id}.jsonl"
+    jsonl_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "user",
+                        "timestamp": "2026-06-20T11:14:00+00:00",
+                        "message": {
+                            "content": [{"type": "text", "text": "こよりは何かしないの？"}],
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "timestamp": "2026-06-20T11:15:00+00:00",
+                        "message": {
+                            "content": [{"type": "text", "text": "ちょっと見てくるわ。"}],
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "type": "user",
+                        "timestamp": "2026-06-20T11:15:30+00:00",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "# /observe — 能動的な観察\n\n入力:\n",
+                                }
+                            ],
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "timestamp": "2026-06-20T11:16:00+00:00",
+                        "message": {
+                            "content": [{"type": "text", "text": "（観察中）"}],
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CLAUDE_HOME", str(claude_home))
+    monkeypatch.setenv("PRESENCE_PROJECT_PATH", project_path)
+
+    result = fetch_native_session_messages(session_id)
+    assert result is not None
+    assert [m.message for m in result.messages] == [
+        "こよりは何かしないの？",
+        "ちょっと見てくるわ。",
+        "（観察中）",
+    ]
+
+
 def test_fetch_native_session_messages_preserves_injection_for_debug_toggle(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

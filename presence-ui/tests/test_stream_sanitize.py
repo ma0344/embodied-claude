@@ -9,6 +9,7 @@ from presence_ui.gateway.stream_sanitize import (
     sanitize_stream_line,
 )
 from presence_ui.gateway.user_prompt import (
+    looks_like_agent_slash_command,
     plain_user_first_line,
     session_title_from_context,
     strip_enriched_user_prompt,
@@ -135,6 +136,12 @@ phase=chat
 おはよう"""
     assert plain_user_first_line(raw) == "おはよう"
     assert plain_user_first_line("PR review 明日やるの覚えといて") == "PR review 明日やるの覚えといて"
+
+
+def test_looks_like_agent_slash_command() -> None:
+    observe = "# /observe — 能動的な観察\n\n部屋を「見る」のではなく"
+    assert looks_like_agent_slash_command(observe) is True
+    assert looks_like_agent_slash_command("こよりは何かしないの？") is False
 
 
 def test_strip_enriched_user_prompt_memory_saved_server() -> None:

@@ -14,6 +14,7 @@
       --ma: #e8f0ff;
       --koyori: #fff5eb;
       --border: #ddd;
+      --danger: #b33;
     }
     @media (prefers-color-scheme: dark) {
       :root {
@@ -24,6 +25,7 @@
         --ma: #1a2433;
         --koyori: #2a2218;
         --border: #333;
+        --danger: #f66;
       }
     }
     * { box-sizing: border-box; }
@@ -42,6 +44,7 @@
     h1 { font-size: 1.35rem; margin: 0 0 0.35rem; }
     .meta { color: var(--muted); font-size: 0.9rem; }
     .meta code { font-size: 0.85rem; }
+    .stats { margin-top: 0.35rem; }
     .toolbar {
       max-width: 920px;
       margin: 0 auto 1rem;
@@ -50,7 +53,7 @@
       gap: 0.5rem;
       align-items: center;
     }
-    input[type="search"], button {
+    input[type="search"], button, label.select-all {
       font: inherit;
       padding: 0.45rem 0.65rem;
       border-radius: 8px;
@@ -58,9 +61,20 @@
       background: var(--card);
       color: var(--text);
     }
+    label.select-all {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      cursor: pointer;
+      user-select: none;
+    }
     input[type="search"] { flex: 1 1 220px; min-width: 180px; }
     button { cursor: pointer; }
     button:disabled { opacity: 0.5; cursor: default; }
+    button.danger {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
     details.system {
       max-width: 920px;
       margin: 0 auto 1rem;
@@ -87,10 +101,23 @@
       border-radius: 12px;
       padding: 0.75rem 0.9rem;
     }
+    .pair.rejected {
+      opacity: 0.55;
+      border-style: dashed;
+    }
     .pair-head {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
       font-size: 0.82rem;
       color: var(--muted);
       margin-bottom: 0.5rem;
+    }
+    .pair-head input { margin: 0; }
+    .pair-head .badge {
+      margin-left: auto;
+      font-size: 0.75rem;
+      color: var(--danger);
     }
     .bubble {
       border-radius: 10px;
@@ -111,19 +138,28 @@
       border: 1px solid var(--border);
     }
     .error { border-color: #c44; }
+    .pager-note {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-left: auto;
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Persona LoRA 学習データ</h1>
     <p class="meta" id="meta">読み込み中…</p>
+    <p class="meta stats" id="stats"></p>
   </header>
 
-  <div class="toolbar">
+  <div class="toolbar pager-toolbar" data-pager="top">
     <input type="search" id="q" placeholder="まー / こより の文面で絞り込み" />
-    <button type="button" id="prev">← 前</button>
-    <button type="button" id="next">次 →</button>
+    <label class="select-all"><input type="checkbox" id="selectPage" /> ページ全選択</label>
+    <button type="button" id="rejectBtn" class="danger" disabled>選択を学習から除外</button>
+    <button type="button" class="pager-prev">← 前</button>
+    <button type="button" class="pager-next">次 →</button>
     <button type="button" id="reload">再読込</button>
+    <span class="pager-note" id="pagerTop"></span>
   </div>
 
   <details class="system" id="systemBox" hidden>
@@ -134,20 +170,32 @@
   <div id="list"></div>
   <div id="message" class="empty" hidden></div>
 
+  <div class="toolbar pager-toolbar" data-pager="bottom">
+    <button type="button" class="pager-prev">← 前</button>
+    <button type="button" class="pager-next">次 →</button>
+    <span class="pager-note" id="pagerBottom"></span>
+  </div>
+
   <script>
     const PAGE = 30;
     let offset = 0;
     let total = 0;
     let lastPayload = null;
+    const selected = new Map();
 
     const metaEl = document.getElementById("meta");
+    const statsEl = document.getElementById("stats");
     const listEl = document.getElementById("list");
     const msgEl = document.getElementById("message");
     const qEl = document.getElementById("q");
     const systemBox = document.getElementById("systemBox");
     const systemPreview = document.getElementById("systemPreview");
-    const prevBtn = document.getElementById("prev");
-    const nextBtn = document.getElementById("next");
+    const selectPageEl = document.getElementById("selectPage");
+    const rejectBtn = document.getElementById("rejectBtn");
+    const pagerTop = document.getElementById("pagerTop");
+    const pagerBottom = document.getElementById("pagerBottom");
+    const prevButtons = document.querySelectorAll(".pager-prev");
+    const nextButtons = document.querySelectorAll(".pager-next");
 
     function showMessage(text, isError) {
       msgEl.hidden = false;
@@ -160,6 +208,24 @@
       msgEl.hidden = true;
     }
 
+    function updateRejectButton() {
+      rejectBtn.disabled = selected.size === 0;
+      rejectBtn.textContent =
+        selected.size > 0
+          ? `選択を学習から除外 (${selected.size})`
+          : "選択を学習から除外";
+    }
+
+    function toggleSelection(pair, checked) {
+      const key = pair.fingerprint;
+      if (checked) {
+        selected.set(key, { user: pair.user, assistant: pair.assistant });
+      } else {
+        selected.delete(key);
+      }
+      updateRejectButton();
+    }
+
     function renderPairs(pairs) {
       const q = (qEl.value || "").trim().toLowerCase();
       const filtered = q
@@ -169,30 +235,82 @@
       listEl.innerHTML = "";
       if (!filtered.length) {
         showMessage(q ? "このページに一致するペアがありません。" : "ペアがありません。");
+        syncSelectPageCheckbox(filtered);
         return;
       }
       hideMessage();
       for (const p of filtered) {
         const card = document.createElement("article");
-        card.className = "pair";
-        card.innerHTML =
-          `<div class="pair-head">Pair ${p.index} · JSONL line ${p.line_no}</div>` +
-          `<div class="label">まー</div><div class="bubble ma"></div>` +
-          `<div class="label">こより</div><div class="bubble koyori"></div>`;
-        card.querySelector(".bubble.ma").textContent = p.user;
-        card.querySelector(".bubble.koyori").textContent = p.assistant;
+        card.className = "pair" + (p.rejected ? " rejected" : "");
+
+        const head = document.createElement("div");
+        head.className = "pair-head";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.disabled = p.rejected;
+        cb.checked = selected.has(p.fingerprint);
+        cb.addEventListener("change", () => toggleSelection(p, cb.checked));
+        const label = document.createElement("span");
+        label.textContent = `Pair ${p.index} · JSONL line ${p.line_no}`;
+        head.appendChild(cb);
+        head.appendChild(label);
+        if (p.rejected) {
+          const badge = document.createElement("span");
+          badge.className = "badge";
+          badge.textContent = "除外済み";
+          head.appendChild(badge);
+        }
+
+        const maLabel = document.createElement("div");
+        maLabel.className = "label";
+        maLabel.textContent = "まー";
+        const maBubble = document.createElement("div");
+        maBubble.className = "bubble ma";
+        maBubble.textContent = p.user;
+        const koLabel = document.createElement("div");
+        koLabel.className = "label";
+        koLabel.textContent = "こより";
+        const koBubble = document.createElement("div");
+        koBubble.className = "bubble koyori";
+        koBubble.textContent = p.assistant;
+
+        card.append(head, maLabel, maBubble, koLabel, koBubble);
         listEl.appendChild(card);
       }
+      syncSelectPageCheckbox(filtered);
+    }
+
+    function syncSelectPageCheckbox(filtered) {
+      const selectable = filtered.filter((p) => !p.rejected);
+      if (!selectable.length) {
+        selectPageEl.checked = false;
+        selectPageEl.indeterminate = false;
+        selectPageEl.disabled = true;
+        return;
+      }
+      selectPageEl.disabled = false;
+      const selectedOnPage = selectable.filter((p) => selected.has(p.fingerprint)).length;
+      selectPageEl.checked = selectedOnPage === selectable.length;
+      selectPageEl.indeterminate =
+        selectedOnPage > 0 && selectedOnPage < selectable.length;
     }
 
     function updatePager() {
-      prevBtn.disabled = offset <= 0;
-      nextBtn.disabled = offset + PAGE >= total;
+      const atStart = offset <= 0;
+      const atEnd = offset + PAGE >= total;
+      prevButtons.forEach((btn) => { btn.disabled = atStart; });
+      nextButtons.forEach((btn) => { btn.disabled = atEnd; });
+      const from = total ? offset + 1 : 0;
+      const to = Math.min(offset + PAGE, total);
+      const note = total ? `${from}–${to} / ${total}` : "0 / 0";
+      pagerTop.textContent = note;
+      pagerBottom.textContent = note;
     }
 
     async function load() {
       hideMessage();
       metaEl.textContent = "読み込み中…";
+      statsEl.textContent = "";
       try {
         const res = await fetch(
           `/api/v1/training/persona?offset=${offset}&limit=${PAGE}`
@@ -200,11 +318,11 @@
         if (!res.ok) throw new Error("HTTP " + res.status);
         const data = await res.json();
         lastPayload = data;
-        total = data.total || 0;
+        total = data.candidates_total || 0;
         if (!data.exists) {
           showMessage(
             "学習 JSONL がまだありません。\n" +
-              data.path +
+              data.candidates_path +
               "\n\nexport:\n" +
               data.export_command,
             false
@@ -214,9 +332,9 @@
           updatePager();
           return;
         }
-        metaEl.innerHTML =
-          `<code>${data.path}</code> · ${data.total} pairs · ` +
-          `表示 ${data.offset + 1}–${Math.min(data.offset + data.pairs.length, data.total)}`;
+        metaEl.innerHTML = `<code>${data.candidates_path}</code>`;
+        statsEl.textContent =
+          `候補 ${data.candidates_total} · 学習用 ${data.curated_total} · 除外 ${data.rejected_total}`;
         if (data.system_preview) {
           systemBox.hidden = false;
           systemPreview.textContent =
@@ -233,17 +351,65 @@
       }
     }
 
-    prevBtn.addEventListener("click", () => {
-      offset = Math.max(0, offset - PAGE);
-      load();
-    });
-    nextBtn.addEventListener("click", () => {
-      if (offset + PAGE < total) {
-        offset += PAGE;
-        load();
+    async function rejectSelected() {
+      if (!selected.size) return;
+      rejectBtn.disabled = true;
+      try {
+        const res = await fetch("/api/v1/training/persona/reject", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pairs: [...selected.values()],
+          }),
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        selected.clear();
+        updateRejectButton();
+        selectPageEl.checked = false;
+        selectPageEl.indeterminate = false;
+        await load();
+        showMessage(
+          `${data.added} 件を除外しました（学習用 ${data.curated_total} 件）`,
+          false
+        );
+      } catch (err) {
+        showMessage(String(err), true);
+      } finally {
+        updateRejectButton();
       }
+    }
+
+    selectPageEl.addEventListener("change", () => {
+      if (!lastPayload || !lastPayload.pairs) return;
+      const q = (qEl.value || "").trim().toLowerCase();
+      const pairs = q
+        ? lastPayload.pairs.filter((p) =>
+            p.user.toLowerCase().includes(q) || p.assistant.toLowerCase().includes(q))
+        : lastPayload.pairs;
+      for (const p of pairs) {
+        if (p.rejected) continue;
+        toggleSelection(p, selectPageEl.checked);
+      }
+      renderPairs(lastPayload.pairs);
+    });
+
+    prevButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        offset = Math.max(0, offset - PAGE);
+        load();
+      });
+    });
+    nextButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (offset + PAGE < total) {
+          offset += PAGE;
+          load();
+        }
+      });
     });
     document.getElementById("reload").addEventListener("click", () => load());
+    rejectBtn.addEventListener("click", () => rejectSelected());
     qEl.addEventListener("input", () => {
       if (lastPayload && lastPayload.pairs) renderPairs(lastPayload.pairs);
     });

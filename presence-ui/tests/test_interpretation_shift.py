@@ -69,6 +69,18 @@ def test_infer_shift_skips_neutral_chat() -> None:
     assert shifts == []
 
 
+def test_infer_shift_skips_compose_policy_boundary_hints_only() -> None:
+    """maybe_interruptible hints must not record every turn as interpretation shift."""
+    shifts = infer_interpretation_shifts(
+        person_id="ma",
+        user_text="おはようこより。返事がおそくなったね。",
+        reply_text="ごめんね、今はゆっくりしてるよ",
+        ctx=_ctx(boundary_hints=["availability is ambivalent; prefer bounded replies"]),
+        plan=_plan(),
+    )
+    assert shifts == []
+
+
 def test_record_interpretation_shifts_dedupes() -> None:
     user_text = "夜は静かにして"
     shifts = infer_interpretation_shifts(

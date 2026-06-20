@@ -82,13 +82,12 @@ def infer_interpretation_shifts(
         return []
 
     has_cue = bool(_CORRECTION_CUE.search(user))
-    boundary_hints = list(ctx.boundary_hints) if ctx else []
-    if not has_cue and not boundary_hints:
+    # Compose policy hints (e.g. maybe_interruptible) are NOT user corrections.
+    if not has_cue:
         return []
 
+    boundary_hints = list(ctx.boundary_hints) if ctx else []
     kind, topic = _topic_for(user)
-    if boundary_hints and not has_cue:
-        topic = boundary_hints[0][:80]
 
     new_text = user[:400]
     if reply_text.strip():

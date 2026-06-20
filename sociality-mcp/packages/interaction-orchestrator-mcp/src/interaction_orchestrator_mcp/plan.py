@@ -432,9 +432,4 @@ def _pick_followup(
                 else "agent_file_created"
             ),
         }
-    if primary_move == "answer_directly" and ctx.open_loops:
-        return {
-            "kind": "record_agent_experience",
-            "experience_kind": "open_loop_progress",
-        }
     return None

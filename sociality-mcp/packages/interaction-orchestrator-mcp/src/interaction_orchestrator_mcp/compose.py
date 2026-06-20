@@ -593,6 +593,11 @@ def _is_noise_open_loop(topic: str) -> bool:
         return True
     if "覚えてる" in compact or "覚えてます" in compact or "覚えとる" in compact:
         return True
+    # Agent gratitude / reply lines mistaken as loop topics (legacy ingest noise).
+    if "ありがと" in compact or "調べてくれた" in compact or "教えてくれた" in compact:
+        return True
+    if compact.endswith("ね") and "、調べ" in compact:
+        return True
     return False
 
 

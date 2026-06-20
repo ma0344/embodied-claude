@@ -251,6 +251,8 @@ def _pick_initiative(
         if dominant == "identity_coherence":
             allowed.append("recall_memories")
         if dominant == "cognitive_load":
+            if quiet_active:
+                allowed.append("read_aozora_passage")
             allowed.append("think_or_discuss_topic")
         if dominant == "miss_companion":
             if quiet_active:

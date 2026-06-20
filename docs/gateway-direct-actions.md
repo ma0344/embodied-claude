@@ -31,6 +31,7 @@ plan の `initiative.allowed_actions`（`plan.py`）を gateway が解釈し、*
 | `remind_commitment` | outbound + tts、then `complete_commitment` | OL2、due commitment 優先 |
 | `write_private_reflection` | orchestrator `append_private_reflection` | quiet hours |
 | `web_search` | DuckDuckGo instant API + `:18900/remember` | browse_curiosity |
+| `read_aozora_passage` | Aozora Bunko HTML (Shift_JIS) + remember + private reflection | quiet + cognitive_load |
 | `think_or_discuss_topic` | private reflection（open loops / prompt からメモ） | cognitive_load |
 | `recall_memories` | `:18900/recall` + private note | identity_coherence |
 | （followup）`satisfy_desire` | desire_updater / memory marker | 1 action 1 satisfy |
@@ -129,6 +130,24 @@ Invoke-RestMethod -Method POST http://127.0.0.1:8090/api/v1/autonomous-tick `
 ```
 
 環境変数: `PRESENCE_GATEWAY_DIRECT_ACTIONS=1`（既定 ON）。`0` で従来 MCP 経路に戻す。
+
+**青空文庫（LW-1）**:
+
+```env
+# 読書位置の state（既定 ~/.claude/aozora_read_state.json）
+PRESENCE_AOZORA_STATE_PATH=
+
+# 作品リスト JSON（省略時: 羅生門 / 妙な話 / 侏儒の言葉）
+PRESENCE_AOZORA_WORKS=
+```
+
+スモーク:
+
+```powershell
+Invoke-RestMethod -Method POST http://127.0.0.1:8090/api/v1/autonomous-tick `
+  -ContentType application/json `
+  -Body '{"smoke_action":"read_aozora","trigger":"smoke"}' | ConvertTo-Json
+```
 
 デプロイ: `.\scripts\sync-presence-deps.ps1` → `.\scripts\restart-presence-ui.ps1`
 

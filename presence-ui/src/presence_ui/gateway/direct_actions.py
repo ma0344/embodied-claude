@@ -20,6 +20,7 @@ from interaction_orchestrator_mcp.schemas import (
 from social_core import utc_now
 
 from presence_ui.deps import PresenceStores
+from presence_ui.gateway.aozora import pick_passage
 from presence_ui.gateway.memory_http import http_recall, http_recall_divergent, http_remember
 from presence_ui.gateway.room_events import activity_event, progress_event
 from presence_ui.gateway.web_search import ddg_instant_answer, pick_browse_query
@@ -179,6 +180,113 @@ def write_private_reflection_direct(
         summary="Private reflection saved.",
         detail=stored.experience_id,
         events=events,
+    )
+
+
+async def read_aozora_passage_direct(
+    stores: PresenceStores,
+    *,
+    person_id: str,
+    ctx: InteractionContext,
+    plan: ResponsePlan,
+) -> DirectActionOutcome:
+    """Fetch one Aozora passage, remember it, and write a private reflection."""
+    picked = await asyncio.to_thread(pick_passage)
+    if picked is None:
+        return DirectActionOutcome(
+            ok=False,
+            action="read_aozora_passage",
+            summary="Could not fetch an Aozora passage.",
+            detail="fetch_failed",
+            events=[
+                activity_event(
+                    kind="read",
+                    label="青空文庫",
+                    detail="fetch failed",
+                    ok=False,
+                )
+            ],
+        )
+
+    work = picked.work
+    passage = picked.text[:900]
+    title = work.title
+    author = work.author
+    memory_line = (
+        f"青空文庫で読んだ『{title}』（{author}）— {passage[:400]}"
+    )
+    remember_result = await asyncio.to_thread(
+        http_remember,
+        content=memory_line,
+        category="feeling",
+        emotion="moved",
+        importance=4,
+    )
+    remember_ok = bool(remember_result.get("ok"))
+
+    why = (plan.why_this_move or "").strip()
+    reflection_parts = [
+        "（青空の一節）",
+        f"『{title}』{f' — {author}' if author else ''}",
+        passage,
+    ]
+    if why:
+        reflection_parts.append(why)
+    reflection_body = "\n\n".join(reflection_parts)[:2000]
+
+    reflection_outcome = write_private_reflection_direct(
+        stores,
+        person_id=person_id,
+        ctx=ctx,
+        plan=plan,
+        body=reflection_body,
+    )
+    if not reflection_outcome.ok:
+        return DirectActionOutcome(
+            ok=False,
+            action="read_aozora_passage",
+            summary="Fetched passage but private reflection failed.",
+            detail=picked.source_url,
+            events=reflection_outcome.events,
+        )
+
+    summary = passage[:240]
+    stores.orchestrator.record_agent_experience(
+        RecordAgentExperienceInput(
+            ts=utc_now(),
+            person_id=person_id,
+            kind="agent_autonomous_action",
+            summary=summary,
+            private_summary=reflection_body[:400],
+            public_summary="",
+            importance=4,
+            privacy_level="private",
+            related_event_ids=[],
+            artifacts=[
+                {
+                    "source_url": picked.source_url,
+                    "work_id": work.work_id,
+                    "passage_index": picked.passage_index,
+                    "remember_ok": remember_ok,
+                }
+            ],
+        )
+    )
+    return DirectActionOutcome(
+        ok=True,
+        action="read_aozora_passage",
+        summary=summary,
+        detail=picked.source_url,
+        desire_satisfied="cognitive_load",
+        events=[
+            progress_event(phase="read", label="青空を読んだ"),
+            activity_event(
+                kind="read",
+                label="青空文庫",
+                detail=f"{title}: {summary[:80]}",
+                ok=True,
+            ),
+        ],
     )
 
 
@@ -852,6 +960,7 @@ SMOKE_ACTIONS = frozenset(
         "miss_companion",
         "write_private_reflection",
         "web_search",
+        "read_aozora",
         "think_or_discuss",
         "recall_memories",
     }
@@ -1005,6 +1114,10 @@ async def execute_smoke_action(
         outcome = await web_search_direct(
             stores, person_id=person_id, ctx=ctx, plan=plan
         )
+    elif key == "read_aozora":
+        outcome = await read_aozora_passage_direct(
+            stores, person_id=person_id, ctx=ctx, plan=plan
+        )
     elif key == "think_or_discuss":
         outcome = think_or_discuss_topic_direct(
             stores, person_id=person_id, ctx=ctx, plan=plan
@@ -1077,6 +1190,7 @@ async def _finalize_autonomous_outcome(
             "defer",
             "quietly_prepare",
             "web_search",
+            "read_aozora_passage",
             "think_or_discuss_topic",
             "recall_memories",
         }
@@ -1140,6 +1254,10 @@ async def execute_autonomous_plan(
         )
     elif "web_search" in allowed or dominant == "browse_curiosity":
         outcome = await web_search_direct(
+            stores, person_id=person_id, ctx=ctx, plan=plan
+        )
+    elif "read_aozora_passage" in allowed:
+        outcome = await read_aozora_passage_direct(
             stores, person_id=person_id, ctx=ctx, plan=plan
         )
     elif "think_or_discuss_topic" in allowed or dominant == "cognitive_load":

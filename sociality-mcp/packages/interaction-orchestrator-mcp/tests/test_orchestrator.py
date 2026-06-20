@@ -420,6 +420,7 @@ class TestPlan:
             PlanResponseInput(interaction_context=ctx, user_text=None)
         )
         assert plan.primary_move == "act_autonomously"
+        assert "read_aozora_passage" in plan.initiative.allowed_actions
         assert "think_or_discuss_topic" in plan.initiative.allowed_actions
         assert "camera_look_around" not in plan.initiative.allowed_actions
         assert plan.voice is not None

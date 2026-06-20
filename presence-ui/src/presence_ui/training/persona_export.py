@@ -7,7 +7,11 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from presence_ui.gateway.user_prompt import looks_like_injected_prompt, strip_enriched_user_prompt
+from presence_ui.gateway.user_prompt import (
+    looks_like_agent_slash_command,
+    looks_like_injected_prompt,
+    strip_enriched_user_prompt,
+)
 from presence_ui.services.native_session_prefs import load_hidden_session_ids
 from presence_ui.services.session_log import (
     _find_project_dir,
@@ -26,6 +30,29 @@ _ASSISTANT_REJECT_EXACT = frozenset(
 )
 _KEIGO_MARKERS = ("です", "ます", "でしょうか", "ござい", "いただけ", "お役に")
 _TOOL_MARKERS = ("mcp__", "gateway_turn_context", "appendSystemPrompt")
+_PERFORMANCE_TEST_USER_MARKERS = (
+    "言ってみて",
+    "言ってみ",
+    "もう一回",
+    "もう1回",
+    "もう一度",
+    "読んでみて",
+    "唱えて",
+    "声出して",
+    "リピート",
+)
+_PROCEDURE_ASSISTANT_MARKERS = (
+    "もう一回言った",
+    "言ったで",
+    "言ったよ",
+    "言えた",
+    "試したで",
+    "試してみた",
+    "聞こえた",
+    "送った",
+    "再生した",
+)
+_META_PAREN_RE = re.compile(r"^[（(].*[）)]$")
 _TRIVIAL_USER_EXACT = frozenset(
     {
         "ok",
@@ -79,6 +106,98 @@ def _is_trivial_user(text: str) -> bool:
     return body in _TRIVIAL_USER_EXACT
 
 
+def _normalize_pair_text(text: str) -> str:
+    body = re.sub(r"\s+", "", (text or "").strip())
+    body = body.replace("よ！", "で！").replace("よ?", "で?")
+    body = body.replace("！", "").replace("!", "").replace("？", "").replace("?", "")
+    return body
+
+
+def _text_tokens(text: str) -> frozenset[str]:
+    normalized = _normalize_pair_text(text)
+    return frozenset(re.findall(r"[\u4e00-\u9fff]{2,}", normalized)[:24])
+
+
+def _texts_near_duplicate(a: str, b: str, *, threshold: float = 0.72) -> bool:
+    left, right = _text_tokens(a), _text_tokens(b)
+    if not left or not right:
+        return _normalize_pair_text(a) == _normalize_pair_text(b)
+    return len(left & right) / min(len(left), len(right)) >= threshold
+
+
+def _is_meta_parenthetical_only(text: str) -> bool:
+    body = (text or "").strip()
+    return bool(_META_PAREN_RE.match(body)) and len(body) <= 200
+
+
+def _user_is_performance_test_request(text: str) -> bool:
+    return any(marker in text for marker in _PERFORMANCE_TEST_USER_MARKERS)
+
+
+def _assistant_is_procedure_report(text: str) -> bool:
+    if _is_meta_parenthetical_only(text):
+        return True
+    body = (text or "").strip()
+    if len(body) > 100:
+        return False
+    if body.startswith("（") and "）" in body[:40]:
+        return True
+    return any(marker in body for marker in _PROCEDURE_ASSISTANT_MARKERS) and len(body) < 90
+
+
+def pair_usable_for_training(user: str, assistant: str) -> bool:
+    """Per-pair quality gate before near-duplicate clustering."""
+    if not _user_usable(user) or not _assistant_usable(assistant):
+        return False
+    if _user_is_performance_test_request(user):
+        return False
+    if _assistant_is_procedure_report(assistant):
+        return False
+    return True
+
+
+def filter_drop_all_near_duplicate_pairs(
+    pairs: list[tuple[str, str]],
+) -> list[tuple[str, str]]:
+    """Drop every pair in a near-duplicate cluster (keep only singletons)."""
+    if len(pairs) <= 1:
+        return list(pairs)
+
+    parent = list(range(len(pairs)))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def union(left: int, right: int) -> None:
+        root_left, root_right = find(left), find(right)
+        if root_left != root_right:
+            parent[root_right] = root_left
+
+    for i in range(len(pairs)):
+        user_i, assistant_i = pairs[i]
+        for j in range(i + 1, len(pairs)):
+            user_j, assistant_j = pairs[j]
+            exact_pair = (
+                _normalize_pair_text(user_i) == _normalize_pair_text(user_j)
+                and _normalize_pair_text(assistant_i) == _normalize_pair_text(assistant_j)
+            )
+            if exact_pair or _texts_near_duplicate(assistant_i, assistant_j):
+                union(i, j)
+
+    groups: dict[int, list[int]] = {}
+    for index in range(len(pairs)):
+        groups.setdefault(find(index), []).append(index)
+
+    kept: list[tuple[str, str]] = []
+    for members in groups.values():
+        if len(members) == 1:
+            kept.append(pairs[members[0]])
+    return kept
+
+
 def _assistant_usable(text: str) -> bool:
     body = (text or "").strip()
     if len(body) < 2:
@@ -97,6 +216,8 @@ def _user_usable(text: str) -> bool:
     if len(body) < 2:
         return False
     if looks_like_injected_prompt(body):
+        return False
+    if looks_like_agent_slash_command(body):
         return False
     if _is_trivial_user(body):
         return False
@@ -139,33 +260,36 @@ def export_persona_jsonl(
     written = 0
     skipped = 0
     sessions_scanned = 0
+    candidates: list[tuple[str, str]] = []
+
+    for row in rows:
+        session_id = str(row.get("session_file_id") or "")
+        if not session_id or session_id in hidden:
+            continue
+        path = Path(str(row.get("path") or ""))
+        if not path.is_file():
+            continue
+        sessions_scanned += 1
+        for user_text, assistant_text in pairs_from_session_jsonl(path):
+            if pair_usable_for_training(user_text, assistant_text):
+                candidates.append((user_text, assistant_text))
+            else:
+                skipped += 1
+
+    filtered = filter_drop_all_near_duplicate_pairs(candidates)
+    skipped += len(candidates) - len(filtered)
 
     with output_path.open("w", encoding="utf-8") as out:
-        for row in rows:
-            if written >= max_pairs:
-                break
-            session_id = str(row.get("session_file_id") or "")
-            if not session_id or session_id in hidden:
-                continue
-            path = Path(str(row.get("path") or ""))
-            if not path.is_file():
-                continue
-            sessions_scanned += 1
-            for user_text, assistant_text in pairs_from_session_jsonl(path):
-                if written >= max_pairs:
-                    break
-                if not _user_usable(user_text) or not _assistant_usable(assistant_text):
-                    skipped += 1
-                    continue
-                record = {
-                    "messages": [
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user_text},
-                        {"role": "assistant", "content": assistant_text},
-                    ]
-                }
-                out.write(json.dumps(record, ensure_ascii=False) + "\n")
-                written += 1
+        for user_text, assistant_text in filtered[:max_pairs]:
+            record = {
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_text},
+                    {"role": "assistant", "content": assistant_text},
+                ]
+            }
+            out.write(json.dumps(record, ensure_ascii=False) + "\n")
+            written += 1
 
     return PersonaExportStats(
         sessions_scanned=sessions_scanned,

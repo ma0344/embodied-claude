@@ -8,12 +8,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from presence_ui.schemas import ChatMessage
 from presence_ui.gateway.user_prompt import (
+    looks_like_agent_slash_command,
     plain_user_first_line,
     session_title_from_context,
     strip_enriched_user_prompt,
 )
+from presence_ui.schemas import ChatMessage
 
 _KOYORI_SKIP_PREFIXES = (
     "[Request interrupted by user for tool use]",
@@ -62,6 +63,8 @@ def _content_blocks(content: Any) -> list[tuple[str, str]]:
 
 def _should_skip_user_text(text: str) -> bool:
     if not text.strip():
+        return True
+    if looks_like_agent_slash_command(text):
         return True
     if text.startswith("[Tool"):
         return True

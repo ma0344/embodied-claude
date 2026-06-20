@@ -621,6 +621,8 @@ promote_score = 0.25*recency + 0.20*frequency + 0.30*emotion + 0.25*interest
 | MEM-5f-b | UI live 心の声カード / status API | **済** |
 | MEM-5f-c | Dreaming `synthesize_overnight_inner_voice()` + 朝注入 | 未 |
 | MEM-5g | **STM `episode_close` 要約** — `gateway_turn_context` を turn から除去してから要約（compose `[stm_recent]` 汚染） | 未 |
+| MEM-5i | **Slash command 擬似 user ターン** — `/observe` 等の展開 markdown が `type:user` で JSONL に載り UI が「まー」表示 | **済**（session_log + cc-messages + persona export） |
+| MEM-5j | **会話中 WebSearch** — LM Studio+Gemma で CC `WebSearch` が空 → 捏造 Sources（表示層修復 **済** / 根本 **未**） | 一部済 |
 
 ##### MEM-5g — STM episode_close の gateway 漏れ（2026-06-20）
 
@@ -639,6 +641,38 @@ promote_score = 0.25*recency + 0.20*frequency + 0.30*emotion + 0.25*interest
 **対応**: compose で類似シーンを `[room_view] same scene ×N` に畳む（**済**）。
 
 **未**: 記録時 dedup（同一 fingerprint なら DB に書かない）— 必要なら後追い。
+
+##### MEM-5i — Slash command が「まー」発言に見える（2026-06-20）
+
+**症状**: まーが一言も話してないのに、チャットに `# /observe — …` 全文が **M まー** として表示される。
+
+**原因**: 「こよりは何かしないの？」への応答ターン内で、Claude Code が **こより側から `/observe` を実行**。CC は展開済み slash command を session JSONL の **`type: user`** として記録する。UI は user → まー とマップするため、まーがスキル全文を送ったように見える。
+
+**対応**: `looks_like_agent_slash_command()` — `# /word` 先頭（+ frontmatter 付き）をチャット履歴・persona export から除外。**JSONL 本体は残る**（監査用）。
+
+**未**: 観察そのものを gateway `observe_room_direct` に寄せて CC slash 依存を減らす — RP/身体の別論点。
+
+##### MEM-5j — 会話中 WebSearch（LM Studio + CC `WebSearch`）（2026-06-20）
+
+**症状**: まー「Webで調べてみたら？」→ こよりが `WebSearch` → `Sources:` は出るが **リンクが壊れる**／中身が薄い。
+
+**原因（session `fcddb68a…` で確認）**:
+1. Claude Code `WebSearch` の tool_result が **`searchCount: 0`** — 実 URL なし（placeholder `<|tool_call>call:google_search…` のみ）
+2. モデルが REMINDER に従い **Google 検索 URL を捏造** — percent-encoding 破損（例: `%E3%83最終`）
+3. 自律 tick の **`web_search_direct`（DDG）** とは別経路 — 会話中は CC ツールに依存
+
+**済（表示層）** — `chat-markdown.js`: `Google Search Results for {query}` ラベルから正しい検索 URL を再生成 + `target="_blank"`。
+
+**未（根本）**:
+
+| ID | 内容 | 優先 |
+|----|------|------|
+| WS-1 | **空 WebSearch 検知** — tool_result に URL/件数なしなら UI に「検索失敗」注記（Sources をリンク化しない） | 中 |
+| WS-2 | **会話中検索を gateway へ** — 「調べて/Webで」→ `web_search_direct`（DDG + remember）結果を compose/vision 注入；CC `WebSearch` は使わない | 高 |
+| WS-3 | **権限・plan** — native chat で CC `WebSearch` 無効化 or plan が search 失敗時 Sources 禁止 | 中 |
+| WS-4 | **LoRA/export** — 捏造 Sources 付き assistant ターンを persona export から除外（任意） | 低 |
+
+**関連**: ⑤a `browse_curiosity` / `web_search_direct`（**済**）— 自律専用。LW-6（Web 散歩）と共通化可。
 
 ##### MEM-7 — Native 会話 JSONL のデータ管理（合意 2026-06-18）
 
@@ -954,7 +988,7 @@ wake → desire/discomfort + SOUL
 | ID | 層 | 内容 | 状態 |
 |----|-----|------|------|
 | **LW-0** | 方針 | 希望/恐れ・5層整理（本節） | **済** |
-| **LW-1** | 実行 | gateway `read_aozora_passage` — 1 節取得・無音・`remember` + private 内省（短文 LLM 可） | 未 |
+| **LW-1** | 実行 | gateway `read_aozora_passage` — 1 節取得・無音・`remember` + private 内省（短文 LLM 可） | **済** |
 | **LW-2** | 動機 | desire `literary_wander`（仮）新設、または `cognitive_load` 拡張 + Chroma キーワード（「青空」「読みふけた」「一節」） | 未 |
 | **LW-3** | 判断 | plan: quiet / `miss_companion` 競合 / `evaluate_action` — 読むだけ黙る vs 短く共有 | 未 |
 | **LW-4** | 記憶 | 閉じ loop — `record_agent_experience` + `satisfy_desire` + `apply_pulse_after_tick` | 未 |
@@ -966,7 +1000,7 @@ wake → desire/discomfort + SOUL
 **関連**: [heartbeat-loop.md](./heartbeat-loop.md)、[gateway-direct-actions.md](./gateway-direct-actions.md)、`desire-system/desire_updater.py`、`SOUL.md`、`exported-session.md`（ステータス UI 案）
 
 - [x] **LW-0** 方針・動機整理（2026-06-19）
-- [ ] **LW-1** `read_aozora_passage` gateway
+- [x] **LW-1** `read_aozora_passage` gateway
 - [ ] **LW-2** desire 結線
 - [ ] **LW-3** plan / boundary 競合
 - [ ] **LW-4** 記憶閉じ loop

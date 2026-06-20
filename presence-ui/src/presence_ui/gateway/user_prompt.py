@@ -74,6 +74,8 @@ _CONTEXT_HEADER_RES = (
     re.compile(r"^\[interaction_context\]\s*$", re.I),
 )
 
+_AGENT_SLASH_COMMAND_RE = re.compile(r"^#\s*/\w+", re.MULTILINE)
+
 
 def _is_system_block_header(line: str) -> bool:
     stripped = line.strip()
@@ -272,6 +274,20 @@ def looks_like_injected_prompt(text: str) -> bool:
         if _STM_BULLET_RE.match(line.strip()):
             return True
     return False
+
+
+def looks_like_agent_slash_command(text: str) -> bool:
+    """True when Claude Code logged an expanded slash command as a user turn.
+
+    Agent-initiated ``/observe``, ``/see``, etc. appear in session JSONL as
+    ``type: user`` with the full command markdown — not something まー typed.
+    """
+    body = (text or "").strip()
+    if not body:
+        return False
+    if _AGENT_SLASH_COMMAND_RE.match(body):
+        return True
+    return body.startswith("---") and bool(_AGENT_SLASH_COMMAND_RE.search(body))
 
 
 def plain_user_first_line(text: str, *, max_len: int = 48) -> str:

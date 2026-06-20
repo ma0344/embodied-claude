@@ -31,6 +31,47 @@
 
   let configured = false;
 
+  const GOOGLE_SEARCH_RESULTS_LABEL_RE =
+    /^Google Search Results for (.+)$/i;
+
+  function rebuildGoogleSearchUrl(query) {
+    return `https://www.google.com/search?q=${encodeURIComponent(String(query || "").trim())}`;
+  }
+
+  function hrefLooksCorrupt(href) {
+    const raw = String(href || "");
+    if (!raw) return true;
+    if (/[\u3000-\u9fff]/.test(raw)) return true;
+    return /%[0-9A-Fa-f](?![0-9A-Fa-f])/i.test(raw) || /%(?![0-9A-Fa-f]{2})/i.test(raw);
+  }
+
+  function isValidHttpUrl(href) {
+    try {
+      const url = new URL(String(href || ""));
+      return /^https?:$/i.test(url.protocol) && !hrefLooksCorrupt(href);
+    } catch {
+      return false;
+    }
+  }
+
+  /** Fix model-fabricated Google citation links after empty WebSearch tool results. */
+  function repairCitationMarkdown(text) {
+    return String(text ?? "").replace(
+      /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/gi,
+      (match, label, href) => {
+        const trimmed = String(label || "").trim();
+        const labelMatch = GOOGLE_SEARCH_RESULTS_LABEL_RE.exec(trimmed);
+        if (labelMatch) {
+          return `[${trimmed}](${rebuildGoogleSearchUrl(labelMatch[1])})`;
+        }
+        if (!isValidHttpUrl(href)) {
+          return trimmed;
+        }
+        return match;
+      },
+    );
+  }
+
   function escapePlain(text) {
     return String(text ?? "")
       .replaceAll("&", "&amp;")
@@ -51,7 +92,7 @@
             ? ` title="${String(token.title).replaceAll('"', "&quot;")}"`
             : "";
           const text = token.text || safe;
-          return `<a href="${safe}" rel="noopener noreferrer"${title}>${text}</a>`;
+          return `<a href="${safe}" target="_blank" rel="noopener noreferrer"${title}>${text}</a>`;
         },
       },
     });
@@ -59,7 +100,7 @@
   }
 
   function toSafeHtml(text) {
-    const body = String(text ?? "").trim();
+    const body = repairCitationMarkdown(String(text ?? "").trim());
     if (!body) return "";
     if (typeof marked === "undefined" || typeof DOMPurify === "undefined") {
       return escapePlain(body);
@@ -74,5 +115,5 @@
     });
   }
 
-  window.ChatMarkdown = { toSafeHtml };
+  window.ChatMarkdown = { toSafeHtml, repairCitationMarkdown, rebuildGoogleSearchUrl };
 })();

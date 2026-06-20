@@ -290,6 +290,13 @@ function extractAssistantText(sdkMessage) {
   return joinTextBlocks(inner.content);
 }
 
+function looksLikeAgentSlashCommand(text) {
+  const raw = String(text ?? "").trim();
+  if (!raw) return false;
+  if (/^#\s*\/\w+/m.test(raw)) return true;
+  return raw.startsWith("---") && /^#\s*\/\w+/m.test(raw);
+}
+
 function flattenHistoryMessages(messages) {
   const rows = [];
   for (const msg of messages || []) {
@@ -298,6 +305,7 @@ function flattenHistoryMessages(messages) {
     const ts = msg.timestamp || msg.ts || new Date().toISOString();
     const userText = extractUserText(msg);
     if (userText) {
+      if (looksLikeAgentSlashCommand(userText)) continue;
       rows.push({ sender: "ma", message: userText, timestamp: ts });
       continue;
     }

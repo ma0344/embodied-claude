@@ -37,6 +37,15 @@ _VALID_EXPERIENCE_KINDS: frozenset[str] = frozenset(
 )
 
 
+def _agent_response_experience_summary(*, user_text: str, reply: str) -> str:
+    """Audit line for compose — not verbatim reply (avoids mid-sentence continuation)."""
+    utterance = " ".join((user_text or "").split())[:100]
+    if utterance:
+        return f"Replied to まー ({utterance})"
+    preview = " ".join((reply or "").split())[:80]
+    return f"Replied to まー ({preview}…)" if preview else "Replied to まー"
+
+
 def finalize_chat_turn(
     *,
     person_id: str,
@@ -86,7 +95,7 @@ def finalize_chat_turn(
         if candidate in _VALID_EXPERIENCE_KINDS:
             experience_kind = candidate  # type: ignore[assignment]
 
-    summary = reply[:500]
+    summary = _agent_response_experience_summary(user_text=user_text, reply=reply)
     try:
         stores.orchestrator.record_agent_experience(
             RecordAgentExperienceInput(

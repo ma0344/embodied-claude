@@ -239,6 +239,20 @@ class TestRecord:
         assert "[recent_experiences]" in block
         assert "open loop" in block.lower()
 
+    def test_agent_response_dialogue_not_injected_verbatim(self, stores):
+        stores["orchestrator"].record_agent_experience(
+            RecordAgentExperienceInput(
+                person_id="ma",
+                kind="agent_response",
+                summary="えっ、雨？急に来たん？うちは、ま…",
+                importance=3,
+            )
+        )
+        ctx = _compose(stores, user_text="こんにちは")
+        block = ctx.compact_prompt_block
+        assert "急に来た" not in block
+        assert "do not continue prior wording" in block
+
     def test_noise_open_loops_filtered_from_compose(self, stores):
         stores["relationship"].upsert_person(
             person_id="ma", canonical_name="まー", aliases=[], role="companion"

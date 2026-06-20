@@ -715,6 +715,14 @@ def _format_shifts_section(
     return lines
 
 
+def _looks_like_dialogue_prose(text: str) -> bool:
+    """Heuristic: stored agent_response that reads like spoken reply, not audit metadata."""
+    if text.startswith("Replied to まー"):
+        return False
+    markers = ("うちは", "うち、", "まー", "……", "。", "？", "！", "\n")
+    return sum(1 for m in markers if m in text) >= 2
+
+
 def _format_experiences_section(
     experiences: list[RecentExperienceRef], *, max_items: int = 3
 ) -> list[str]:
@@ -722,6 +730,12 @@ def _format_experiences_section(
         return []
     lines = ["[recent_experiences]"]
     for exp in experiences[:max_items]:
+        if exp.kind == "agent_response" and _looks_like_dialogue_prose(exp.summary):
+            lines.append(
+                f"- [{exp.kind}] prior reply logged "
+                "(answer THIS turn fresh; do not continue prior wording)"
+            )
+            continue
         summary = exp.summary[:100] + ("…" if len(exp.summary) > 100 else "")
         lines.append(f"- [{exp.kind}] {summary}")
     return lines

@@ -59,6 +59,25 @@ koyori_start_window_manager() {
 }
 
 # Resize browser window to root size (Firefox --kiosk often stays smaller without a WM).
+koyori_raise_browser_window() {
+  local wid="$1"
+  local w="${KOYORI_SCREEN_W:-}"
+  local h="${KOYORI_SCREEN_H:-}"
+  command -v xdotool >/dev/null 2>&1 || return 0
+  [[ -n "$wid" ]] || return 0
+
+  xdotool windowmap "$wid" 2>/dev/null || true
+  xdotool windowactivate "$wid" 2>/dev/null || true
+  xdotool windowraise "$wid" 2>/dev/null || true
+  if [[ -n "$w" && -n "$h" ]]; then
+    xdotool windowmove "$wid" 0 0 2>/dev/null || true
+    xdotool windowsize "$wid" "$w" "$h" 2>/dev/null || true
+  fi
+  if command -v wmctrl >/dev/null 2>&1; then
+    wmctrl -i -r "$wid" -b add,fullscreen,maximized_vert,maximized_horz 2>/dev/null || true
+  fi
+}
+
 koyori_resize_browser_window() {
   local browser_pid="${1:-}"
   local w="${KOYORI_SCREEN_W:-}"
@@ -71,13 +90,13 @@ koyori_resize_browser_window() {
   }
 
   local wid="" i
-  for i in $(seq 1 60); do
+  for i in $(seq 1 80); do
     if [[ -n "$browser_pid" ]] && kill -0 "$browser_pid" 2>/dev/null; then
-      wid=$(xdotool search --pid "$browser_pid" --onlyvisible 2>/dev/null | head -1)
+      wid=$(xdotool search --pid "$browser_pid" 2>/dev/null | head -1)
     fi
-    for cls in Firefox Navigator chromium Chromium; do
+    for cls in Firefox Navigator firefox; do
       if [[ -z "$wid" ]]; then
-        wid=$(xdotool search --class "$cls" --onlyvisible 2>/dev/null | tail -1)
+        wid=$(xdotool search --class "$cls" 2>/dev/null | tail -1)
       fi
     done
     [[ -n "$wid" ]] && break
@@ -89,7 +108,8 @@ koyori_resize_browser_window() {
     return 0
   fi
 
-  xdotool windowmove "$wid" 0 0 2>/dev/null || true
-  xdotool windowsize "$wid" "$w" "$h" 2>/dev/null || true
-  koyori_display_log "resized window=$wid to ${w}x${h}"
+  koyori_raise_browser_window "$wid"
+  local geom
+  geom=$(xdotool getwindowgeometry --shell "$wid" 2>/dev/null || true)
+  koyori_display_log "browser window=$wid geometry=${geom//$'\n'/ } target=${w}x${h}"
 }

@@ -74,7 +74,8 @@ koyori_configure_dpms() {
   xset s off 2>/dev/null || true
   xset +dpms 2>/dev/null || true
   xset dpms 0 0 "$off_sec" 2>/dev/null || true
-  log "dpms enabled standby_off_sec=$off_sec"
+  xset dpms force on 2>/dev/null || true
+  log "dpms enabled standby_off_sec=$off_sec (forced on at boot)"
 }
 
 koyori_start_screen_idle_server() {
@@ -227,6 +228,11 @@ koyori_run_browser() {
 
   if [[ "$CHROMIUM" == *firefox* ]]; then
     export MOZ_ENABLE_A11Y=1
+    export MOZ_X11_EGL=0
+    if [[ "${KOYORI_FIREFOX_SOFTWARE_GL:-0}" == "1" ]]; then
+      export LIBGL_ALWAYS_SOFTWARE=1
+      log "firefox software GL enabled (KOYORI_FIREFOX_SOFTWARE_GL=1)"
+    fi
     ff_args=(--kiosk)
     ff_profile="${KOYORI_FIREFOX_PROFILE:-}"
     if [[ -z "$ff_profile" ]]; then
@@ -270,6 +276,7 @@ koyori_run_browser() {
 
     if declare -F koyori_resize_browser_window >/dev/null 2>&1; then
       (sleep 2; koyori_resize_browser_window "$browser_pid") &
+      (sleep 8; koyori_resize_browser_window "$browser_pid") &
     fi
     if declare -F koyori_osk_ensure_visible >/dev/null 2>&1; then
       (sleep 3; koyori_osk_ensure_visible) &

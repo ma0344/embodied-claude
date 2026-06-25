@@ -56,6 +56,7 @@ install -m 644 "$SCRIPT_DIR/mozc-ibus-kiosk.textproto" /usr/local/share/koyori-k
 install -m 755 "$SCRIPT_DIR/koyori-onboard-start.sh" /usr/local/bin/koyori-onboard-start
 install -m 755 "$SCRIPT_DIR/koyori-onboard-preseed.sh" /usr/local/bin/koyori-onboard-preseed
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-ime.sh" /usr/local/bin/koyori-diagnose-ime
+install -m 755 "$SCRIPT_DIR/koyori-diagnose-browser.sh" /usr/local/bin/koyori-diagnose-browser
 install -m 755 "$SCRIPT_DIR/koyori-ime-scrub-early.sh" /etc/X11/Xsession.d/65koyori-ime-scrub
 install -m 755 "$SCRIPT_DIR/koyori-ime-preseed.sh" /usr/local/bin/koyori-ime-preseed
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-input-leap.sh" /usr/local/bin/koyori-diagnose-input-leap
@@ -67,7 +68,7 @@ install -m 755 "$SCRIPT_DIR/koyori-bluetooth-keychron-watch.sh" /usr/local/bin/k
 install -d -m 755 /etc/bluetooth/main.conf.d
 install -m 644 "$SCRIPT_DIR/99-koyori-bluetooth-keychron.conf" /etc/bluetooth/main.conf.d/99-koyori-keychron.conf
 
-KIOSK_PKGS=(openbox xdotool x11-xserver-utils bluez)
+KIOSK_PKGS=(openbox xdotool x11-xserver-utils bluez wmctrl)
 missing_kiosk=()
 for pkg in "${KIOSK_PKGS[@]}"; do
   if ! dpkg -s "$pkg" >/dev/null 2>&1; then

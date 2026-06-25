@@ -97,6 +97,8 @@ sudo reboot
 | `ime: mozc registered; ... use 半/全` | **OK** — Mozc 登録済み。半/全で切替 |
 | `ime: engine=mozc-jp` | **OK** — CLI でもエンジン選択できた |
 | `ime: engine mozc-on failed` | **旧スクリプト** — `mozc-on` は IBus に無い。`git pull` + reinstall |
+| `firefox launch:` の直後に `ERROR firefox process not found` | snap ラッパー即終了など — 最新 `koyori-kiosk.sh`（実 pid 待ち + 再起動ループ）を deploy |
+| `firefox pid=` あってすぐ `firefox exited` | プロファイル lock / snap 起動失敗 — 下記「Firefox 手動起動」 |
 | `ime: background timeout` | 旧スクリプト。半/全が効いていれば無視してよい |
 | `ibus engine (current): xkb:us:eng` | 半/全を押すまで英字レイアウト表示のことがある |
 

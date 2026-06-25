@@ -179,36 +179,40 @@ koyori_ime_stop_daemon() {
   fi
 }
 
-koyori_ime_scrub_gsettings_bootstrap
-koyori_ime_stop_daemon
+koyori_ime_start_main() {
+  koyori_ime_scrub_gsettings_bootstrap
+  koyori_ime_stop_daemon
 
-if ! pgrep -u "$(id -u)" -x ibus-daemon >/dev/null 2>&1; then
-  koyori_ime_log "starting ibus-daemon"
-  ibus-daemon -drx --xim &
-  sleep 2
-fi
-
-if koyori_ime_wait_mozc 60; then
-  koyori_ime_apply_gsettings
-  if command -v ibus >/dev/null 2>&1; then
-    ibus write-cache 2>/dev/null || true
+  if ! pgrep -u "$(id -u)" -x ibus-daemon >/dev/null 2>&1; then
+    koyori_ime_log "starting ibus-daemon"
+    ibus-daemon -drx --xim &
+    sleep 2
   fi
-  attempt=0
-  while (( attempt < 5 )); do
-    if koyori_ime_try_activate; then
-      if [[ -n "${KOYORI_INPUT_LEAP_SERVER:-}" ]]; then
-        koyori_ime_log "Input Leap: Mozc toggle Ctrl+Shift+Space (or IBUS panel あ/A)"
-      else
-        koyori_ime_log "toggle: 半/全; romaji input (konnichiwa)"
-      fi
-      return 0
-    fi
-    sleep 1
-    ((attempt++)) || true
-  done
-  koyori_ime_log "mozc registered; manual: koyori-mozc-on; Input Leap needs mozc-ibus-kiosk.textproto"
-  return 0
-fi
 
-koyori_ime_log "WARN mozc not in ibus list-engine after 60s"
-koyori_ime_log "engines: $(koyori_ime_list_engines | tr '\n' ' ')"
+  if koyori_ime_wait_mozc 60; then
+    koyori_ime_apply_gsettings
+    if command -v ibus >/dev/null 2>&1; then
+      ibus write-cache 2>/dev/null || true
+    fi
+    attempt=0
+    while (( attempt < 5 )); do
+      if koyori_ime_try_activate; then
+        if [[ -n "${KOYORI_INPUT_LEAP_SERVER:-}" ]]; then
+          koyori_ime_log "Input Leap: Mozc toggle Ctrl+Shift+Space (or IBUS panel あ/A)"
+        else
+          koyori_ime_log "toggle: 半/全; romaji input (konnichiwa)"
+        fi
+        return 0
+      fi
+      sleep 1
+      ((attempt++)) || true
+    done
+    koyori_ime_log "mozc registered; manual: koyori-mozc-on; Input Leap needs mozc-ibus-kiosk.textproto"
+    return 0
+  fi
+
+  koyori_ime_log "WARN mozc not in ibus list-engine after 60s"
+  koyori_ime_log "engines: $(koyori_ime_list_engines | tr '\n' ' ')"
+}
+
+koyori_ime_start_main

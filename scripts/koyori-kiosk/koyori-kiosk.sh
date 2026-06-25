@@ -187,13 +187,48 @@ BROWSER_ARGS=(
   --autoplay-policy=no-user-gesture-required
 )
 
+koyori_prepare_firefox_profile() {
+  local ff_profile="$1"
+  [[ -d "$ff_profile" ]] || return 0
+  if pgrep -u "$(id -u)" -f '[f]irefox' >/dev/null 2>&1; then
+    return 0
+  fi
+  rm -f "${ff_profile}/.parentlock" "${ff_profile}/lock" "${ff_profile}/parent.lock" 2>/dev/null || true
+}
+
+koyori_find_firefox_pid() {
+  local pid
+  for pid in $(pgrep -u "$(id -u)" -x firefox 2>/dev/null); do
+    if tr '\0' ' ' </proc/"$pid"/cmdline 2>/dev/null | grep -qE 'koyori-kiosk|--kiosk'; then
+      echo "$pid"
+      return 0
+    fi
+  done
+  pgrep -u "$(id -u)" -n -f '[f]irefox.*koyori-kiosk' 2>/dev/null || true
+}
+
+koyori_wait_firefox_exit() {
+  local browser_pid="$1"
+  local i=0
+  while (( i < 120 )); do
+    if ! kill -0 "$browser_pid" 2>/dev/null; then
+      wait "$browser_pid" 2>/dev/null || true
+      return $?
+    fi
+    sleep 1
+    ((i++)) || true
+  done
+  log "WARN firefox pid=$browser_pid still running after 120s wait slice"
+  return 0
+}
+
 koyori_run_browser() {
-  local browser_pid
+  local browser_pid launcher_pid ff_args ff_profile
 
   if [[ "$CHROMIUM" == *firefox* ]]; then
     export MOZ_ENABLE_A11Y=1
-    local ff_args=(--kiosk)
-    local ff_profile="${KOYORI_FIREFOX_PROFILE:-}"
+    ff_args=(--kiosk)
+    ff_profile="${KOYORI_FIREFOX_PROFILE:-}"
     if [[ -z "$ff_profile" ]]; then
       if [[ -d "${HOME}/snap/firefox/common" ]]; then
         ff_profile="${HOME}/snap/firefox/common/.mozilla/koyori-kiosk"
@@ -202,21 +237,47 @@ koyori_run_browser() {
       fi
     fi
     if [[ -d "$ff_profile" && -r "$ff_profile" && -w "$ff_profile" ]]; then
+      koyori_prepare_firefox_profile "$ff_profile"
       ff_args=(--profile "$ff_profile" --kiosk)
       log "firefox profile=$ff_profile"
     else
       log "WARN firefox profile unavailable ($ff_profile) — default profile"
     fi
-    "$CHROMIUM" "${ff_args[@]}" "$WEBUI_URL" &
-    browser_pid=$!
+    log "firefox launch: $CHROMIUM ${ff_args[*]} $WEBUI_URL"
+    "$CHROMIUM" "${ff_args[@]}" "$WEBUI_URL" </dev/null &
+    launcher_pid=$!
+    disown "$launcher_pid" 2>/dev/null || true
+
+    browser_pid=""
+    local i
+    for i in $(seq 1 40); do
+      browser_pid=$(koyori_find_firefox_pid)
+      [[ -n "$browser_pid" ]] && break
+      if ! kill -0 "$launcher_pid" 2>/dev/null; then
+        wait "$launcher_pid" 2>/dev/null || true
+        browser_pid=$(koyori_find_firefox_pid)
+        break
+      fi
+      sleep 0.25
+    done
+
+    if [[ -z "$browser_pid" ]]; then
+      log "ERROR firefox process not found after launch (launcher_pid=$launcher_pid)"
+      wait "$launcher_pid" 2>/dev/null || true
+      return 1
+    fi
+    log "firefox pid=$browser_pid (launcher=$launcher_pid)"
+
     if declare -F koyori_resize_browser_window >/dev/null 2>&1; then
       (sleep 2; koyori_resize_browser_window "$browser_pid") &
     fi
     if declare -F koyori_osk_ensure_visible >/dev/null 2>&1; then
       (sleep 3; koyori_osk_ensure_visible) &
     fi
-    wait "$browser_pid"
-    return $?
+    koyori_wait_firefox_exit "$browser_pid"
+    local rc=$?
+    log "firefox exited pid=$browser_pid code=$rc"
+    return "$rc"
   fi
 
   # Ubuntu 24.04 chromium-browser is usually snap; needs this on minimal X sessions.
@@ -228,8 +289,11 @@ koyori_run_browser() {
     BROWSER_ARGS+=(--window-size="${KOYORI_SCREEN_W},${KOYORI_SCREEN_H}")
   fi
 
-  "$CHROMIUM" "${BROWSER_ARGS[@]}" "$WEBUI_URL" &
-  browser_pid=$!
+  log "chromium launch: $CHROMIUM ${BROWSER_ARGS[*]} $WEBUI_URL"
+  "$CHROMIUM" "${BROWSER_ARGS[@]}" "$WEBUI_URL" </dev/null &
+  launcher_pid=$!
+  disown "$launcher_pid" 2>/dev/null || true
+  browser_pid=$launcher_pid
   if declare -F koyori_resize_browser_window >/dev/null 2>&1; then
     (sleep 2; koyori_resize_browser_window "$browser_pid") &
   fi
@@ -237,6 +301,17 @@ koyori_run_browser() {
     (sleep 3; koyori_osk_ensure_visible) &
   fi
   wait "$browser_pid"
+  local rc=$?
+  log "chromium exited pid=$browser_pid code=$rc"
+  return "$rc"
 }
 
-koyori_run_browser
+BROWSER_RESTART_SEC="${KOYORI_BROWSER_RESTART_SEC:-3}"
+while true; do
+  if koyori_run_browser; then
+    log "browser ended normally — restart in ${BROWSER_RESTART_SEC}s"
+  else
+    log "browser failed — restart in ${BROWSER_RESTART_SEC}s"
+  fi
+  sleep "$BROWSER_RESTART_SEC"
+done

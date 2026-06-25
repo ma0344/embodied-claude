@@ -212,7 +212,7 @@ koyori_prepare_firefox_profile() {
 koyori_find_firefox_pid() {
   local pid
   for pid in $(pgrep -u "$(id -u)" -x firefox 2>/dev/null); do
-    if tr '\0' ' ' </proc/"$pid"/cmdline 2>/dev/null | grep -qE 'koyori-kiosk|--kiosk'; then
+    if tr '\0' ' ' </proc/"$pid"/cmdline 2>/dev/null | grep -qE 'koyori-kiosk'; then
       echo "$pid"
       return 0
     fi
@@ -222,23 +222,29 @@ koyori_find_firefox_pid() {
 
 koyori_wait_firefox_exit() {
   local browser_pid="$1"
-  local i=0
-  while (( i < 120 )); do
-    if ! kill -0 "$browser_pid" 2>/dev/null; then
-      wait "$browser_pid" 2>/dev/null || true
-      return $?
-    fi
-    sleep 1
-    ((i++)) || true
+  while kill -0 "$browser_pid" 2>/dev/null; do
+    sleep 2
   done
-  log "WARN firefox pid=$browser_pid still running after 120s wait slice"
-  return 0
+  wait "$browser_pid" 2>/dev/null || true
 }
 
 koyori_run_browser() {
   local browser_pid launcher_pid ff_args ff_profile
 
   if [[ "$CHROMIUM" == *firefox* ]]; then
+    local existing_pid
+    existing_pid=$(koyori_find_firefox_pid)
+    if [[ -n "$existing_pid" ]] && kill -0 "$existing_pid" 2>/dev/null; then
+      log "firefox already running pid=$existing_pid — waiting (no second launch)"
+      if declare -F koyori_resize_browser_window >/dev/null 2>&1; then
+        koyori_resize_browser_window "$existing_pid"
+      fi
+      koyori_wait_firefox_exit "$existing_pid"
+      local rc=$?
+      log "firefox exited pid=$existing_pid code=$rc"
+      return "$rc"
+    fi
+
     export MOZ_ENABLE_A11Y=1
     export MOZ_X11_EGL=0
     if [[ "${KOYORI_FIREFOX_SOFTWARE_GL:-0}" == "1" ]]; then

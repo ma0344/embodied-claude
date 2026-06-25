@@ -115,6 +115,10 @@ if id ma &>/dev/null && [[ -d "$MA_HOME" ]]; then
   install -d -o ma -g ma -m 755 "$OB_DIR"
   install -o ma -g ma -m 644 "$SCRIPT_DIR/openbox-kiosk-rc.xml" "$OB_DIR/rc.xml"
   echo "  openbox rc: $OB_DIR/rc.xml"
+  if command -v xmllint >/dev/null 2>&1; then
+    xmllint --noout "$OB_DIR/rc.xml" 2>/dev/null && echo "  openbox rc: xmllint OK" \
+      || echo "  WARN: openbox rc.xml failed xmllint — fix before reboot" >&2
+  fi
 fi
 
 install -d -m 755 /usr/share/xsessions

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <openbox_config xmlns="http://openbox.org/3.4/rc">
-  <!-- Koyori kiosk: snap Firefox --kiosk often maps as 1x1; force fullscreen on map. -->
+  <!-- Koyori kiosk: snap Firefox kiosk mode may map 1x1; force fullscreen on map. -->
   <applications>
     <application class="Firefox">
       <decor>no</decor>

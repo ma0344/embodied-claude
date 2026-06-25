@@ -57,6 +57,8 @@ install -m 755 "$SCRIPT_DIR/koyori-onboard-start.sh" /usr/local/bin/koyori-onboa
 install -m 755 "$SCRIPT_DIR/koyori-onboard-preseed.sh" /usr/local/bin/koyori-onboard-preseed
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-ime.sh" /usr/local/bin/koyori-diagnose-ime
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-browser.sh" /usr/local/bin/koyori-diagnose-browser
+install -m 755 "$SCRIPT_DIR/koyori-fix-browser-window.sh" /usr/local/bin/koyori-fix-browser-window
+install -m 755 "$SCRIPT_DIR/koyori-restart-browser.sh" /usr/local/bin/koyori-restart-browser
 install -m 755 "$SCRIPT_DIR/koyori-ime-scrub-early.sh" /etc/X11/Xsession.d/65koyori-ime-scrub
 install -m 755 "$SCRIPT_DIR/koyori-ime-preseed.sh" /usr/local/bin/koyori-ime-preseed
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-input-leap.sh" /usr/local/bin/koyori-diagnose-input-leap
@@ -109,6 +111,10 @@ if id ma &>/dev/null && [[ -d "$MA_HOME" ]]; then
   # Snap Firefox cannot read /var/lib; remove legacy path if present.
   rm -rf /var/lib/koyori/firefox-kiosk 2>/dev/null || true
   echo "  firefox profile: $FF_PROFILE"
+  OB_DIR="$MA_HOME/.config/openbox"
+  install -d -o ma -g ma -m 755 "$OB_DIR"
+  install -o ma -g ma -m 644 "$SCRIPT_DIR/openbox-kiosk-rc.xml" "$OB_DIR/rc.xml"
+  echo "  openbox rc: $OB_DIR/rc.xml"
 fi
 
 install -d -m 755 /usr/share/xsessions

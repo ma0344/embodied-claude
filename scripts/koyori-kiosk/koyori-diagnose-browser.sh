@@ -64,8 +64,9 @@ fi
 
 echo ""
 echo "Quick fixes:"
+echo "  DISPLAY=:0 koyori-fix-browser-window"
 echo "  DISPLAY=:0 xset dpms force on"
-echo "  DISPLAY=:0 xdotool search --class Firefox windowactivate %1 windowraise %1"
 echo "  sudo cp .../firefox-kiosk-user.js ~/snap/firefox/common/.mozilla/koyori-kiosk/user.js"
 echo "  pkill -u $USER firefox; sudo reboot"
 echo "  /etc/default/koyori-kiosk: KOYORI_FIREFOX_SOFTWARE_GL=1  # if still black"
+echo "  Firefox 1x1 windows: keep KOYORI_FIREFOX_KIOSK_FLAG=0 (default) — do not use --kiosk on snap"

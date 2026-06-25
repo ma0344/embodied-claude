@@ -157,18 +157,29 @@ koyori_ime_apply_gsettings() {
 }
 
 koyori_ime_scrub_gsettings_bootstrap() {
-  # Empty preload until engines exist — avoids dialog for mozc-on (missing) or mozc-jp (not registered yet).
-  if command -v gsettings >/dev/null 2>&1; then
+  # Drop known-bad preload names only. Blanket [] before every boot broke snap Firefox mapping.
+  local preload="" order=""
+  if ! command -v gsettings >/dev/null 2>&1; then
+    return 0
+  fi
+  preload=$(gsettings get org.freedesktop.ibus.general preload-engines 2>/dev/null || true)
+  order=$(gsettings get org.freedesktop.ibus.general engines-order 2>/dev/null || true)
+  if [[ "$preload" == *mozc-on* || "$preload" == *mozc-jp-ro* || "$order" == *mozc-on* ]]; then
+    koyori_ime_log "scrub stale preload/order (mozc-on etc.)"
     gsettings set org.freedesktop.ibus.general preload-engines "[]" 2>/dev/null || true
     gsettings set org.freedesktop.ibus.general engines-order "[]" 2>/dev/null || true
   fi
 }
 
 koyori_ime_stop_daemon() {
+  # Opt-in only: killing ibus right before Firefox correlated with 1x1 invisible windows.
+  if [[ "${KOYORI_IME_FORCE_RESTART:-0}" != "1" ]]; then
+    return 0
+  fi
   if ! pgrep -u "$(id -u)" -x ibus-daemon >/dev/null 2>&1; then
     return 0
   fi
-  koyori_ime_log "stopping existing ibus-daemon (stale engine config)"
+  koyori_ime_log "KOYORI_IME_FORCE_RESTART=1 — stopping ibus-daemon"
   if command -v ibus >/dev/null 2>&1; then
     ibus exit 2>/dev/null || true
   fi
@@ -183,7 +194,9 @@ koyori_ime_start_main() {
   koyori_ime_scrub_gsettings_bootstrap
   koyori_ime_stop_daemon
 
-  if ! pgrep -u "$(id -u)" -x ibus-daemon >/dev/null 2>&1; then
+  if pgrep -u "$(id -u)" -x ibus-daemon >/dev/null 2>&1; then
+    koyori_ime_log "ibus-daemon already running — keeping session (no restart)"
+  else
     koyori_ime_log "starting ibus-daemon"
     ibus-daemon -drx --xim &
     sleep 2

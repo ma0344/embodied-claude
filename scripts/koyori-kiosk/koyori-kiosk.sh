@@ -252,8 +252,8 @@ koyori_run_browser() {
       log "firefox software GL enabled (KOYORI_FIREFOX_SOFTWARE_GL=1)"
     fi
     ff_args=()
-    # snap Firefox + minimal openbox: --kiosk often creates 1x1 helper windows (see xdotool).
-    if [[ "${KOYORI_FIREFOX_KIOSK_FLAG:-0}" == "1" ]]; then
+    # snap Firefox + openbox: --kiosk hides tab bar; needs valid rc.xml + IME not blocking first.
+    if [[ "${KOYORI_FIREFOX_KIOSK_FLAG:-1}" == "1" ]]; then
       ff_args+=(--kiosk)
     fi
     ff_profile="${KOYORI_FIREFOX_PROFILE:-}"
@@ -267,7 +267,7 @@ koyori_run_browser() {
     if [[ -d "$ff_profile" && -r "$ff_profile" && -w "$ff_profile" ]]; then
       koyori_prepare_firefox_profile "$ff_profile"
       ff_args=(--profile "$ff_profile" "${ff_args[@]}")
-      log "firefox profile=$ff_profile kiosk_flag=${KOYORI_FIREFOX_KIOSK_FLAG:-0}"
+      log "firefox profile=$ff_profile kiosk_flag=${KOYORI_FIREFOX_KIOSK_FLAG:-1}"
     else
       log "WARN firefox profile unavailable ($ff_profile) — default profile"
     fi
@@ -297,10 +297,12 @@ koyori_run_browser() {
     log "firefox pid=$browser_pid (launcher=$launcher_pid)"
 
     if declare -F koyori_resize_browser_window >/dev/null 2>&1; then
-      (sleep 2; koyori_resize_browser_window "$browser_pid") &
-      (sleep 5; koyori_resize_browser_window "$browser_pid") &
-      (sleep 10; koyori_resize_browser_window "$browser_pid") &
-      (sleep 20; koyori_resize_browser_window "$browser_pid") &
+      if [[ "${KOYORI_FIREFOX_KIOSK_FLAG:-1}" == "1" ]]; then
+        (sleep 3; koyori_resize_browser_window "$browser_pid") &
+      else
+        (sleep 2; koyori_resize_browser_window "$browser_pid") &
+        (sleep 8; koyori_resize_browser_window "$browser_pid") &
+      fi
     fi
     if declare -F koyori_osk_ensure_visible >/dev/null 2>&1; then
       (sleep 3; koyori_osk_ensure_visible) &

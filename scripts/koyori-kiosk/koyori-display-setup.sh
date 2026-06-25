@@ -8,7 +8,7 @@ koyori_display_log() {
 koyori_display_log "start DISPLAY=${DISPLAY:-unset}"
 
 if command -v xsetroot >/dev/null 2>&1 && [[ -n "${DISPLAY:-}" ]]; then
-  xsetroot -solid "#000000" || true
+  xsetroot -solid "#f5f5f0" || true
 fi
 
 if command -v xrandr >/dev/null 2>&1 && [[ -n "${DISPLAY:-}" ]]; then
@@ -52,6 +52,9 @@ koyori_start_window_manager() {
   if command -v openbox >/dev/null 2>&1; then
     openbox --sm-disable &
     sleep 0.3
+    if [[ -f "${HOME}/.config/openbox/rc.xml" ]]; then
+      openbox --reconfigure 2>/dev/null || true
+    fi
     koyori_display_log "wm=openbox"
     return 0
   fi

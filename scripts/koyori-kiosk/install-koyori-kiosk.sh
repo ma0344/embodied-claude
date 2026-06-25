@@ -164,6 +164,8 @@ KOYORI_WEBUI_URL='$WEBUI_URL'
 KOYORI_CHROMIUM_NO_SANDBOX=1
 # firefox: IBus/Mozc works on minimal X. snap chromium often cannot use host IME.
 KOYORI_BROWSER=firefox
+# 1 = firefox --kiosk (hide tab bar). 0 = windowed + xdotool fullscreen (Stage A fallback).
+KOYORI_FIREFOX_KIOSK_FLAG=1
 # Surface Go native mode (optional; xrandr --auto usually enough):
 # KOYORI_DISPLAY_MODE=1800x1200
 # KOYORI_USE_WM=1

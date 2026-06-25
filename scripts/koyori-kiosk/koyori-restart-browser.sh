@@ -39,7 +39,7 @@ sleep 2
 rm -f "${FF_PROFILE}/.parentlock" "${FF_PROFILE}/lock" "${FF_PROFILE}/parent.lock" 2>/dev/null || true
 
 args=(--profile "$FF_PROFILE")
-if [[ "${KOYORI_FIREFOX_KIOSK_FLAG:-0}" == "1" ]]; then
+if [[ "${KOYORI_FIREFOX_KIOSK_FLAG:-1}" == "1" ]]; then
   args+=(--kiosk)
 fi
 

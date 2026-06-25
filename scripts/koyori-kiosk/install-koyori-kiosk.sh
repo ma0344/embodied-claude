@@ -56,6 +56,8 @@ install -m 644 "$SCRIPT_DIR/mozc-ibus-kiosk.textproto" /usr/local/share/koyori-k
 install -m 755 "$SCRIPT_DIR/koyori-onboard-start.sh" /usr/local/bin/koyori-onboard-start
 install -m 755 "$SCRIPT_DIR/koyori-onboard-preseed.sh" /usr/local/bin/koyori-onboard-preseed
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-ime.sh" /usr/local/bin/koyori-diagnose-ime
+install -m 755 "$SCRIPT_DIR/koyori-ime-scrub-early.sh" /etc/X11/Xsession.d/65koyori-ime-scrub
+install -m 755 "$SCRIPT_DIR/koyori-ime-preseed.sh" /usr/local/bin/koyori-ime-preseed
 install -m 755 "$SCRIPT_DIR/koyori-diagnose-input-leap.sh" /usr/local/bin/koyori-diagnose-input-leap
 install -m 755 "$SCRIPT_DIR/koyori-pair-keychron.sh" /usr/local/bin/koyori-pair-keychron
 install -m 755 "$SCRIPT_DIR/koyori-connect-keychron.sh" /usr/local/bin/koyori-connect-keychron
@@ -118,6 +120,7 @@ if id ma &>/dev/null && [[ -d "$MA_HOME" ]]; then
   if command -v im-config >/dev/null 2>&1; then
     runuser -u ma -- im-config -n ibus 2>/dev/null || true
   fi
+  /usr/local/bin/koyori-ime-preseed ma
 else
   echo "WARN: user ma or $MA_HOME not found; create ~/.xsession manually" >&2
 fi

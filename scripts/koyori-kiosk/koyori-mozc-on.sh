@@ -21,13 +21,14 @@ if ! pgrep -u "$(id -u)" -x ibus-daemon >/dev/null 2>&1; then
   exit 1
 fi
 
-for engine in mozc-on mozc-jp mozc-jp-ro mozc; do
+while IFS= read -r engine; do
+  [[ -z "$engine" ]] && continue
   if ibus engine "$engine" 2>/dev/null; then
     echo "engine=$(ibus engine 2>/dev/null || echo "$engine")"
     echo "type romaji (konnichiwa + Space). Input Leap: click IBUS panel あ if still A_"
     exit 0
   fi
-done
+done < <(ibus list-engine 2>/dev/null | awk '/mozc/ { print $1 }' | sort -u)
 
 echo "failed to activate mozc — run koyori-diagnose-ime" >&2
 exit 1

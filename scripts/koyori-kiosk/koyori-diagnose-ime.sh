@@ -44,6 +44,24 @@ if command -v ibus >/dev/null 2>&1; then
   ibus list-engine 2>&1 | sed 's/^/    /' || true
   echo ""
   echo "  ibus engine (current): $(DISPLAY=$DISPLAY ibus engine 2>/dev/null || echo '?')"
+  if command -v gsettings >/dev/null 2>&1; then
+    echo "  gsettings preload-engines: $(gsettings get org.freedesktop.ibus.general preload-engines 2>/dev/null || echo '?')"
+    echo "  gsettings engines-order: $(gsettings get org.freedesktop.ibus.general engines-order 2>/dev/null || echo '?')"
+    preload=$(gsettings get org.freedesktop.ibus.general preload-engines 2>/dev/null || true)
+    order=$(gsettings get org.freedesktop.ibus.general engines-order 2>/dev/null || true)
+    if [[ "$preload" == *mozc-on* || "$order" == *mozc-on* ]]; then
+      echo "  WARN: config includes mozc-on (not in ibus list-engine) — causes startup dialog"
+      echo "        fix: sudo koyori-ime-preseed && reboot"
+    fi
+    if command -v ibus >/dev/null 2>&1; then
+      listed=$(ibus list-engine 2>/dev/null | awk '/^  / { print $1 }' | tr '\n' ' ')
+      for token in mozc-on mozc-jp-ro mozc; do
+        if [[ "$preload $order" == *"$token"* ]] && [[ " $listed " != *" $token "* ]]; then
+          echo "  WARN: gsettings references $token but ibus list-engine does not"
+        fi
+      done
+    fi
+  fi
 else
   echo "    (ibus CLI missing)"
 fi

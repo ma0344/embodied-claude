@@ -67,8 +67,39 @@ koyori_ime_list_engines() {
   ibus list-engine 2>&1
 }
 
+koyori_ime_all_engine_ids() {
+  koyori_ime_list_engines | awk '/^  / { print $1 }'
+}
+
+# Engine IDs from `ibus list-engine` (e.g. mozc-jp). Not Mozc textproto names (mozc-on).
+koyori_ime_mozc_engine_ids() {
+  koyori_ime_list_engines | awk '/mozc/ { print $1 }' | sort -u
+}
+
 koyori_ime_has_mozc() {
-  koyori_ime_list_engines | grep -qE '(^|[[:space:]])mozc'
+  koyori_ime_mozc_engine_ids | grep -q .
+}
+
+koyori_ime_gsettings_engine_array() {
+  local -a ids=()
+  local id
+  while IFS= read -r id; do
+    [[ -n "$id" ]] && ids+=("$id")
+  done < <(koyori_ime_mozc_engine_ids)
+  if ((${#ids[@]} == 0)); then
+    echo "['mozc-jp']"
+    return 0
+  fi
+  local quoted="" first=1
+  for id in "${ids[@]}"; do
+    if (( first )); then
+      quoted="'${id}'"
+      first=0
+    else
+      quoted+=", '${id}'"
+    fi
+  done
+  echo "[${quoted}]"
 }
 
 koyori_ime_wait_mozc() {
@@ -87,11 +118,12 @@ koyori_ime_wait_mozc() {
 
 koyori_ime_try_activate() {
   local engine err current
-  local -a engines
-  if [[ -n "${KOYORI_INPUT_LEAP_SERVER:-}" ]]; then
-    engines=(mozc-on mozc-jp mozc-jp-ro mozc)
-  else
-    engines=(mozc-jp mozc-on mozc-jp-ro mozc)
+  local -a engines=()
+  while IFS= read -r engine; do
+    [[ -n "$engine" ]] && engines+=("$engine")
+  done < <(koyori_ime_mozc_engine_ids)
+  if ((${#engines[@]} == 0)); then
+    return 1
   fi
   for engine in "${engines[@]}"; do
     if err=$(ibus engine "$engine" 2>&1); then
@@ -106,20 +138,49 @@ koyori_ime_try_activate() {
   return 1
 }
 
-if command -v gsettings >/dev/null 2>&1; then
+koyori_ime_apply_gsettings() {
+  local engines_array
+  if ! command -v gsettings >/dev/null 2>&1; then
+    return 0
+  fi
+  engines_array=$(koyori_ime_gsettings_engine_array)
+  koyori_ime_log "gsettings engines=$engines_array"
+  gsettings set org.freedesktop.ibus.general preload-engines "$engines_array" 2>/dev/null || true
+  gsettings set org.freedesktop.ibus.general engines-order "$engines_array" 2>/dev/null || true
   if [[ -n "${KOYORI_INPUT_LEAP_SERVER:-}" ]]; then
-    gsettings set org.freedesktop.ibus.general preload-engines "['mozc-on', 'mozc-jp']" 2>/dev/null || true
-    gsettings set org.freedesktop.ibus.general engines-order "['mozc-on', 'mozc-jp']" 2>/dev/null || true
     # 1 = show panel always (ibus-setup: Show property panel → Always)
     gsettings set org.freedesktop.ibus.panel show 1 2>/dev/null || true
-  else
-    gsettings set org.freedesktop.ibus.general preload-engines "['mozc-jp']" 2>/dev/null || true
-    gsettings set org.freedesktop.ibus.general engines-order "['mozc-jp']" 2>/dev/null || true
   fi
   gsettings set org.freedesktop.ibus.general use-global-engine true 2>/dev/null || true
   gsettings set org.freedesktop.ibus.general.hotkey triggers "['Control+space', 'Zenkaku_Hankaku', 'Hangul']" 2>/dev/null || true
   gsettings set org.freedesktop.ibus.general use-system-keyboard-layout false 2>/dev/null || true
-fi
+}
+
+koyori_ime_scrub_gsettings_bootstrap() {
+  # Empty preload until engines exist — avoids dialog for mozc-on (missing) or mozc-jp (not registered yet).
+  if command -v gsettings >/dev/null 2>&1; then
+    gsettings set org.freedesktop.ibus.general preload-engines "[]" 2>/dev/null || true
+    gsettings set org.freedesktop.ibus.general engines-order "[]" 2>/dev/null || true
+  fi
+}
+
+koyori_ime_stop_daemon() {
+  if ! pgrep -u "$(id -u)" -x ibus-daemon >/dev/null 2>&1; then
+    return 0
+  fi
+  koyori_ime_log "stopping existing ibus-daemon (stale engine config)"
+  if command -v ibus >/dev/null 2>&1; then
+    ibus exit 2>/dev/null || true
+  fi
+  sleep 1
+  if pgrep -u "$(id -u)" -x ibus-daemon >/dev/null 2>&1; then
+    pkill -u "$(id -u)" -x ibus-daemon 2>/dev/null || true
+    sleep 0.5
+  fi
+}
+
+koyori_ime_scrub_gsettings_bootstrap
+koyori_ime_stop_daemon
 
 if ! pgrep -u "$(id -u)" -x ibus-daemon >/dev/null 2>&1; then
   koyori_ime_log "starting ibus-daemon"
@@ -128,11 +189,12 @@ if ! pgrep -u "$(id -u)" -x ibus-daemon >/dev/null 2>&1; then
 fi
 
 if koyori_ime_wait_mozc 60; then
+  koyori_ime_apply_gsettings
   if command -v ibus >/dev/null 2>&1; then
     ibus write-cache 2>/dev/null || true
   fi
   attempt=0
-  while (( attempt < 30 )); do
+  while (( attempt < 5 )); do
     if koyori_ime_try_activate; then
       if [[ -n "${KOYORI_INPUT_LEAP_SERVER:-}" ]]; then
         koyori_ime_log "Input Leap: Mozc toggle Ctrl+Shift+Space (or IBUS panel あ/A)"

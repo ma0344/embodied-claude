@@ -15,6 +15,7 @@ from interaction_orchestrator_mcp.schemas import (
 )
 from pydantic import BaseModel, Field
 
+from presence_ui.gateway.context_limits import full_compose_max_chars, lite_compose_max_chars
 from presence_ui.deps import get_stores
 from presence_ui.heartbeat.record import finalize_chat_turn
 from presence_ui.services.somatic_context import enrich_interaction_context
@@ -52,9 +53,9 @@ class FinalizeTurnResponse(BaseModel):
 
 def compose_plan_body(body: ComposePlanRequest) -> ComposePlanResponse:
     stores = get_stores()
-    max_chars = int(os.getenv("PRESENCE_COMPOSE_MAX_CHARS", "10000"))
+    max_chars = full_compose_max_chars()
     if body.lite:
-        max_chars = min(max_chars, int(os.getenv("PRESENCE_LITE_COMPOSE_MAX_CHARS", "6000")))
+        max_chars = min(max_chars, lite_compose_max_chars())
 
     ctx = compose_interaction_context(
         ComposeInteractionContextInput(

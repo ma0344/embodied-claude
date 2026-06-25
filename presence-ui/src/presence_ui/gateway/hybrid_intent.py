@@ -46,7 +46,12 @@ def llm_intent_fallback_enabled() -> bool:
 
 
 def _rules_body_active(intent: UserIntent) -> bool:
-    return intent.wants_speech or intent.wants_observe or intent.wants_remember
+    return (
+        intent.wants_speech
+        or intent.wants_observe
+        or intent.wants_remember
+        or intent.wants_web_search
+    )
 
 
 def should_try_llm_fallback(text: str, rules: UserIntent) -> bool:
@@ -96,6 +101,7 @@ def _user_intent_from_labels(labels: list[str]) -> UserIntent:
         explicit_say=False,
         wants_observe=wants_observe,
         wants_remember="remember" in body,
+        wants_web_search=False,
     )
 
 

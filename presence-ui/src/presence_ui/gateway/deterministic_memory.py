@@ -21,6 +21,7 @@ RememberIntent = _mas.RememberIntent
 RememberOutcome = _mas.RememberOutcome
 detect_personal_fact_intent = _mas.detect_personal_fact_intent
 detect_remember_intent = _mas.detect_remember_intent
+detect_self_disclosure = _mas.detect_self_disclosure
 memory_saved_prompt_note = _mas.memory_saved_prompt_note
 persist_remember_intent = _mas.persist_remember_intent
 

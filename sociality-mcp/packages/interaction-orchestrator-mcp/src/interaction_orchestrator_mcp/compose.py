@@ -7,6 +7,7 @@ from typing import Any
 
 from boundary_mcp.store import BoundaryStore
 from joint_attention_mcp.store import JointAttentionStore
+from relationship_mcp.inference import is_archive_remember_utterance
 from relationship_mcp.store import RelationshipStore
 from self_narrative_mcp.store import SelfNarrativeStore
 from social_core import DEFAULT_POLICY_TIMEZONE, local_view, utc_now
@@ -19,6 +20,12 @@ from .memory_adapter import (
 )
 from .memory_adapter import (
     make_default_adapter as make_default_memory_adapter,
+)
+from .recall_query import (
+    extract_schedule_facts,
+    is_episodic_blob,
+    is_temporal_question,
+    temporal_schedule_contract_enabled,
 )
 from .schemas import (
     AgentStateSummary,
@@ -128,6 +135,7 @@ def compose_interaction_context(
     )
 
     memory = memory_adapter or make_default_memory_adapter()
+    profile_gists = list((person_model or {}).get("profile_gists") or [])
     relevant_memories = [
         RelevantMemoryRef(
             memory_id=hit.memory_id,
@@ -141,6 +149,8 @@ def compose_interaction_context(
             person_id=payload.person_id,
             max_results=6,
             include_private=payload.include_private,
+            purpose="compose",
+            profile_gists=profile_gists,
         )
     ]
 
@@ -210,6 +220,7 @@ def compose_interaction_context(
         prompt_summary=prompt_summary,
         response_contract=response_contract,
         relevant_memories=relevant_memories,
+        user_text=payload.user_text,
         session_context_block=prompt_session_block,
         dominant_desire=dominant_desire,
         desires=desires,
@@ -218,6 +229,7 @@ def compose_interaction_context(
         commitments_due=commitments,
         recent_shifts=recent_shifts,
         recent_experiences=recent_experiences,
+        profile_gists=list((person_model or {}).get("profile_gists") or []),
         max_chars=payload.max_chars,
     )
 
@@ -599,6 +611,9 @@ def _is_noise_open_loop(topic: str) -> bool:
         return True
     if compact.endswith("ね") and "、調べ" in compact:
         return True
+    # MEM-8f: archival remember mistaken as follow-up loop (legacy ingest).
+    if is_archive_remember_utterance(compact):
+        return True
     return False
 
 
@@ -803,6 +818,7 @@ def _compact_block(
     prompt_summary: str,
     response_contract: ResponseContract,
     relevant_memories: list[RelevantMemoryRef],
+    user_text: str | None = None,
     session_context_block: str = "",
     dominant_desire: str | None = None,
     desires: dict[str, Any] | None = None,
@@ -811,6 +827,7 @@ def _compact_block(
     commitments_due: list[CommitmentSummary] | None = None,
     recent_shifts: list[InterpretationShiftSummary] | None = None,
     recent_experiences: list[RecentExperienceRef] | None = None,
+    profile_gists: list[str] | None = None,
     max_chars: int,
 ) -> str:
     contract_lines = [f"treat_user_as: {response_contract.treat_user_as}"]
@@ -823,7 +840,10 @@ def _compact_block(
         f"max_clarifying={response_contract.max_clarifying_questions}"
     )
     memory_lines: list[str] = []
-    mentionable = [m for m in relevant_memories if m.use_policy == "mentionable"]
+    all_mentionable = [m for m in relevant_memories if m.use_policy == "mentionable"]
+    mentionable = [m for m in all_mentionable if not is_episodic_blob(m.content)]
+    if not mentionable:
+        mentionable = all_mentionable
     background = [m for m in relevant_memories if m.use_policy == "background_only"]
     for m in mentionable[:3]:
         snippet = m.content[:120] + ("…" if len(m.content) > 120 else "")
@@ -831,6 +851,22 @@ def _compact_block(
     for m in background[:2]:
         snippet = m.content[:80] + ("…" if len(m.content) > 80 else "")
         memory_lines.append(f"[background r={m.relevance:.2f}] {snippet}")
+
+    schedule_facts = extract_schedule_facts(
+        user_text or "",
+        [m.content for m in relevant_memories]
+        + [g.strip() for g in (profile_gists or []) if g and g.strip()],
+    )
+    temporal = is_temporal_question(user_text or "")
+    pinned_schedule: list[str] = []
+    if temporal and schedule_facts and temporal_schedule_contract_enabled():
+        pinned_schedule = [
+            "",
+            "[schedule_facts — answer いつ/何曜; state this day/time directly]",
+            *schedule_facts,
+        ]
+        if memory_lines:
+            pinned_schedule.extend(["", "[relevant_memories]", *memory_lines[:2]])
 
     session_budget = min(7000, max(max_chars // 2, 1200))
     trimmed_session = ""
@@ -844,6 +880,8 @@ def _compact_block(
         "[interaction_context]",
         prompt_summary,
     ]
+    if pinned_schedule:
+        sections.extend(pinned_schedule)
     soul_sections = [
         *_format_desire_section(
             dominant_desire=dominant_desire,
@@ -858,6 +896,9 @@ def _compact_block(
     ]
     if soul_sections:
         sections.extend(["", *soul_sections])
+    gist_lines = [g.strip() for g in (profile_gists or []) if g and g.strip()]
+    if gist_lines:
+        sections.extend(["", "[person_profile_gists]", *gist_lines[:5]])
     if trimmed_session:
         sections.extend(["", trimmed_session])
     sections.extend(
@@ -866,10 +907,21 @@ def _compact_block(
             *contract_lines,
         ]
     )
-    if memory_lines:
+    if memory_lines and not pinned_schedule:
         sections.append("[relevant_memories]")
         sections.extend(memory_lines)
     block = "\n".join(sections)
     if len(block) > max_chars:
-        block = block[: max_chars - 1].rstrip() + "…"
+        pin_len = 2 + len(pinned_schedule) if pinned_schedule else len(sections)
+        pinned_prefix = "\n".join(sections[:pin_len])
+        if pinned_schedule and len(pinned_prefix) < max_chars:
+            rest = "\n".join(sections[2 + len(pinned_schedule) :])
+            budget = max_chars - len(pinned_prefix) - 1
+            if budget > 80 and rest:
+                trimmed_rest = rest[:budget].rsplit("\n", 1)[0].rstrip()
+                block = f"{pinned_prefix}\n{trimmed_rest}…"
+            else:
+                block = pinned_prefix
+        else:
+            block = block[: max_chars - 1].rstrip() + "…"
     return block

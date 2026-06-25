@@ -99,6 +99,16 @@ def create_app() -> FastAPI:
 
         await asyncio.to_thread(log_kiosk_mcp_status)
 
+        from presence_ui.gateway.ws_guard import ensure_ws_guard_permissions
+
+        try:
+            if await asyncio.to_thread(ensure_ws_guard_permissions):
+                logging.getLogger(__name__).info(
+                    "WS guard: WebSearch/WebFetch denied in settings.local.json"
+                )
+        except Exception as exc:
+            logging.getLogger(__name__).debug("ws guard permissions sync skipped: %s", exc)
+
     @app.on_event("shutdown")
     async def _stop_background_tasks() -> None:
         from presence_ui.gateway.reminder_watchdog import stop_reminder_watchdog
@@ -670,6 +680,16 @@ def create_app() -> FastAPI:
         body = PersonaRejectRequest.model_validate(raw if isinstance(raw, dict) else {})
         return utf8_json(reject_persona_training_pairs(body).model_dump())
 
+    @app.post("/api/v1/training/persona/export")
+    async def post_persona_training_export() -> JSONResponse:
+        """Re-export persona LoRA candidates from native chat JSONL (RP-2a)."""
+        import asyncio
+
+        from presence_ui.training.persona_review import run_persona_training_export
+
+        result = await asyncio.to_thread(run_persona_training_export)
+        return utf8_json(result.model_dump())
+
     @app.get("/training/persona")
     async def training_persona_page() -> FileResponse:
         return FileResponse(
@@ -766,6 +786,18 @@ def create_app() -> FastAPI:
         from presence_ui.gateway.stm_api import stm_dream_digest
 
         return utf8_json(stm_dream_digest().model_dump(mode="json"))
+
+    @app.post("/api/v1/stm/rebuild-dream-digest")
+    async def post_stm_rebuild_dream_digest(request: Request) -> JSONResponse:
+        """Rebuild saved dream digest + overnight inner voice without re-dreaming."""
+        from presence_ui.gateway.stm_api import StmRebuildDreamDigestRequest, stm_rebuild_dream_digest
+
+        try:
+            raw = await request.json()
+        except json.JSONDecodeError:
+            raw = {}
+        body = StmRebuildDreamDigestRequest.model_validate(raw if isinstance(raw, dict) else {})
+        return utf8_json((await stm_rebuild_dream_digest(body)).model_dump(mode="json"))
 
     @app.post("/api/v1/autonomous-tick")
     async def post_autonomous_tick(request: Request) -> JSONResponse:

@@ -14,7 +14,7 @@ Input Leap 無効時は `KOYORI_INPUT_LEAP_SERVER` 未設定のまま → BT の
 
 **日本語（確認済み）**: Input Leap は半/全を **`'`** として転送（US 配列扱い）。**Mozc プロパティで Ctrl+Shift+Space** を IME トグルに設定 → キーボードで切替可。IBUS パネル あ/A も可。BT なら半/全。→ `docs/koyori-kiosk-ime.md`
 
-**再起動後**: koyori はキオスク起動時に client + **watch**（30s ごとに再起動）。ma-home Server は `install-input-leap-task.ps1`（ログオン時）。Surface だけ先に起動すると数分待つか watch が拾う。
+**再起動後**: koyori はキオスク起動時に client + **watch**（30s ごとに再起動）。ma-home Server は **WinGet 3.0.2 の Windows サービス `InputLeap`**（自動起動）+ 任意で GUI トレイ。Surface だけ先に起動すると数分待つか watch が拾う。
 
 ---
 
@@ -52,26 +52,40 @@ koyori-diagnose-input-leap
 sudo reboot
 ```
 
-### 4. ma-home（Phase 2）
+### 4. ma-home（Phase 2）— **推奨: WinGet 3.0.2**
 
-1. `C:\Programs\InputLeap` に zip 展開（インストーラ不要）
-2. **Server は GUI ではなく CLI**（zip 版は `input-leapd` サービス未登録 → GUI が IPC エラーになる）
+**3.0.3** の GitHub には Windows 用インストーラが無い（[issue #2254](https://github.com/input-leap/input-leap/issues/2254)）。ma-home は **3.0.2 公式インストーラ** を使う。
 
 ```powershell
-# 古い Server を全部止めてから1つだけ起動（複数起動すると証明書エラーが続く）
+cd C:\Users\ma\src\embodied-claude
+winget install -e --id input-leap.input-leap
+.\scripts\configure-input-leap-winget.ps1
+# トレイ GUI も出す: .\scripts\configure-input-leap-winget.ps1 -LaunchGui
+```
+
+- インストール先: `C:\Program Files\InputLeap\`
+- **Windows サービス `InputLeap`**（`input-leapd.exe`）が自動起動 — **ログオン Task は不要**
+- 設定: `scripts\input-leap\default.sgc` を `%USERPROFILE%\.config\embodied-claude\input-leap\` にコピー、crypto OFF、画面名 **MA-HOME** / **koyori**
+- 旧 **CLI + `EmbodiedClaude-InputLeapServer` タスク** は configure が削除（二重起動防止）
+
+GUI: `input-leap.exe` → **サーバー**、右端に koyori を配置（`default.sgc` と同じ）。Mouse Without Borders は **OFF**。
+
+**診断**: `.\scripts\check-koyori-stack.ps1`（Input Leap / Presence / 記憶 / TTS など一括）
+
+Firewall: TCP **24800**（configure が未設定なら追加）
+
+#### レガシー: zip 3.0.3 + CLI（非推奨）
+
+1. `C:\Programs\InputLeap` に zip 展開
+2. **Server は CLI のみ**（zip 版は `input-leapd` 未登録 → GUI が IPC エラーになりやすい）
+
+```powershell
 Get-Process input-leaps -ErrorAction SilentlyContinue | Stop-Process -Force
 cd C:\Programs\InputLeap
 .\input-leaps.exe -c .\default.sgc --disable-client-cert-checking --disable-crypto
 ```
 
-LAN なら **`--disable-crypto`** 推奨（fingerprint / クライアント証明書不要）。  
-crypto 有効時は Server に `--disable-client-cert-checking` が必須。
-
-3. Firewall: TCP **24800** 許可（済ならスキップ）
-
-```powershell
-New-NetFirewallRule -DisplayName "Input Leap" -Direction Inbound -Protocol TCP -LocalPort 24800 -Action Allow
-```
+LAN なら **`--disable-crypto`** 推奨。
 
 4. **Server の SSL フィンガープリントを koyori に信頼登録**（crypto 有効時は必須）
 
@@ -99,15 +113,18 @@ koyori-diagnose-input-leap
 
 ### 5. ma-home ログオン自動起動
 
+**WinGet 3.0.2（推奨）**: サービス `InputLeap` が **自動起動**（`configure-input-leap-winget.ps1`）。`install-input-leap-task.ps1` は **使わない**。
+
+**レガシー CLI のみ**（zip 3.0.3）:
+
 ```powershell
-cd C:\Users\ma\src\embodied-claude
 .\scripts\install-input-leap-task.ps1
 ```
 
 ログ: `%USERPROFILE%\.config\embodied-claude\logs\input-leap-server.log`  
 解除: `.\scripts\install-input-leap-task.ps1 -Uninstall`
 
-`scripts\input-leap\default.sgc` を `C:\Programs\InputLeap\` にコピーして使う。
+`scripts\input-leap\default.sgc` を Server 設定に使う（WinGet は configure がユーザ設定ディレクトリへコピー）。サービス反映には **管理者 PowerShell** で `Restart-Service InputLeap` が必要な場合あり。
 
 ### 6. Mouse Without Borders との関係
 

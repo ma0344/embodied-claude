@@ -8,6 +8,8 @@ from pathlib import Path
 import httpx
 from interaction_orchestrator_mcp.schemas import InteractionContext, ResponsePlan
 
+from presence_ui.gateway.ws_guard import ws_guard_stable_append
+
 
 def _lm_studio_settings() -> tuple[str, str, str]:
     base = (
@@ -132,25 +134,27 @@ def build_reply_prompt(
 
 def build_social_turn_delta(*, ctx: InteractionContext, plan: ResponsePlan) -> str:
     """Per-turn sociality block (compose + plan). Changes every turn — not for appendSystemPrompt."""
-    parts: list[str] = []
-    if ctx.compact_prompt_block:
-        parts.append(f"[Social context]\n{ctx.compact_prompt_block}")
-    elif ctx.session_context_block:
-        parts.append(f"[Recent context]\n{ctx.session_context_block}")
+    head: list[str] = []
+    body: list[str] = []
+    tail: list[str] = []
     if plan.must_include:
-        parts.append(f"[Must include] {'; '.join(plan.must_include)}")
+        head.append(f"[Must include] {'; '.join(plan.must_include)}")
     if plan.must_avoid:
-        parts.append(f"[Must avoid] {'; '.join(plan.must_avoid)}")
+        head.append(f"[Must avoid] {'; '.join(plan.must_avoid)}")
+    if ctx.compact_prompt_block:
+        body.append(f"[Social context]\n{ctx.compact_prompt_block}")
+    elif ctx.session_context_block:
+        body.append(f"[Recent context]\n{ctx.session_context_block}")
     if plan.why_this_move:
-        parts.append(f"[Social move: {plan.primary_move}] {plan.why_this_move}")
+        tail.append(f"[Social move: {plan.primary_move}] {plan.why_this_move}")
     if plan.primary_move == "write_private_reflection":
-        parts.append(
+        tail.append(
             "[Action] Gateway will save a private reflection server-side. "
             "Do not send a visible chat reply to まー (no user-facing text). "
             "If you draft the note, use first-person inner voice only — "
             "no injection tags or tool names."
         )
-    return "\n\n".join(parts)
+    return "\n\n".join([*head, *body, *tail])
 
 
 def build_social_prompt_prefix(*, ctx: InteractionContext, plan: ResponsePlan) -> str:
@@ -165,6 +169,8 @@ Server-side compose/plan runs before each turn. The user message may include a
 That block is for you only — never quote it to まー.
 Obey the latest turn's [Must include] / [Must avoid] / [Social move] only.
 When [relevant_memories] appear in gateway_turn_context, answer from them directly.
+When [schedule_facts] appear, state that day/time in your reply — do not hedge with
+「まだ確定してへん」 or roleplay memory search (e.g. （記憶を検索中）).
 Do NOT call mcp__memory__recall or other memory MCP tools for ordinary recall questions.
 [recent_experiences] is audit metadata only — never continue or quote prior agent_response wording."""
 
@@ -177,6 +183,9 @@ Do not call yourself 「こより」in third person. Do not sound like a product
 def build_gateway_stable_append() -> str:
     """Stable appendSystemPrompt: gateway rules + SOUL core (or voice anchor fallback)."""
     parts = [GATEWAY_STABLE_APPEND]
+    ws = ws_guard_stable_append()
+    if ws:
+        parts.append(ws)
     if _soul_core_in_append():
         core = load_soul_core()
         if core:

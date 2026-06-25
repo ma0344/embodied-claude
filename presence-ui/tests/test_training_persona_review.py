@@ -96,5 +96,37 @@ def test_training_persona_page(client: TestClient) -> None:
     resp = client.get("/training/persona")
     assert resp.status_code == 200
     assert "Persona LoRA" in resp.text
+    assert "会話から再 export" in resp.text
     assert "選択を学習から除外" in resp.text
     assert 'class="pager-prev"' in resp.text
+
+
+def test_training_persona_export(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    candidates = tmp_path / "candidates.jsonl"
+    curated = tmp_path / "curated.jsonl"
+    rejected = tmp_path / "rejected.json"
+    monkeypatch.setenv("PERSONA_TRAINING_CANDIDATES_JSONL", str(candidates))
+    monkeypatch.setenv("PERSONA_TRAINING_JSONL", str(curated))
+    monkeypatch.setenv("PERSONA_TRAINING_REJECTED_JSON", str(rejected))
+
+    from presence_ui.training.persona_export import PersonaExportStats
+
+    monkeypatch.setattr(
+        "presence_ui.training.persona_review.export_persona_jsonl",
+        lambda **kwargs: PersonaExportStats(
+            sessions_scanned=3,
+            pairs_written=12,
+            pairs_skipped=4,
+        ),
+    )
+
+    resp = client.post("/api/v1/training/persona/export")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ok"] is True
+    assert data["sessions_scanned"] == 3
+    assert data["pairs_written"] == 12
+    assert data["pairs_skipped"] == 4
+    assert data["curated_total"] == 0

@@ -59,6 +59,44 @@ def test_detect_personal_fact_intent(text: str, expected_substr: str | None) -> 
 
 
 @pytest.mark.parametrize(
+    ("text", "promote_ltm", "gist_substr"),
+    [
+        (
+            "僕のやっている会社のグループホームの名前が「ここっち」だよ",
+            True,
+            "ここっち",
+        ),
+        (
+            "ちがうよ（笑）「ここっち」のお仕事",
+            True,
+            "ここっち",
+        ),
+        (
+            "今日はここっちのお仕事をぼちぼちやるかな",
+            None,
+            None,
+        ),
+        (
+            "ここっちのこと覚えてる？",
+            None,
+            None,
+        ),
+    ],
+)
+def test_detect_self_disclosure(
+    text: str, promote_ltm: bool | None, gist_substr: str | None
+) -> None:
+    intent = dm.detect_self_disclosure(text)
+    if promote_ltm is None:
+        assert intent is None
+        return
+    assert intent is not None
+    assert intent.promote_ltm is promote_ltm
+    if gist_substr:
+        assert gist_substr in intent.gist
+
+
+@pytest.mark.parametrize(
     ("text", "limit", "oldest_first"),
     [
         ("最初から10個分の記憶を完全なリストで出して", 10, True),

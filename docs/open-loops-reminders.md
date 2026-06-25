@@ -14,6 +14,7 @@
 - **OL1c（2026-06-19）**: 日曜始まりの週界 + 曜日 lookup（コードのみ）— `来週の火曜` / `再来週の月曜` / `一週間後` / `N日後` / `来月の頭` / `今週末` / `6月20日` など
 - **OL2（temporal）（2026-06-19）**: `次の{曜}` / `今度の{曜}`（同義・次に来るその曜日）、`来週中` 等の曖昧スパンはアンカーせず `needs_date_confirmation` → compose `[date_confirmation_needed]` / plan `must_include` でまーに聞く。`social_core.ja_timex_bridge`（任意・PoC/ベンチ用）
 - 期限切れ loop は ingest / 自律 tick 前の `close_stale_open_loops` で `status=closed`（アンカー後は `resolved_date` でも判定）
+- **OL5（未）**: 予定消化（作った/できた）でも loop close — [backlog OL5](./backlog-ma-home.md#ol5--予定消化で-loop-終了合意-2026-06-25)
 - 手動掃除: `scripts/purge-stale-open-loops.py`（共有ロジックは `social_core.date_resolution`）
 
 ### OL2 — リマインド
@@ -21,6 +22,7 @@
 1. 部屋で「10時に〇〇をリマインドして」等 → `create_commitment(due_at)`（`reminder_intent.py`）
 2. **Phase B**: ルールで `due_at` が取れないがリマインド意図がある発話 → Gateway が LM Studio で JSON spec を **登録時に1回だけ** 生成 → `create_reminder_from_spec(source=reminder_llm)`（`PRESENCE_LLM_REMINDER_SPEC=1` 既定、0 で無効）
 3. compose が `list_due_commitments` で `[commitments_due]` を注入（旧 `person_model.commitments` バグ修正済み）
+   - **注意**: `list_due_commitments` は **due_at を過ぎた** active のみ（未来の 16:30 リマインドは compose に出ない）。発火は reminder watchdog / 自律 tick。
 4. **reminder watchdog**（60s）または 15m 自律 tick: `remind_commitment_direct`（`speak_line` 固定、LLM なし）→ outbound + `room_say`
 
 ```powershell

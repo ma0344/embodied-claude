@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from social_core.stm import StmEntry
+from social_core.stm_episode import sanitize_episode_summary_text
 from social_core.stm_scoring import (
     StmScoreBreakdown,
     detect_topics,
@@ -24,6 +25,7 @@ DIGEST_EXCLUDE_KINDS = frozenset(
 # Lower number = higher priority in morning [dream_digest].
 DIGEST_KIND_PRIORITY: dict[str, int] = {
     "episode_close": 10,
+    "self_disclosure": 12,
     "interpretation_shift": 15,
     "body_affliction": 20,
     "agent_boundary": 20,
@@ -145,7 +147,10 @@ def build_dream_digest(
     lines = ["[dream_digest]"]
     total = len("[dream_digest]\n[/dream_digest]")
     for entry in selected:
-        line = f"- ({entry.kind}) {entry.summary[:220]}"
+        summary = entry.summary
+        if entry.kind == "episode_close":
+            summary = sanitize_episode_summary_text(summary)
+        line = f"- ({entry.kind}) {summary[:220]}"
         if total + len(line) + 1 > max_chars:
             break
         lines.append(line)
@@ -155,6 +160,8 @@ def build_dream_digest(
 
 
 def memory_category_for_stm(entry: StmEntry) -> str:
+    if entry.kind == "self_disclosure":
+        return "memory"
     if entry.kind in {"body_affliction", "agent_boundary"}:
         return "feeling"
     if entry.kind in {"interpretation_shift", "agent_private_reflection"}:

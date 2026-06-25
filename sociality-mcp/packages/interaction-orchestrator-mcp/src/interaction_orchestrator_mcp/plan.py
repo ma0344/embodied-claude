@@ -4,6 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from relationship_mcp.inference import is_archive_remember_utterance
+
+from .recall_query import (
+    extract_schedule_facts,
+    is_temporal_question,
+    temporal_schedule_contract_enabled,
+)
 from .schemas import (
     BoundaryHint,
     InitiativeHint,
@@ -328,6 +335,17 @@ def _pick_must_lists(
 
     if primary_move == "answer_directly":
         must_include.append("direct, contract-aware answer")
+    schedule_answer = (
+        extract_schedule_facts(
+            user_text,
+            [m.content for m in ctx.relevant_memories if m.use_policy == "mentionable"]
+            + list((ctx.person_model or {}).get("profile_gists") or []),
+        )
+        if user_text
+        and is_temporal_question(user_text)
+        and temporal_schedule_contract_enabled()
+        else []
+    )
     if ctx.session_history and primary_move in {
         "answer_directly",
         "answer_with_empathy",
@@ -338,7 +356,8 @@ def _pick_must_lists(
             "do not cold-start or impersonate a different persona"
         )
     if ctx.open_loops and primary_move in {"answer_directly", "write_private_reflection"}:
-        must_include.append("reference at least one concrete open loop if relevant")
+        if not schedule_answer:
+            must_include.append("reference at least one concrete open loop if relevant")
     pending_dates = [loop for loop in ctx.open_loops if loop.needs_date_confirmation]
     if pending_dates and primary_move in {
         "answer_directly",
@@ -412,6 +431,21 @@ def _pick_must_lists(
         elif primary_move in {"answer_directly", "answer_with_empathy"}:
             must_include.append(
                 "multiple body issues detected — ask まー for help if self-remedy failed"
+            )
+    if (
+        user_text
+        and is_temporal_question(user_text)
+        and temporal_schedule_contract_enabled()
+        and primary_move in {"answer_directly", "answer_with_empathy"}
+    ):
+        schedule_facts = schedule_answer
+        if schedule_facts:
+            must_include.append(
+                "temporal schedule question — state the saved schedule directly: "
+                f"{schedule_facts[0]}; do NOT say the date is unknown"
+            )
+            must_avoid.append(
+                "meta narration like （記憶を検索中） or pretending to search memory"
             )
     return must_include, must_avoid
 

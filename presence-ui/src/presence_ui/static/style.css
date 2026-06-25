@@ -73,6 +73,43 @@ body {
   display: none;
 }
 
+.kiosk-volume-overlay {
+  position: fixed;
+  left: 50%;
+  top: 18%;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.85rem 1.35rem;
+  border-radius: 999px;
+  background: rgba(45, 40, 36, 0.88);
+  color: #f8f4ec;
+  font-size: 1.65rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
+  transform: translate(-50%, 8px) scale(0.96);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.kiosk-volume-overlay.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.kiosk-volume-overlay__icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.kiosk-volume-overlay__pct {
+  min-width: 3.2ch;
+  text-align: center;
+}
+
 .room--kiosk .top-bar {
   padding-bottom: 0.35rem;
 }
@@ -1060,6 +1097,8 @@ body {
 .message-body {
   white-space: pre-wrap;
   word-break: break-word;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .message-body--md {
@@ -1268,16 +1307,24 @@ body {
   padding: 0.5rem 0.85rem;
 }
 
-/* C11a: touch — pan-y scroll, no accidental text selection on messages */
+/* C11a: touch — vertical pan on scroll; message text remains selectable for copy/share */
 .room--kiosk .chat-scroll {
   touch-action: pan-y;
-  -webkit-user-select: none;
-  user-select: none;
 }
 
 .room--kiosk .message,
 .room--kiosk .message-body,
 .room--kiosk .message .meta-line {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.room--kiosk .message-copy-btn,
+.room--kiosk .chat-send,
+.room--kiosk .drawer-action,
+.room--kiosk .room-drawer-open,
+.room--kiosk .room-drawer__close,
+.room--kiosk .status-card__toggle {
   -webkit-user-select: none;
   user-select: none;
 }

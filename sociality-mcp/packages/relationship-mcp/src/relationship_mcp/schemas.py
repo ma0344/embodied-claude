@@ -79,4 +79,5 @@ class PersonModel(BaseModel):
     rituals: list[RitualRecord]
     boundaries: list[str]
     relationship_summary: str
+    profile_gists: list[str] = Field(default_factory=list)
     last_updated: str

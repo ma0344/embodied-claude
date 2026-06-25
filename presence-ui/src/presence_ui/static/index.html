@@ -245,11 +245,16 @@
     </div>
   </div>
 
+  <div id="kiosk-volume-overlay" class="kiosk-volume-overlay" hidden aria-live="polite" aria-atomic="true">
+    <span class="kiosk-volume-overlay__icon" aria-hidden="true">🔊</span>
+    <span id="kiosk-volume-overlay-pct" class="kiosk-volume-overlay__pct">0%</span>
+  </div>
+
   <script src="/static/vendor/marked.min.js"></script>
   <script src="/static/vendor/purify.min.js"></script>
   <script src="/static/chat-markdown.js?v=20260620-citation-fix"></script>
   <script src="/static/cc-messages.js?v=20260615-memory-inject"></script>
   <script src="/static/koyori-voice.js?v=20260619-inner-voice-1"></script>
-  <script src="/static/app.js?v=20260619-inner-voice-1"></script>
+  <script src="/static/app.js?v=20260625-volume-overlay"></script>
 </body>
 </html>

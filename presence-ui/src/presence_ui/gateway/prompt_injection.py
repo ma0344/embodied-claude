@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from presence_ui.services.llm import GATEWAY_STABLE_APPEND, build_gateway_stable_append, prepend_gateway_turn_context
+from presence_ui.services.llm import build_gateway_stable_append, prepend_gateway_turn_context
 
 
 def kv_stable_append_enabled() -> bool:

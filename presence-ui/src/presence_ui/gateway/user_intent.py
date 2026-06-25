@@ -12,6 +12,7 @@ from presence_ui.gateway.deterministic_memory import (
     detect_personal_fact_intent,
     detect_remember_intent,
 )
+from presence_ui.gateway.search_prefetch import detect_web_search_intent
 from presence_ui.gateway.see_intent import detect_ptz_intent, detect_see_intent
 
 _SPEECH = re.compile(
@@ -34,6 +35,7 @@ class UserIntent:
     explicit_say: bool
     wants_observe: bool
     wants_remember: bool
+    wants_web_search: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +61,7 @@ def resolve_user_intent(text: str) -> UserIntent:
             explicit_say=False,
             wants_observe=False,
             wants_remember=False,
+            wants_web_search=False,
         )
     wants_speech = bool(_SPEECH.search(line))
     explicit_say = bool(_EXPLICIT_SAY.search(line))
@@ -73,6 +76,7 @@ def resolve_user_intent(text: str) -> UserIntent:
         explicit_say=explicit_say,
         wants_observe=wants_observe,
         wants_remember=wants_remember,
+        wants_web_search=detect_web_search_intent(line),
     )
 
 
@@ -114,6 +118,8 @@ def merge_intent_with_plan(
     intent: UserIntent,
     plan: ResponsePlan,
     vision_prefetch_done: bool = False,
+    web_search_prefetch_done: bool = False,
+    url_prefetch_done: bool = False,
     remember_saved: bool = False,
 ) -> EffectiveTurnBody:
     """Combine まーの要求 with plan/boundary — plan can veto gateway body actions."""
@@ -130,6 +136,18 @@ def merge_intent_with_plan(
         notes.append(
             "[Action] User asked to see/move camera but social plan selected "
             f"{plan.primary_move}. Text reply only; do NOT call wifi-cam MCP tools."
+        )
+
+    if web_search_prefetch_done:
+        notes.append(
+            "[Action] Gateway already ran web_search_prefetch. "
+            "Do NOT call WebSearch/WebFetch; page facts only from url_prefetch excerpt."
+        )
+
+    if url_prefetch_done:
+        notes.append(
+            "[Action] Gateway already ran url_prefetch. "
+            "Describe page contents ONLY from excerpt; do NOT infer from snippets or training data."
         )
 
     if remember_saved:

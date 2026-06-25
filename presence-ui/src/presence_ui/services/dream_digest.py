@@ -26,6 +26,7 @@ class DreamDigestRecord:
     consolidate_ok: bool = False
     consolidate_stats: dict[str, Any] | None = None
     daybook_day: str | None = None
+    inner_voice_summary: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -33,6 +34,8 @@ class DreamDigestRecord:
             data.pop("consolidate_stats", None)
         if data.get("daybook_day") is None:
             data.pop("daybook_day", None)
+        if data.get("inner_voice_summary") is None:
+            data.pop("inner_voice_summary", None)
         return data
 
     @classmethod
@@ -48,6 +51,7 @@ class DreamDigestRecord:
             if isinstance(data.get("consolidate_stats"), dict)
             else None,
             daybook_day=_opt_str(data.get("daybook_day")),
+            inner_voice_summary=_opt_str(data.get("inner_voice_summary")),
         )
 
 

@@ -121,6 +121,101 @@ function Get-PresenceNativeLoginPassword {
     return "koyori-poc"
 }
 
+function Test-PresenceChatSendProbe {
+    <#
+    .SYNOPSIS
+    POST chat (native SSE or legacy NDJSON) and fail on HTTP 5xx before stream starts.
+    Catches intercept bugs that /health and compose-plan miss (e.g. missing imports).
+    #>
+    param(
+        [string]$Port = $(if ($env:PRESENCE_UI_PORT) { $env:PRESENCE_UI_PORT } else { "8090" }),
+        [bool]$NativeChat = $true,
+        [double]$TimeoutSec = 15.0
+    )
+
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $base = "http://127.0.0.1:$Port"
+
+    try {
+        $chatUri = if ($NativeChat) { "$base/api/native/chat" } else { "$base/api/chat" }
+        $headers = @{}
+
+        if ($NativeChat) {
+            $password = Get-PresenceNativeLoginPassword
+            $loginJson = (@{ password = $password } | ConvertTo-Json -Compress)
+            $loginResp = Invoke-RestMethod -Method Post -Uri "$base/api/native/login" `
+                -ContentType "application/json; charset=utf-8" `
+                -Body $loginJson -TimeoutSec 5
+            $token = [string]$loginResp.token
+            if ([string]::IsNullOrWhiteSpace($token)) {
+                $sw.Stop()
+                return @{ Ok = $false; Reason = "native login: token missing"; Ms = $sw.ElapsedMilliseconds }
+            }
+            $headers["Authorization"] = "Bearer $token"
+            $bodyObj = @{ prompt = "__healthcheck__" }
+        } else {
+            $bodyObj = @{ message = "__healthcheck__" }
+        }
+
+        $bodyJson = ($bodyObj | ConvertTo-Json -Compress)
+        $client = [System.Net.Http.HttpClient]::new()
+        $client.Timeout = [TimeSpan]::FromSeconds($TimeoutSec)
+
+        $request = [System.Net.Http.HttpRequestMessage]::new(
+            [System.Net.Http.HttpMethod]::Post,
+            $chatUri
+        )
+        $request.Content = [System.Net.Http.StringContent]::new(
+            $bodyJson,
+            [System.Text.Encoding]::UTF8,
+            "application/json"
+        )
+        foreach ($key in $headers.Keys) {
+            $null = $request.Headers.TryAddWithoutValidation($key, $headers[$key])
+        }
+
+        $response = $client.SendAsync(
+            $request,
+            [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead
+        ).GetAwaiter().GetResult()
+
+        $status = [int]$response.StatusCode
+        if ($status -ge 500) {
+            $detail = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            $snippet = ($detail -replace '\s+', ' ').Trim()
+            if ($snippet.Length -gt 140) { $snippet = $snippet.Substring(0, 140) + "..." }
+            $sw.Stop()
+            $client.Dispose()
+            return @{
+                Ok     = $false
+                Reason = "HTTP $status $snippet"
+                Ms     = $sw.ElapsedMilliseconds
+            }
+        }
+        if ($status -lt 200 -or $status -ge 300) {
+            $sw.Stop()
+            $client.Dispose()
+            return @{ Ok = $false; Reason = "HTTP $status"; Ms = $sw.ElapsedMilliseconds }
+        }
+
+        $stream = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+        $buffer = New-Object byte[] 256
+        $read = $stream.Read($buffer, 0, $buffer.Length)
+        $stream.Dispose()
+        $client.Dispose()
+        $sw.Stop()
+
+        if ($read -le 0) {
+            return @{ Ok = $false; Reason = "empty response body"; Ms = $sw.ElapsedMilliseconds }
+        }
+
+        return @{ Ok = $true; Ms = $sw.ElapsedMilliseconds; Status = $status }
+    } catch {
+        $sw.Stop()
+        return @{ Ok = $false; Reason = $_.Exception.Message; Ms = $sw.ElapsedMilliseconds }
+    }
+}
+
 function Initialize-PresenceUiEnv {
     param(
         [string]$Repo,

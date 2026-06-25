@@ -64,7 +64,7 @@ uv run python ..\scripts\export-persona-lora-jsonl.py --dry-run
 
    **ブラウザで確認（ma-home）**:
 
-   `http://localhost:8090/training/persona` — チェックで選択 → **選択を学習から除外**。候補 / 学習用 / 除外件数を表示。ページ送りは上下両方。API: `GET /api/v1/training/persona`, `POST /api/v1/training/persona/reject`
+   `http://localhost:8090/training/persona` — **「会話から再 export」**で native JSONL から候補を再生成 → チェックで選択 → **選択を学習から除外**。候補 / 学習用 / 除外件数を表示。API: `POST /api/v1/training/persona/export`, `GET /api/v1/training/persona`, `POST /api/v1/training/persona/reject`
 
    **プレビュー（Markdown）**:
 

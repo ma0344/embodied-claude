@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from .db import SocialDB
+from .stm_episode import sanitize_episode_summary_text
 from .time import DEFAULT_POLICY_TIMEZONE, local_view, utc_now
 
 StmSource = Literal[
@@ -412,6 +413,52 @@ class StmStore:
         )
         return int(row[0]) if row else 0
 
+    def update_summary(self, entry_id: str, summary: str) -> bool:
+        text = (summary or "").strip()
+        if not text:
+            return False
+        with self.db.transaction() as conn:
+            cursor = conn.execute(
+                "UPDATE stm_entries SET summary = ? WHERE entry_id = ?",
+                (text, entry_id),
+            )
+            return int(cursor.rowcount or 0) > 0
+
+    def repair_episode_close_summaries(self) -> tuple[int, int]:
+        """Sanitize polluted episode_close rows (MEM-5g, inbound echo). Returns (scanned, updated)."""
+        rows = self.db.fetchall(
+            """
+            SELECT entry_id, summary FROM stm_entries
+            WHERE kind = 'episode_close'
+              AND (
+                summary LIKE '%gateway_turn_context%'
+                OR summary LIKE '%まー:%こより:%'
+              )
+            """
+        )
+        updated = 0
+        for row in rows:
+            cleaned = sanitize_episode_summary_text(str(row["summary"]))
+            if cleaned != row["summary"]:
+                if self.update_summary(str(row["entry_id"]), cleaned):
+                    updated += 1
+        return len(rows), updated
+
+    def get_entry(self, entry_id: str) -> StmEntry | None:
+        row = self.db.fetchone(
+            "SELECT * FROM stm_entries WHERE entry_id = ?",
+            (entry_id,),
+        )
+        if row is None:
+            return None
+        return _row_to_entry(row)
+
+
+def _summary_for_prompt(entry: StmEntry) -> str:
+    if entry.kind == "episode_close":
+        return sanitize_episode_summary_text(entry.summary)
+    return entry.summary
+
 
 def _row_to_entry(row: Any) -> StmEntry:
     keys = row.keys() if hasattr(row, "keys") else []
@@ -441,7 +488,8 @@ def build_stm_prompt_block(entries: list[StmEntry], *, max_chars: int = 2000) ->
     lines = ["[stm_recent]"]
     total = len("[stm_recent]\n[/stm_recent]")
     for entry in entries[:12]:
-        line = f"- ({entry.kind}) {entry.summary[:200]}"
+        summary = _summary_for_prompt(entry)
+        line = f"- ({entry.kind}) {summary[:200]}"
         if total + len(line) + 1 > max_chars:
             break
         lines.append(line)

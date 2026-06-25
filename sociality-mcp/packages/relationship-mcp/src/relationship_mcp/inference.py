@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from social_core import clamp01
 
 STRESS_KEYWORDS = ("疲れ", "tired", "stress", "しんど", "overwhelmed", "会議多")
@@ -33,6 +35,67 @@ RECALL_MARKERS = (
     "remember?",
     "do you remember",
     "recall",
+)
+
+FOLLOW_UP_LOOP_MARKERS = (
+    "明日",
+    "tomorrow",
+    "今日中",
+    "来週",
+    "今週中",
+    "来月中",
+    "また",
+    "続き",
+    "後で",
+    "リマインド",
+    "remind me",
+    "remind ",
+    "忘れん",
+    "忘れない",
+    "会議",
+    "meeting",
+    "dentist",
+    "歯医者",
+)
+
+_TRAILING_REMEMBER_TAIL = (
+    r"(?:[。．!！]|(?:よ|ね|な|わ|さ|かな|や|で)[。．!！]?)?$"
+)
+
+# Keep in sync with ``.claude/hooks/memory_auto_save.py`` (_CONTENT_PATTERNS / _TRIGGER_HINT).
+_ARCHIVE_REMEMBER_CONTENT_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(
+        rf"^(.+?)(?:を|って)?(?:覚えておいて|覚えといて|覚えとく|記憶して|記憶しといて){_TRAILING_REMEMBER_TAIL}",
+        re.DOTALL,
+    ),
+    re.compile(
+        r"^(?:覚えておいて|覚えといて|記憶して|記憶しといて)[：:\s]+(.+)$",
+        re.DOTALL,
+    ),
+    re.compile(
+        r"^(?:remember(?:\s+this|\s+forever)?|store\s+this(?:\s+permanently)?)"
+        r"[：:\s]+(.+)$",
+        re.IGNORECASE | re.DOTALL,
+    ),
+    re.compile(
+        r"^(.+?)\s+(?:please\s+)?remember(?:\s+this|\s+forever)?[.!]?$",
+        re.IGNORECASE | re.DOTALL,
+    ),
+)
+
+_ARCHIVE_IMPERATIVE_ONLY = re.compile(
+    rf"^(?:これ|それ|あれ)?(?:を)?(?:覚えておいて|覚えといて|記憶して|記憶しといて){_TRAILING_REMEMBER_TAIL}",
+)
+
+_REMEMBER_TRIGGER_HINT = re.compile(
+    r"(覚えておいて|覚えといて|覚えとく|記憶して|記憶しといて|"
+    r"remember\s+forever|remember\s+this|store\s+this)",
+    re.IGNORECASE,
+)
+
+_QUOTED_JA = re.compile(r"[「『]([^」』]+)[」』]")
+_LEADING_FILLER = re.compile(
+    r"^(?:今度は|今回は|次は|次から|もう一度|あらためて|改めて|ちなみに)[、,\s]*",
 )
 
 FUTURE_REMEMBER_MARKERS = (
@@ -89,6 +152,60 @@ def is_recall_loop_topic(topic: str) -> bool:
     if any(marker in compact for marker in FUTURE_REMEMBER_MARKERS):
         return False
     return any(marker in compact for marker in ("覚えてる", "覚えてます", "覚えとる"))
+
+
+def _normalize_archive_content(raw: str) -> str:
+    content = raw.strip()
+    quoted = _QUOTED_JA.findall(content)
+    if quoted:
+        return quoted[-1].strip()
+    content = _LEADING_FILLER.sub("", content).strip()
+    content = re.sub(r"^[「『\"']+|[」』\"']+$", "", content).strip()
+    return content.strip("、, ")
+
+
+def extract_archive_remember_content(text: str) -> str | None:
+    """Extract storable content from an archival remember utterance (MEM-8f)."""
+    stripped = (text or "").strip()
+    if len(stripped) < 4 or not _REMEMBER_TRIGGER_HINT.search(stripped):
+        return None
+    if _ARCHIVE_IMPERATIVE_ONLY.match(stripped):
+        return None
+    for pattern in _ARCHIVE_REMEMBER_CONTENT_PATTERNS:
+        match = pattern.match(stripped)
+        if not match:
+            continue
+        content = _normalize_archive_content(match.group(1).strip())
+        if len(content) >= 2:
+            return content
+    return None
+
+
+def has_follow_up_loop_markers(text: str) -> bool:
+    """True when the utterance signals ongoing follow-up, not archive-only."""
+    stripped = (text or "").strip()
+    if not stripped:
+        return False
+    lowered = stripped.lower()
+    if any(marker in stripped or marker in lowered for marker in FOLLOW_UP_LOOP_MARKERS):
+        return True
+    if "pr" in lowered and ("review" in lowered or "レビュー" in stripped):
+        return True
+    return False
+
+
+def is_archive_remember_utterance(text: str) -> bool:
+    """Storage-for-later remember — skip open-loop creation (MEM-8f / OL-ARCHIVE 2)."""
+    if is_recall_utterance(text):
+        return False
+    if has_follow_up_loop_markers(text):
+        return False
+    return extract_archive_remember_content(text) is not None
+
+
+def has_remember_save_trigger(text: str) -> bool:
+    stripped = (text or "").strip()
+    return len(stripped) >= 4 and bool(_REMEMBER_TRIGGER_HINT.search(stripped))
 
 
 def is_dismiss_utterance(text: str) -> bool:

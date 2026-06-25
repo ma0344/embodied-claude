@@ -32,6 +32,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Literal, Protocol
 
+from interaction_orchestrator_mcp.recall_query import (
+    RecallPurpose,
+    build_recall_queries,
+    compose_hit_rank,
+    should_skip_compose_recall,
+)
+
 UsePolicy = Literal["mentionable", "background_only", "do_not_surface"]
 
 _MAX_ROWS_CONSIDERED = 80
@@ -69,6 +76,8 @@ class OrchestratorMemoryAdapter(Protocol):
         max_results: int = 6,
         include_private: bool = True,
         exclude_categories: Iterable[str] = (),
+        purpose: RecallPurpose = "compose",
+        profile_gists: list[str] | None = None,
     ) -> list[RecallHit]:
         ...
 
@@ -178,10 +187,21 @@ class SQLiteMemoryAdapter:
         max_results: int = 6,
         include_private: bool = True,
         exclude_categories: Iterable[str] = (),
+        purpose: RecallPurpose = "compose",
+        profile_gists: list[str] | None = None,
     ) -> list[RecallHit]:
         if not self.db_path.exists():
             return []
-        keywords = _extract_keywords(user_text or "")
+        queries = build_recall_queries(
+            purpose=purpose,
+            user_text=user_text,
+            profile_gists=profile_gists,
+        )
+        if not queries:
+            return []
+        keywords = _extract_keywords(" ".join(queries))
+        if not keywords:
+            keywords = _extract_keywords(user_text or "")
         if not keywords:
             return []
         exclude = {str(c) for c in exclude_categories}
@@ -256,6 +276,8 @@ class NullMemoryAdapter:
         max_results: int = 6,
         include_private: bool = True,
         exclude_categories: Iterable[str] = (),
+        purpose: RecallPurpose = "compose",
+        profile_gists: list[str] | None = None,
     ) -> list[RecallHit]:
         return []
 
@@ -281,6 +303,8 @@ def _hits_from_http_items(
     *,
     max_results: int,
     include_private: bool,
+    purpose: RecallPurpose = "compose",
+    temporal: bool = False,
 ) -> list[RecallHit]:
     hits: list[RecallHit] = []
     for item in items:
@@ -289,6 +313,10 @@ def _hits_from_http_items(
             continue
         score = float(item.get("score") or 0.0)
         relevance = max(0.0, min(1.0, score))
+        if purpose == "compose":
+            relevance = compose_hit_rank(
+                content, base_relevance=relevance, temporal=temporal
+            )
         importance = max(1, min(5, int(round(relevance * 5)) or 3))
         category = "daily"
         policy, reason = _use_policy_for(
@@ -311,9 +339,9 @@ def _hits_from_http_items(
                 reason=f"{reason}; semantic recall score={relevance:.2f}",
             )
         )
-        if len(hits) >= max_results:
-            break
-    return hits
+    if purpose == "compose":
+        hits.sort(key=lambda h: h.relevance, reverse=True)
+    return hits[:max_results]
 
 
 @dataclass(slots=True)
@@ -333,12 +361,14 @@ class HttpMemoryAdapter:
     def _fetch_http(
         self,
         *,
-        user_text: str,
+        query: str,
         max_results: int,
         include_private: bool,
+        purpose: RecallPurpose = "compose",
+        temporal: bool = False,
     ) -> list[RecallHit]:
-        q = urllib.parse.quote(user_text)
-        url = f"{self._base()}/recall?q={q}&n={max_results}"
+        q = urllib.parse.quote(query)
+        url = f"{self._base()}/recall?q={q}&n={max(max_results, 6)}"
         try:
             with urllib.request.urlopen(url, timeout=self._timeout()) as resp:
                 body = resp.read().decode("utf-8", errors="replace")
@@ -353,8 +383,10 @@ class HttpMemoryAdapter:
         items = [item for item in payload if isinstance(item, dict)]
         return _hits_from_http_items(
             items,
-            max_results=max_results,
+            max_results=max(max_results * 2, 8),
             include_private=include_private,
+            purpose=purpose,
+            temporal=temporal,
         )
 
     def recall_for_response(
@@ -365,16 +397,45 @@ class HttpMemoryAdapter:
         max_results: int = 6,
         include_private: bool = True,
         exclude_categories: Iterable[str] = (),
+        purpose: RecallPurpose = "compose",
+        profile_gists: list[str] | None = None,
     ) -> list[RecallHit]:
         text = (user_text or "").strip()
         if len(text) < 2:
             return []
 
-        hits = self._fetch_http(
+        if purpose == "compose" and should_skip_compose_recall(text):
+            return []
+
+        from interaction_orchestrator_mcp.recall_query import _TEMPORAL_Q
+
+        temporal = bool(_TEMPORAL_Q.search(text))
+        queries = build_recall_queries(
+            purpose=purpose,
             user_text=text,
-            max_results=max_results,
-            include_private=include_private,
+            profile_gists=profile_gists,
         )
+        if not queries:
+            return []
+
+        merged: list[RecallHit] = []
+        seen_content: set[str] = set()
+        for query in queries:
+            for hit in self._fetch_http(
+                query=query,
+                max_results=max_results,
+                include_private=include_private,
+                purpose=purpose,
+                temporal=temporal,
+            ):
+                key = hit.content.strip()
+                if key in seen_content:
+                    continue
+                seen_content.add(key)
+                merged.append(hit)
+        merged.sort(key=lambda h: h.relevance, reverse=True)
+        hits = merged[:max_results]
+
         if hits:
             exclude = {str(c) for c in exclude_categories}
             if exclude:
@@ -388,6 +449,8 @@ class HttpMemoryAdapter:
                 max_results=max_results,
                 include_private=include_private,
                 exclude_categories=exclude_categories,
+                purpose=purpose,
+                profile_gists=profile_gists,
             )
         return []
 

@@ -19,7 +19,12 @@ from social_core.stm_dreaming import (
 
 from presence_ui.deps import get_stores
 from presence_ui.gateway.memory_http import http_consolidate, http_remember
-from presence_ui.services.dream_digest import DreamDigestRecord, save_dream_digest
+from presence_ui.services.dream_digest import (
+    DreamDigestRecord,
+    load_dream_digest,
+    save_dream_digest,
+)
+from presence_ui.services.overnight_inner_voice import synthesize_overnight_inner_voice
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +39,7 @@ class DreamingResult:
     consolidate_ok: bool = False
     consolidate_stats: dict[str, Any] | None = None
     digest_summary: str = ""
+    inner_voice_summary: str = ""
     daybook_day: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -46,6 +52,7 @@ class DreamingResult:
             "consolidate_ok": self.consolidate_ok,
             "consolidate_stats": self.consolidate_stats,
             "digest_summary": self.digest_summary,
+            "inner_voice_summary": self.inner_voice_summary,
             "daybook_day": self.daybook_day,
         }
 
@@ -115,6 +122,12 @@ def run_dreaming_job(
         logger.warning("Dreaming daybook failed: %s", exc)
 
     digest_summary = build_dream_digest(entries)
+    inner_voice_summary = synthesize_overnight_inner_voice(
+        entries,
+        person_id=person_id,
+        local_day=day,
+        timezone=stores.policy_timezone,
+    )
     dreamed_at = utc_now()
     marked = stm.mark_dreamed([entry.entry_id for entry in entries], dreamed_at=dreamed_at)
 
@@ -128,6 +141,7 @@ def run_dreaming_job(
             consolidate_ok=consolidate_ok,
             consolidate_stats=consolidate_stats,
             daybook_day=daybook_day,
+            inner_voice_summary=inner_voice_summary or None,
         )
     )
 
@@ -139,5 +153,50 @@ def run_dreaming_job(
         consolidate_ok=consolidate_ok,
         consolidate_stats=consolidate_stats,
         digest_summary=digest_summary,
+        inner_voice_summary=inner_voice_summary,
         daybook_day=daybook_day,
     )
+
+
+def rebuild_saved_dream_digest(
+    *,
+    person_id: str = "ma",
+    regenerate_inner_voice: bool = True,
+    use_llm: bool | None = None,
+) -> DreamDigestRecord | None:
+    """Rebuild digest (and optional inner voice) from saved stm_entry_ids (MEM-5g/5f-c)."""
+    record = load_dream_digest()
+    if record is None or not record.stm_entry_ids:
+        return None
+    stores = get_stores()
+    stm = StmStore(stores.db)
+    entries: list = []
+    for entry_id in record.stm_entry_ids:
+        entry = stm.get_entry(entry_id)
+        if entry is not None:
+            entries.append(entry)
+    if not entries:
+        return None
+    summary = build_dream_digest(entries)
+    inner_voice = record.inner_voice_summary or ""
+    if regenerate_inner_voice:
+        inner_voice = synthesize_overnight_inner_voice(
+            entries,
+            person_id=person_id,
+            local_day=record.local_day,
+            timezone=stores.policy_timezone,
+            use_llm=use_llm,
+        )
+    updated = DreamDigestRecord(
+        dreamed_at=record.dreamed_at,
+        local_day=record.local_day,
+        summary=summary,
+        stm_entry_ids=record.stm_entry_ids,
+        remembered_count=record.remembered_count,
+        consolidate_ok=record.consolidate_ok,
+        consolidate_stats=record.consolidate_stats,
+        daybook_day=record.daybook_day,
+        inner_voice_summary=inner_voice or None,
+    )
+    save_dream_digest(updated)
+    return updated

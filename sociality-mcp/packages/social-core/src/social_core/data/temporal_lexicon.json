@@ -1,0 +1,1180 @@
+{
+  "version": 1,
+  "week_starts": "sunday",
+  "timezone": "Asia/Tokyo",
+  "entries": [
+    {
+      "phrase": "再来週の月曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "再来週の火曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "再来週の水曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "再来週の木曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "再来週の金曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "再来週の土曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "再来週の日曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "今週の月曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "今週の火曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "今週の水曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "今週の木曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "今週の金曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "今週の土曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "今週の日曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "来週の月曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "来週の火曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "来週の水曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "来週の木曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "来週の金曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "来週の土曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "来週の日曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "再来週の月曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "再来週月曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "再来週の火曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "再来週火曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "再来週の水曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "再来週水曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "再来週の木曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "再来週木曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "再来週の金曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "再来週金曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "再来週の土曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "再来週土曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "再来週の日曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "再来週日曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "今週の月曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "今週月曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "今週の火曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "今週火曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "今週の水曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "今週水曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "今週の木曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "今週木曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "今週の金曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "今週金曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "今週の土曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "今週土曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "今週の日曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "今週日曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "来週の月曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "来週月曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "来週の火曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "来週火曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "来週の水曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "来週水曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "来週の木曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "来週木曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "来週の金曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "来週金曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "来週の土曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "来週土曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "来週の日曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "来週日曜日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "再来週の月",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "再来週月曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "再来週の火",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "再来週火曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "再来週の水",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "再来週水曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "再来週の木",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "再来週木曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "再来週の金",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "再来週金曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "再来週の土",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "再来週土曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "再来週の日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "再来週日曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "来月の初め",
+      "recipe": {
+        "kind": "month_start",
+        "month_offset": 1
+      }
+    },
+    {
+      "phrase": "再来月の頭",
+      "recipe": {
+        "kind": "month_start",
+        "month_offset": 2
+      }
+    },
+    {
+      "phrase": "あさって",
+      "recipe": {
+        "kind": "day_offset",
+        "offset_days": 2
+      }
+    },
+    {
+      "phrase": "今週の月",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "今週月曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "今週の火",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "今週火曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "今週の水",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "今週水曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "今週の木",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "今週木曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "今週の金",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "今週金曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "今週の土",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "今週土曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "今週の日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "今週日曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "来週の月",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "来週月曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "来週の火",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "来週火曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "来週の水",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "来週水曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "来週の木",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "来週木曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "来週の金",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "来週金曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "来週の土",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "来週土曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "来週の日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "来週日曜",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "再来週月",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "再来週火",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "再来週水",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "再来週木",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "再来週金",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "再来週土",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "再来週日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 2,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "来月の頭",
+      "recipe": {
+        "kind": "month_start",
+        "month_offset": 1
+      }
+    },
+    {
+      "phrase": "来月初め",
+      "recipe": {
+        "kind": "month_start",
+        "month_offset": 1
+      }
+    },
+    {
+      "phrase": "一週間後",
+      "recipe": {
+        "kind": "days_after",
+        "days": 7
+      }
+    },
+    {
+      "phrase": "1週間後",
+      "recipe": {
+        "kind": "days_after",
+        "days": 7
+      }
+    },
+    {
+      "phrase": "１週間後",
+      "recipe": {
+        "kind": "days_after",
+        "days": 7
+      }
+    },
+    {
+      "phrase": "再来週中",
+      "recipe": {
+        "kind": "needs_confirmation"
+      }
+    },
+    {
+      "phrase": "連休明け",
+      "recipe": {
+        "kind": "needs_confirmation"
+      }
+    },
+    {
+      "phrase": "しばらく",
+      "recipe": {
+        "kind": "needs_confirmation"
+      }
+    },
+    {
+      "phrase": "そのうち",
+      "recipe": {
+        "kind": "needs_confirmation"
+      }
+    },
+    {
+      "phrase": "明後日",
+      "recipe": {
+        "kind": "day_offset",
+        "offset_days": 2
+      }
+    },
+    {
+      "phrase": "あした",
+      "recipe": {
+        "kind": "day_offset",
+        "offset_days": 1
+      }
+    },
+    {
+      "phrase": "きょう",
+      "recipe": {
+        "kind": "day_offset",
+        "offset_days": 0
+      }
+    },
+    {
+      "phrase": "今週月",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "今週火",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "今週水",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "今週木",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "今週金",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "今週土",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "今週日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 0,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "来週月",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "月"
+      }
+    },
+    {
+      "phrase": "来週火",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "火"
+      }
+    },
+    {
+      "phrase": "来週水",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "水"
+      }
+    },
+    {
+      "phrase": "来週木",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "木"
+      }
+    },
+    {
+      "phrase": "来週金",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "金"
+      }
+    },
+    {
+      "phrase": "来週土",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "土"
+      }
+    },
+    {
+      "phrase": "来週日",
+      "recipe": {
+        "kind": "weekday_in_week",
+        "week_offset": 1,
+        "weekday": "日"
+      }
+    },
+    {
+      "phrase": "再来月",
+      "recipe": {
+        "kind": "month_start",
+        "month_offset": 2
+      }
+    },
+    {
+      "phrase": "今週末",
+      "recipe": {
+        "kind": "this_weekend"
+      }
+    },
+    {
+      "phrase": "来週中",
+      "recipe": {
+        "kind": "needs_confirmation"
+      }
+    },
+    {
+      "phrase": "近日中",
+      "recipe": {
+        "kind": "needs_confirmation"
+      }
+    },
+    {
+      "phrase": "明日",
+      "recipe": {
+        "kind": "day_offset",
+        "offset_days": 1
+      }
+    },
+    {
+      "phrase": "今日",
+      "recipe": {
+        "kind": "day_offset",
+        "offset_days": 0
+      }
+    },
+    {
+      "phrase": "来月",
+      "recipe": {
+        "kind": "month_start",
+        "month_offset": 1
+      }
+    },
+    {
+      "phrase": "週末",
+      "recipe": {
+        "kind": "this_weekend"
+      }
+    },
+    {
+      "phrase": "月末",
+      "recipe": {
+        "kind": "needs_confirmation"
+      }
+    },
+    {
+      "phrase": "月初",
+      "recipe": {
+        "kind": "needs_confirmation"
+      }
+    }
+  ]
+}

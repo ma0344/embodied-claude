@@ -304,6 +304,24 @@ class TestRecord:
         assert "どないしたん" not in ctx.prompt_summary
         assert "どないしたん" not in ctx.compact_prompt_block
 
+    def test_archive_remember_open_loops_filtered_from_compose(self, stores):
+        stores["relationship"].upsert_person(
+            person_id="ma", canonical_name="まー", aliases=[], role="companion"
+        )
+        with stores["relationship"].db.transaction() as conn:
+            conn.execute(
+                """
+                INSERT INTO open_loops(
+                    loop_id, person_id, topic, status, source_event_id, updated_at, detail_json
+                )
+                VALUES ('loop_archive', 'ma', ?, 'open', 'evt1', '2026-06-14T00:00:00+00:00', '{}')
+                """,
+                ("さっきの仕事の話、覚えといてね",),
+            )
+        ctx = _compose(stores, user_text="ねっとわん いつ")
+        assert "さっきの仕事の話" not in ctx.prompt_summary
+        assert "[open_loops]" not in ctx.compact_prompt_block or "さっきの仕事" not in ctx.compact_prompt_block
+
     def test_compose_includes_calendar_anchor(self, stores):
         ctx = _compose(stores, user_text="今日の日付って？")
         assert "Calendar today" in ctx.prompt_summary
@@ -571,6 +589,20 @@ class TestPlan:
         )
         assert plan.memory_use.use_specific_memory is True
         assert plan.memory_use.max_memories_to_surface >= 1
+
+    def test_profile_gists_in_compact_prompt_block(self, stores):
+        stores["relationship"].upsert_person(
+            person_id="ma", canonical_name="まー", aliases=[], role="companion"
+        )
+        stores["relationship"].record_self_disclosure_gist(
+            person_id="ma",
+            text="僕のやっている会社のグループホームの名前が「ここっち」だよ",
+            gist="まーのグループホーム名は「ここっち」（こよりプロジェクトの「こっち」と別）",
+            ts="2026-06-25T10:00:00+09:00",
+        )
+        ctx = _compose(stores, user_text="今日の予定は？")
+        assert "[person_profile_gists]" in ctx.compact_prompt_block
+        assert "ここっち" in ctx.compact_prompt_block
 
     def test_autonomous_with_dominant_desire_is_bounded(self, stores, monkeypatch, tmp_path):
         # Seed desires.json so the orchestrator sees a dominant desire.

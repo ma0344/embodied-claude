@@ -10,6 +10,10 @@ from typing import Callable
 from claude_code_server import AgentConfig, ChatRequest
 from fastapi import FastAPI
 
+from presence_ui.gateway.context_limits import (
+    lite_append_max_chars,
+    lite_compose_max_chars,
+)
 from presence_ui.gateway.prompt_block_safe import truncate_prompt_text
 
 from presence_ui.gateway.social_chat import ChatInterceptResult, intercept_chat_request
@@ -21,9 +25,9 @@ _SILENT_APPEND = (
     "Social plan selected stay_silent/defer. Reply with nothing visible to the user."
 )
 
-# Local LLM (8192 ctx) cannot carry full compose + MCP tools + history.
-_LITE_COMPOSE_MAX_CHARS = int(os.getenv("PRESENCE_LITE_COMPOSE_MAX_CHARS", "1200"))
-_LITE_APPEND_MAX_CHARS = int(os.getenv("PRESENCE_LITE_APPEND_MAX_CHARS", "2500"))
+# Native chat uses context_limits (defaults raised for ~87k ctx ma-home).
+_LITE_COMPOSE_MAX_CHARS = lite_compose_max_chars()
+_LITE_APPEND_MAX_CHARS = lite_append_max_chars()
 
 _MODEL_ENV_KEYS = (
     "CLAUDE_MODEL",

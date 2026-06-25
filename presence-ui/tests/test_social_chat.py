@@ -8,7 +8,7 @@ import pytest
 
 from interaction_orchestrator_mcp.schemas import InteractionContext, ResponseContract, ResponsePlan
 from presence_ui.gateway import social_chat
-from presence_ui.services.llm import GATEWAY_STABLE_APPEND
+from presence_ui.services.llm import build_gateway_stable_append
 
 
 def _minimal_ctx() -> InteractionContext:
@@ -71,7 +71,7 @@ def test_intercept_stable_append_in_message_not_dynamic_append(
     )
     assert result.forward is True
     assert result.payload is not None
-    assert result.payload["appendSystemPrompt"] == GATEWAY_STABLE_APPEND
+    assert result.payload["appendSystemPrompt"] == build_gateway_stable_append()
     assert "[gateway_turn_context" in result.payload["message"]
     assert result.payload["message"].endswith("hello")
     assert "[interaction_context]" in result.payload["message"]
@@ -161,7 +161,7 @@ def test_intercept_preserves_explicit_permission_mode(mock_stores: MagicMock) ->
     assert result.payload["permissionMode"] == "default"
 
 
-def test_intercept_includes_inbound_nudge(
+def test_intercept_includes_inbound_reply_dialogue(
     mock_stores: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("PRESENCE_KV_STABLE_APPEND", "1")
@@ -176,7 +176,19 @@ def test_intercept_includes_inbound_nudge(
     )
     assert result.forward is True
     msg = result.payload["message"] if result.payload else ""
-    assert "[inbound_nudge" in msg
-    assert "まー、ちょっといい？" in msg
+    assert "[inbound_reply" in msg
+    assert "こより: まー、ちょっといい？" in msg
+    assert "まー: うん、聞いてる" in msg
     assert "nudge_id=nudge-1" in msg
     assert msg.endswith("うん、聞いてる")
+
+
+def test_intercept_ordinary_message_reaches_compose(mock_stores):
+    """Regression: missing soul_prefetch import caused NameError on every chat POST."""
+    result = social_chat.intercept_chat_request(
+        payload={"message": "おはよう"},
+        person_id="ma",
+        lite=True,
+    )
+    assert result.forward is True
+    assert result.payload is not None

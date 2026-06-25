@@ -75,6 +75,18 @@
       border-color: var(--danger);
       color: var(--danger);
     }
+    button.primary {
+      background: #4a6741;
+      color: #fff;
+      border-color: #3d5536;
+    }
+    @media (prefers-color-scheme: dark) {
+      button.primary {
+        background: #5a7a50;
+        border-color: #6a8a60;
+        color: #f4f4f4;
+      }
+    }
     details.system {
       max-width: 920px;
       margin: 0 auto 1rem;
@@ -153,6 +165,7 @@
   </header>
 
   <div class="toolbar pager-toolbar" data-pager="top">
+    <button type="button" id="exportBtn" class="primary">会話から再 export</button>
     <input type="search" id="q" placeholder="まー / こより の文面で絞り込み" />
     <label class="select-all"><input type="checkbox" id="selectPage" /> ページ全選択</label>
     <button type="button" id="rejectBtn" class="danger" disabled>選択を学習から除外</button>
@@ -192,6 +205,7 @@
     const systemPreview = document.getElementById("systemPreview");
     const selectPageEl = document.getElementById("selectPage");
     const rejectBtn = document.getElementById("rejectBtn");
+    const exportBtn = document.getElementById("exportBtn");
     const pagerTop = document.getElementById("pagerTop");
     const pagerBottom = document.getElementById("pagerBottom");
     const prevButtons = document.querySelectorAll(".pager-prev");
@@ -321,10 +335,7 @@
         total = data.candidates_total || 0;
         if (!data.exists) {
           showMessage(
-            "学習 JSONL がまだありません。\n" +
-              data.candidates_path +
-              "\n\nexport:\n" +
-              data.export_command,
+            "学習 JSONL がまだありません。「会話から再 export」で native 会話 JSONL から生成できます。",
             false
           );
           metaEl.textContent = "ファイルなし";
@@ -348,6 +359,34 @@
       } catch (err) {
         showMessage(String(err), true);
         metaEl.textContent = "読み込み失敗";
+      }
+    }
+
+    async function exportFromSessions() {
+      exportBtn.disabled = true;
+      const label = exportBtn.textContent;
+      exportBtn.textContent = "export 中…";
+      hideMessage();
+      try {
+        const res = await fetch("/api/v1/training/persona/export", { method: "POST" });
+        const data = await res.json();
+        if (!data.ok) {
+          throw new Error(data.error || "export failed");
+        }
+        offset = 0;
+        selected.clear();
+        updateRejectButton();
+        await load();
+        showMessage(
+          `export 完了: セッション ${data.sessions_scanned} · 候補 ${data.pairs_written} 件` +
+            `（フィルタ除外 ${data.pairs_skipped}）· 学習用 ${data.curated_total} · 除外 ${data.rejected_total}`,
+          false
+        );
+      } catch (err) {
+        showMessage(String(err), true);
+      } finally {
+        exportBtn.disabled = false;
+        exportBtn.textContent = label;
       }
     }
 
@@ -409,6 +448,7 @@
       });
     });
     document.getElementById("reload").addEventListener("click", () => load());
+    exportBtn.addEventListener("click", () => exportFromSessions());
     rejectBtn.addEventListener("click", () => rejectSelected());
     qEl.addEventListener("input", () => {
       if (lastPayload && lastPayload.pairs) renderPairs(lastPayload.pairs);

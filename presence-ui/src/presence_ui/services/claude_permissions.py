@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from presence_ui.gateway.ccs_integration import embodied_repo_root
+from presence_ui.gateway.ws_guard import (
+    apply_ws_guard_to_settings,
+    filter_managed_preset_ids,
+    ws_guard_enabled,
+)
 
 _SETTINGS_REL = Path(".claude") / "settings.local.json"
 
@@ -65,21 +70,27 @@ def list_permission_state() -> tuple[list[PermissionPresetState], list[str]]:
     """Return managed presets + preserved (non-UI) allow rules."""
     allow = _allow_list(_load_settings())
     allow_set = set(allow)
-    presets = [
-        PermissionPresetState(
-            id=p["id"],
-            rule=p["rule"],
-            label=p["label"],
-            enabled=p["rule"] in allow_set,
+    guard = ws_guard_enabled()
+    presets = []
+    for p in MANAGED_PRESETS:
+        enabled = p["rule"] in allow_set
+        if guard and p["id"] in ("web_search", "web_fetch"):
+            enabled = False
+        presets.append(
+            PermissionPresetState(
+                id=p["id"],
+                rule=p["rule"],
+                label=p["label"],
+                enabled=enabled,
+            )
         )
-        for p in MANAGED_PRESETS
-    ]
     preserved = [r for r in allow if r not in _MANAGED_RULES]
     return presets, preserved
 
 
 def save_enabled_preset_ids(enabled_ids: list[str]) -> list[str]:
     """Update settings.local.json allow list; returns final allow list."""
+    enabled_ids = filter_managed_preset_ids(enabled_ids)
     unknown = [i for i in enabled_ids if i not in _PRESET_BY_ID]
     if unknown:
         raise ValueError(f"unknown preset id(s): {', '.join(unknown)}")
@@ -95,6 +106,7 @@ def save_enabled_preset_ids(enabled_ids: list[str]) -> list[str]:
         perms = {}
         data["permissions"] = perms
     perms["allow"] = new_allow
+    apply_ws_guard_to_settings(data)
 
     path = settings_local_path()
     path.parent.mkdir(parents=True, exist_ok=True)

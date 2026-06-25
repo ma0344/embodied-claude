@@ -8,6 +8,7 @@ import re
 PAIRED_PROMPT_TAGS: tuple[tuple[str, str], ...] = (
     ("[stm_recent]", "[/stm_recent]"),
     ("[dream_digest]", "[/dream_digest]"),
+    ("[overnight_inner_voice]", "[/overnight_inner_voice]"),
     ("[somatic_state]", "[/somatic_state]"),
 )
 
@@ -25,6 +26,35 @@ def close_open_paired_tags(text: str) -> str:
         while _tag_count(result, open_tag) > _tag_count(result, close_tag):
             result = f"{result}\n{close_tag}"
     return result
+
+
+def truncate_lite_turn_delta(turn_delta: str, max_chars: int) -> str:
+    """Preserve plan constraints; trim [Social context] only."""
+    raw = (turn_delta or "").strip()
+    if max_chars <= 0 or len(raw) <= max_chars:
+        return raw
+    parts = raw.split("\n\n")
+    preserved: list[str] = []
+    social_idx: int | None = None
+    for i, part in enumerate(parts):
+        if part.startswith("[Social context]"):
+            social_idx = i
+            break
+        preserved.append(part)
+    if social_idx is None:
+        return truncate_prompt_text(raw, max_chars)
+    head = "\n\n".join(preserved)
+    tail_parts = parts[social_idx + 1 :]
+    tail = "\n\n".join(tail_parts) if tail_parts else ""
+    reserved = len(head) + (len(tail) + 2 if tail else 0)
+    budget = max_chars - reserved
+    if budget < 200:
+        return truncate_prompt_text(raw, max_chars)
+    social_trimmed = truncate_prompt_text(parts[social_idx], budget)
+    chunks = [head, social_trimmed]
+    if tail:
+        chunks.append(tail)
+    return "\n\n".join(chunks)
 
 
 def truncate_prompt_text(text: str, max_chars: int) -> str:

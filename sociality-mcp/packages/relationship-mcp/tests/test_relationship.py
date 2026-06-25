@@ -213,3 +213,16 @@ def test_person_model_stays_compact_and_followup_uses_same_day_disclosure(store)
     assert boundary_pref is not None
     assert boundary_pref.evidence  # evidence list must not be empty
     assert "会議多くて疲れた" in suggestions[0].text
+
+
+def test_record_self_disclosure_gist_surfaces_in_person_model(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.record_self_disclosure_gist(
+        person_id="ma",
+        text="僕のやっている会社のグループホームの名前が「ここっち」だよ",
+        gist="まーの仕事・所属: 「ここっち」",
+        ts="2026-06-25T10:00:00+09:00",
+    )
+    model = store.get_person_model(person_id="ma")
+    assert model.profile_gists
+    assert "ここっち" in model.profile_gists[0]

@@ -27,6 +27,20 @@ $webuiOptional = $nativeChat -and -not $RequireWebUI
 
 $failures = @()
 
+function Test-PortListening([int]$Port) {
+    return $null -ne (
+        Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+    )
+}
+
+# Hidden VBS launchers exit quickly (Task → Ready) while the daemon keeps listening.
+$daemonTaskPorts = @{
+    "EmbodiedClaude-MemoryHTTP" = 18900
+    "EmbodiedClaude-PresenceUI" = 8090
+    "EmbodiedClaude-AivisTTS"    = 10101
+}
+
 function Test-TaskRunning([string]$Name) {
     $t = Get-ScheduledTask -TaskName $Name -ErrorAction SilentlyContinue
     if (-not $t) { return "missing" }
@@ -54,24 +68,31 @@ foreach ($name in $taskNames) {
     $status = Test-TaskRunning $name
     $isWatchdog = ($name -eq "EmbodiedClaude-Watchdog")
     $isWebui = ($name -eq "EmbodiedClaude-WebUI")
-    $isAivis = ($name -eq "EmbodiedClaude-AivisTTS")
+    $daemonPort = $daemonTaskPorts[$name]
+    $daemonPortUp = $daemonPort -and (Test-PortListening $daemonPort)
     $ok = ($status -eq "running") -or (
-        ($isWatchdog -or $isAivis) -and $status -match "^state=Ready"
+        $isWatchdog -and $status -match "^state=Ready"
+    ) -or (
+        $daemonPort -and $daemonPortUp -and $status -match "^state=Ready"
     )
     if ($isWebui -and $webuiOptional -and $status -ne "running") {
         Write-Host "  $name : $status (optional — Native chat)" -ForegroundColor DarkGray
         continue
     }
-    if ($isAivis -and $status -eq "missing") {
+    if ($name -eq "EmbodiedClaude-AivisTTS" -and $status -eq "missing") {
         Write-Host "  $name : missing (recommended — kiosk TTS)" -ForegroundColor Yellow
         continue
     }
-    $color = if ($ok) { "Green" } else { "Yellow" }
-    Write-Host "  $name : $status" -ForegroundColor $color
+    if ($daemonPort -and $daemonPortUp -and $status -match "^state=Ready") {
+        Write-Host "  $name : $status (daemon up :$daemonPort)" -ForegroundColor Green
+    } else {
+        $color = if ($ok) { "Green" } else { "Yellow" }
+        Write-Host "  $name : $status" -ForegroundColor $color
+    }
     if ($status -eq "missing") {
         if ($isWebui -and $webuiOptional) { continue }
         $failures += "task $name missing"
-    } elseif (-not $ok -and -not $isWatchdog -and -not $isAivis) {
+    } elseif (-not $ok -and -not $isWatchdog) {
         if ($isWebui -and $webuiOptional) { continue }
         $failures += "task $name not running ($status)"
     }

@@ -10,6 +10,10 @@ const SYSTEM_BLOCK_RES = [
   /^\[Social context\]\s*$/i,
   /^\[gateway_turn_context\b/i,
   /^\[vision_prefetch\]\s*$/i,
+  /^\[web_search_prefetch\]\s*$/i,
+  /^\[\/web_search_prefetch\]/i,
+  /^\[url_prefetch\]\s*$/i,
+  /^\[\/url_prefetch\]/i,
   /^\[Gateway directive\b/i,
   /^\[interaction_context\]\s*$/i,
   /^\[response_contract\]\s*$/i,
@@ -24,7 +28,10 @@ const SYSTEM_BLOCK_RES = [
   /^\[\/stm_recent\]/i,
   /^\[dream_digest\]\s*$/i,
   /^\[\/dream_digest\]/i,
+  /^\[overnight_inner_voice\]\s*$/i,
+  /^\[\/overnight_inner_voice\]/i,
   /^\[inbound_nudge\b/i,
+  /^\[inbound_reply\b/i,
   /^\[somatic_state\]\s*$/i,
   /^\[relevant_memories\]\s*$/i,
   /^\[commitments_due\]\s*$/i,
@@ -35,6 +42,9 @@ const SYSTEM_BLOCK_RES = [
 const PAIRED_BLOCK_OPENERS = {
   "[stm_recent]": "[/stm_recent]",
   "[dream_digest]": "[/dream_digest]",
+  "[overnight_inner_voice]": "[/overnight_inner_voice]",
+  "[web_search_prefetch]": "[/web_search_prefetch]",
+  "[url_prefetch]": "[/url_prefetch]",
 };
 
 const STM_BULLET_RE = /^- \([a-z_]+\)/i;
@@ -147,6 +157,12 @@ function blockIndices(lines, headerIndex, nextHeader) {
     return Array.from({ length: start - headerIndex }, (_, offset) => headerIndex + offset);
   }
 
+  if (/^\[inbound_reply\b/i.test(header.trim())) {
+    while (start < end && lines[start].trim()) start += 1;
+    while (start < end && !lines[start].trim()) start += 1;
+    return Array.from({ length: start - headerIndex }, (_, offset) => headerIndex + offset);
+  }
+
   if (/^\[Gateway directive\b/i.test(header.trim())) {
     while (start < end && lines[start].trim()) start += 1;
     return Array.from({ length: start - headerIndex }, (_, offset) => headerIndex + offset);
@@ -218,12 +234,38 @@ function stripLeadingOrphanInjectionLines(text) {
   return lines.join("\n").trim();
 }
 
+function stripOneTrailingTailPrefetch(remainder) {
+  const patterns = [
+    /\n\[url_prefetch\][\s\S]*$/i,
+    /\n\[web_search_prefetch\][\s\S]*$/i,
+    /\n\[vision_prefetch\][\s\S]*$/i,
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(remainder);
+    if (match) {
+      return { text: remainder.slice(0, match.index).trimEnd(), changed: true };
+    }
+  }
+  return { text: remainder, changed: false };
+}
+
+function stripTrailingTailPrefetch(remainder) {
+  let out = remainder;
+  for (let i = 0; i < 5; i += 1) {
+    const { text, changed } = stripOneTrailingTailPrefetch(out);
+    out = text;
+    if (!changed) break;
+  }
+  return out;
+}
+
 function stripGatewayWrapperTail(text) {
   const raw = String(text ?? "");
   if (!raw.trim()) return "";
   const lines = raw.split("\n");
   if (!lines.length || !/^\[gateway_turn_context\b/i.test(lines[0].trim())) return null;
-  const remainder = lines.slice(1).join("\n");
+  let remainder = lines.slice(1).join("\n");
+  remainder = stripTrailingTailPrefetch(remainder);
   if (!remainder.includes("\n\n")) {
     const tail = remainder.trim();
     return tail && !msgLooksInjected(tail) ? tail : null;

@@ -108,6 +108,33 @@ fi
 
 koyori_start_screen_idle_server
 
+koyori_start_audio_server() {
+  local py="/usr/local/bin/koyori-audio-server"
+  local port="${KOYORI_AUDIO_PORT:-18791}"
+  if [[ ! -x "$py" ]]; then
+    log "WARN audio-server missing — run: sudo install-koyori-kiosk.sh"
+    return 0
+  fi
+  if ss -ltn 2>/dev/null | grep -qE ":${port}\\b"; then
+    log "audio-server already listening on :${port}"
+    return 0
+  fi
+  KOYORI_AUDIO_USER="${KOYORI_AUDIO_USER:-ma}" "$py" &
+  local pid=$!
+  sleep 0.3
+  if ! kill -0 "$pid" 2>/dev/null; then
+    log "WARN audio-server exited immediately"
+    return 0
+  fi
+  if ! ss -ltn 2>/dev/null | grep -qE ":${port}\\b"; then
+    log "WARN audio-server pid=$pid but port :${port} not listening"
+    return 0
+  fi
+  log "audio-server pid=$pid port=$port"
+}
+
+koyori_start_audio_server
+
 if command -v unclutter >/dev/null 2>&1 && [[ -n "${DISPLAY:-}" ]]; then
   unclutter -idle 0 -root &
 fi

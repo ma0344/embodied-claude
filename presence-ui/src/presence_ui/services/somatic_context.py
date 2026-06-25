@@ -115,9 +115,10 @@ def enrich_interaction_context(
         compact = f"{compact}\n\n{block}"
     else:
         compact = block
+    from presence_ui.gateway.context_limits import enrich_max_chars
     from presence_ui.gateway.prompt_block_safe import truncate_prompt_text
 
-    max_len = 12000
+    max_len = enrich_max_chars()
     ctx = ctx.model_copy(
         update={
             "compact_prompt_block": truncate_prompt_text(compact, max_len),
@@ -126,7 +127,12 @@ def enrich_interaction_context(
     )
     from presence_ui.services.memory_context import enrich_memory_context
 
-    return enrich_memory_context(ctx, person_id=ctx.person_id or "ma", channel=channel)
+    return enrich_memory_context(
+        ctx,
+        person_id=ctx.person_id or "ma",
+        channel=channel,
+        user_text=user_text,
+    )
 
 
 def apply_somatic_plan_side_effects(

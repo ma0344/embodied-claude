@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator
@@ -20,6 +21,7 @@ from social_core import utc_now
 
 from presence_ui.deps import get_stores
 from presence_ui.gateway.deterministic_memory import (
+    RememberOutcome,
     detect_memory_list_request,
     detect_personal_fact_intent,
     detect_remember_intent,
@@ -34,14 +36,29 @@ from presence_ui.gateway.direct_actions import (
 )
 from presence_ui.gateway.hybrid_intent import HybridBodyIntent, resolve_hybrid_intent
 from presence_ui.gateway.open_loop_dismiss import dismiss_note, dismiss_progress_label
+from presence_ui.gateway.context_limits import (
+    enrich_max_chars,
+    full_compose_max_chars,
+    lite_append_max_chars,
+    lite_compose_max_chars,
+)
+from presence_ui.gateway.prompt_block_safe import truncate_lite_turn_delta, truncate_prompt_text
 from presence_ui.gateway.prompt_injection import apply_gateway_prompt_injection
-from presence_ui.gateway.prompt_block_safe import truncate_prompt_text
-from presence_ui.gateway.soul_prefetch import detect_soul_read_request, soul_read_prefetch_block
 from presence_ui.gateway.room_events import progress_event
 from presence_ui.gateway.room_ingest import ingest_human_turn_async
+from presence_ui.gateway.self_disclosure_encode import encode_self_disclosure_if_any
+from presence_ui.gateway.soul_prefetch import (
+    detect_soul_read_request,
+    soul_read_prefetch_block,
+)
 from presence_ui.gateway.user_intent import (
     ibf_gateway_speak_enabled,
     merge_intent_with_plan,
+)
+from presence_ui.gateway.ws_guard import (
+    looks_like_web_search_request,
+    web_search_honesty_directive,
+    ws_guard_enabled,
 )
 from presence_ui.heartbeat.schedule import apply_pulse_schedule
 from presence_ui.services.llm import build_social_turn_delta
@@ -58,18 +75,40 @@ _SILENT_MOVES = frozenset({"stay_silent", "defer", "quietly_prepare"})
 # Kiosk (:8090) has no webui permission UI; auto-accept edits within allow rules.
 _DEFAULT_PERMISSION_MODE = "acceptEdits"
 
+logger = logging.getLogger(__name__)
 
-def _inbound_nudge_delta(payload: dict) -> str:
-    """Gateway-only context for replying to a proactive room inbound (A4j+)."""
-    text = str(payload.get("inboundNudge") or "").strip()
-    if not text:
+
+def _close_archive_remember_loops(
+    *,
+    person_id: str,
+    message: str,
+    saved_content: str | None,
+) -> list[str]:
+    try:
+        return get_stores().relationship.close_loops_after_remember_save(
+            person_id=person_id,
+            utterance=message,
+            saved_content=saved_content,
+            ts=utc_now(),
+        )
+    except Exception:
+        logger.exception("close_loops_after_remember_save failed")
+        return []
+
+
+def _inbound_reply_dialogue_delta(payload: dict, *, user_reply: str) -> str:
+    """Pseudo two-turn dialogue for room-inbound replies (aligns with UI seed message)."""
+    nudge = str(payload.get("inboundNudge") or "").strip()
+    reply = (user_reply or "").strip()
+    if not nudge or not reply:
         return ""
     nudge_id = str(payload.get("inboundNudgeId") or "").strip()
     lines = [
-        "[inbound_nudge — not for the user]",
-        f"Koyori reached out proactively (room inbound): 「{text[:500]}」",
-        "The user's message is their reply. Respond naturally in Koyori voice; "
-        "do not quote this block or mention gateway/inbound metadata.",
+        "[inbound_reply — not for the user]",
+        "Conversation so far (you are こより; reply to まー's last line):",
+        f"こより: {nudge[:500]}",
+        f"まー: {reply[:500]}",
+        "Reply as こより with new words only — never echo or mirror まー's exact wording.",
     ]
     if nudge_id:
         lines.insert(1, f"nudge_id={nudge_id}")
@@ -121,6 +160,8 @@ def intercept_chat_request(
     person_id: str = "ma",
     lite: bool = False,
     vision_prefetch: str | None = None,
+    web_search_prefetch: str | None = None,
+    url_prefetch: str | None = None,
     hybrid: HybridBodyIntent | None = None,
 ) -> ChatInterceptResult:
     """Sync wrapper (tests / thread offload). Native chat uses async variant."""
@@ -135,6 +176,8 @@ def intercept_chat_request(
                 person_id=person_id,
                 lite=lite,
                 vision_prefetch=vision_prefetch,
+                web_search_prefetch=web_search_prefetch,
+                url_prefetch=url_prefetch,
                 hybrid=hybrid,
             )
         )
@@ -151,6 +194,8 @@ def intercept_chat_request(
         person_id=person_id,
         lite=lite,
         vision_prefetch=vision_prefetch,
+        web_search_prefetch=web_search_prefetch,
+        url_prefetch=url_prefetch,
         message=message,
         session_key=session_key,
         dismiss_outcome=dismiss_outcome,
@@ -164,6 +209,8 @@ async def intercept_chat_request_async(
     person_id: str = "ma",
     lite: bool = False,
     vision_prefetch: str | None = None,
+    web_search_prefetch: str | None = None,
+    url_prefetch: str | None = None,
     hybrid: HybridBodyIntent | None = None,
 ) -> ChatInterceptResult:
     """Run compose/plan; enrich message or block forward on silent moves."""
@@ -183,6 +230,8 @@ async def intercept_chat_request_async(
         person_id=person_id,
         lite=lite,
         vision_prefetch=vision_prefetch,
+        web_search_prefetch=web_search_prefetch,
+        url_prefetch=url_prefetch,
         message=message,
         session_key=session_key,
         dismiss_outcome=dismiss_outcome,
@@ -196,35 +245,18 @@ def _finish_intercept_chat_request(
     person_id: str,
     lite: bool,
     vision_prefetch: str | None,
+    web_search_prefetch: str | None,
+    url_prefetch: str | None,
     message: str,
     session_key: str | None,
     dismiss_outcome,
     hybrid: HybridBodyIntent | None = None,
 ) -> ChatInterceptResult:
-    compose_max_chars = (
-        int(os.getenv("PRESENCE_LITE_COMPOSE_MAX_CHARS", "1200"))
-        if lite
-        else 10000
-    )
+    compose_max_chars = lite_compose_max_chars() if lite else full_compose_max_chars()
 
     gateway_events: list[dict[str, Any]] = []
     memory_notes: list[str] = []
-    if dismiss_outcome.any:
-        memory_notes.append(
-            dismiss_note(
-                closed_loops=dismiss_outcome.closed_loops,
-                cancelled_commitments=dismiss_outcome.cancelled_commitments,
-            )
-        )
-        gateway_events.append(
-            progress_event(
-                phase="relationship",
-                label=dismiss_progress_label(
-                    closed_loops=dismiss_outcome.closed_loops,
-                    cancelled_commitments=dismiss_outcome.cancelled_commitments,
-                ),
-            )
-        )
+    archive_closed_loops: list[str] = []
     resolved = hybrid or resolve_hybrid_intent(message)
     user_intent = resolved.user_intent
     remember_intent = None
@@ -239,11 +271,67 @@ def _finish_intercept_chat_request(
             gateway_events.append(
                 progress_event(phase="remember", label=label)
             )
+            archive_closed_loops.extend(
+                _close_archive_remember_loops(
+                    person_id=person_id,
+                    message=message,
+                    saved_content=remember_intent.content,
+                )
+            )
         else:
             gateway_events.append(
                 progress_event(phase="remember", label="記憶の保存に失敗")
             )
         memory_notes.append(memory_saved_prompt_note(outcome))
+    elif not remember_saved:
+        sd_outcome = encode_self_disclosure_if_any(
+            person_id=person_id,
+            text=message,
+            session_id=session_key,
+        )
+        if sd_outcome.encoded:
+            if sd_outcome.ltm_saved:
+                label = "もう覚えてある" if sd_outcome.duplicate_ltm else "自己開示を記憶に保存した"
+                gateway_events.append(progress_event(phase="remember", label=label))
+                archive_closed_loops.extend(
+                    _close_archive_remember_loops(
+                        person_id=person_id,
+                        message=message,
+                        saved_content=sd_outcome.gist or message,
+                    )
+                )
+                memory_notes.append(
+                    memory_saved_prompt_note(
+                        RememberOutcome(
+                            ok=True,
+                            content=sd_outcome.gist or message,
+                            memory_id=sd_outcome.ltm_memory_id,
+                            duplicate=sd_outcome.duplicate_ltm,
+                        )
+                    )
+                )
+            else:
+                gateway_events.append(
+                    progress_event(phase="remember", label="自己開示を短期記憶に記録した")
+                )
+
+    merged_closed_loops = [*dismiss_outcome.closed_loops, *archive_closed_loops]
+    if dismiss_outcome.any or archive_closed_loops:
+        memory_notes.append(
+            dismiss_note(
+                closed_loops=merged_closed_loops,
+                cancelled_commitments=dismiss_outcome.cancelled_commitments,
+            )
+        )
+        gateway_events.append(
+            progress_event(
+                phase="relationship",
+                label=dismiss_progress_label(
+                    closed_loops=merged_closed_loops,
+                    cancelled_commitments=dismiss_outcome.cancelled_commitments,
+                ),
+            )
+        )
 
     list_request = detect_memory_list_request(message)
     if detect_soul_read_request(message) and not list_request:
@@ -399,6 +487,8 @@ def _finish_intercept_chat_request(
         intent=user_intent,
         plan=plan,
         vision_prefetch_done=bool(vision_prefetch),
+        web_search_prefetch_done=bool(web_search_prefetch),
+        url_prefetch_done=bool(url_prefetch),
         remember_saved=remember_saved,
     )
     gateway_speak = ibf_gateway_speak_enabled() and effective.gateway_speak_after_reply
@@ -411,12 +501,19 @@ def _finish_intercept_chat_request(
     if memory_notes:
         note = "\n\n".join(memory_notes)
         turn_delta = f"{turn_delta}\n\n{note}" if turn_delta else note
-    inbound_delta = _inbound_nudge_delta(payload)
+    if (
+        ws_guard_enabled()
+        and looks_like_web_search_request(message)
+        and not web_search_prefetch
+        and not url_prefetch
+    ):
+        honesty = web_search_honesty_directive()
+        turn_delta = f"{turn_delta}\n\n{honesty}" if turn_delta else honesty
+    inbound_delta = _inbound_reply_dialogue_delta(payload, user_reply=message)
     if inbound_delta:
         turn_delta = f"{turn_delta}\n\n{inbound_delta}" if turn_delta else inbound_delta
     if lite and turn_delta:
-        cap = int(os.getenv("PRESENCE_LITE_APPEND_MAX_CHARS", "2500"))
-        turn_delta = truncate_prompt_text(turn_delta, cap)
+        turn_delta = truncate_lite_turn_delta(turn_delta, lite_append_max_chars())
     extra_append = ""
     if remember_intent and memory_notes and "[memory_save_failed]" in memory_notes[0]:
         extra_append = (
@@ -431,6 +528,10 @@ def _finish_intercept_chat_request(
     if vision_prefetch:
         # After user utterance — KV-friendly (variable caption at tail, like stable append).
         enriched_message = f"{enriched_message.rstrip()}\n\n{vision_prefetch.strip()}"
+    if web_search_prefetch:
+        enriched_message = f"{enriched_message.rstrip()}\n\n{web_search_prefetch.strip()}"
+    if url_prefetch:
+        enriched_message = f"{enriched_message.rstrip()}\n\n{url_prefetch.strip()}"
     enriched = payload.copy()
     enriched["message"] = enriched_message
     if append_prompt:

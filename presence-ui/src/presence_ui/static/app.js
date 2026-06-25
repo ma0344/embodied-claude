@@ -17,6 +17,9 @@ const SHOW_DEBUG_INJECTION_KEY = "koyori-show-debug-injection";
 const KIOSK_LAYOUT_STORAGE_KEY = "koyori-kiosk-layout";
 const KIOSK_AUDIO_VOLUME_KEY = "koyori-kiosk-audio-volume";
 const KIOSK_AUDIO_VOLUME_DEFAULT = 1;
+const KOYORI_AUDIO_OVERLAY_PORT = 18791;
+const KOYORI_AUDIO_OVERLAY_POLL_MS = 350;
+const KOYORI_AUDIO_OVERLAY_SHOW_MS = 2500;
 const KIOSK_SLEEP_MINUTES_KEY = "koyori-kiosk-sleep-minutes";
 const KIOSK_SLEEP_MINUTES_DEFAULT = 10;
 const KIOSK_SLEEP_WAKE_ON_NOTIFY_KEY = "koyori-kiosk-sleep-wake-on-notify";
@@ -2576,6 +2579,54 @@ function setupKioskAudio() {
   document.addEventListener("touchstart", onFirstGesture, { once: true, passive: true });
 }
 
+let kioskVolumeOverlayHideTimer = null;
+let kioskVolumeOverlayPollTimer = null;
+
+function kioskAudioHelperUrl(path) {
+  return `http://127.0.0.1:${KOYORI_AUDIO_OVERLAY_PORT}${path}`;
+}
+
+function showKioskVolumeOverlay(percent, muted = false) {
+  const overlay = document.getElementById("kiosk-volume-overlay");
+  const pctEl = document.getElementById("kiosk-volume-overlay-pct");
+  if (!overlay || !pctEl) return;
+  const icon = overlay.querySelector(".kiosk-volume-overlay__icon");
+  const safe = Math.max(0, Math.min(100, Number(percent) || 0));
+  pctEl.textContent = `${safe}%`;
+  if (icon) icon.textContent = muted ? "🔇" : "🔊";
+  overlay.hidden = false;
+  requestAnimationFrame(() => overlay.classList.add("is-visible"));
+  if (kioskVolumeOverlayHideTimer) clearTimeout(kioskVolumeOverlayHideTimer);
+  kioskVolumeOverlayHideTimer = setTimeout(() => {
+    overlay.classList.remove("is-visible");
+    kioskVolumeOverlayHideTimer = setTimeout(() => {
+      overlay.hidden = true;
+    }, 260);
+  }, KOYORI_AUDIO_OVERLAY_SHOW_MS);
+}
+
+async function pollKioskVolumeOverlay() {
+  if (!isKioskLayout()) return;
+  try {
+    const res = await fetch(kioskAudioHelperUrl("/volume-overlay"), { cache: "no-store" });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data?.visible) return;
+    showKioskVolumeOverlay(data.percent, Boolean(data.muted));
+  } catch {
+    /* koyori-audio-server not running (PC layout / dev) */
+  }
+}
+
+function setupKioskVolumeOverlay() {
+  if (!isKioskLayout()) return;
+  if (kioskVolumeOverlayPollTimer) return;
+  void pollKioskVolumeOverlay();
+  kioskVolumeOverlayPollTimer = setInterval(() => {
+    void pollKioskVolumeOverlay();
+  }, KOYORI_AUDIO_OVERLAY_POLL_MS);
+}
+
 // ── C11g スリープ / 画面消灯 ──────────────────────────────────────
 
 function getKioskSleepMinutes() {
@@ -3274,6 +3325,7 @@ function setupKioskLayout() {
   setupRoomDrawer();
   setupContextRail();
   setupKioskAudio();
+  setupKioskVolumeOverlay();
   setupKioskSleep();
   setupOutboundPoll();
 }

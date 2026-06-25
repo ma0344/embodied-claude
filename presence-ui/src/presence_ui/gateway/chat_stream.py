@@ -10,6 +10,11 @@ from typing import Any
 from presence_ui.gateway.hybrid_intent import resolve_hybrid_intent
 from presence_ui.gateway.room_events import activity_event, encode_event, progress_event
 from presence_ui.gateway.room_ingest import ingest_agent_turn
+from presence_ui.gateway.search_prefetch import (
+    detect_web_search_intent,
+    prefetch_web_search_for_message,
+)
+from presence_ui.gateway.url_prefetch import prefetch_urls_for_turn
 from presence_ui.gateway.see_intent import SEE_PROGRESS_LABELS, detect_see_intent
 from presence_ui.gateway.see_prefetch import prefetch_camera_for_message
 from presence_ui.gateway.social_chat import (
@@ -31,8 +36,50 @@ async def stream_gateway_chat(
 
     message = str(payload.get("message") or "").strip()
     vision_note: str | None = None
+    web_search_note: str | None = None
+    url_note: str | None = None
+    search_hits = []
+    search_query = ""
     gateway_events: list[dict[str, Any]] = []
     hybrid = resolve_hybrid_intent(message) if message else None
+
+    if message:
+        if detect_web_search_intent(message):
+            yield encode_event(progress_event(phase="web_search", label="ネットを調べてる…"))
+        try:
+            web_search_note, web_events, search_hits, search_query = (
+                await prefetch_web_search_for_message(message)
+            )
+            gateway_events.extend(web_events)
+        except Exception as exc:  # noqa: BLE001
+            web_search_note = None
+            gateway_events.append(
+                activity_event(
+                    kind="web_search",
+                    label="検索に失敗した",
+                    detail=str(exc)[:120],
+                    ok=False,
+                )
+            )
+
+    if message:
+        try:
+            url_note, url_events = await prefetch_urls_for_turn(
+                message,
+                search_hits=search_hits,
+                search_query=search_query,
+            )
+            gateway_events.extend(url_events)
+        except Exception as exc:  # noqa: BLE001
+            url_note = None
+            gateway_events.append(
+                activity_event(
+                    kind="url_fetch",
+                    label="ページを読めなかった",
+                    detail=str(exc)[:120],
+                    ok=False,
+                )
+            )
 
     if message and vision_prefetch_enabled():
         see_intent = (hybrid.see_intent if hybrid else None) or detect_see_intent(message)
@@ -64,6 +111,8 @@ async def stream_gateway_chat(
             payload=payload,
             person_id=person_id,
             vision_prefetch=vision_note,
+            web_search_prefetch=web_search_note,
+            url_prefetch=url_note,
             hybrid=hybrid,
         )
     except ValueError as exc:

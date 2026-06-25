@@ -71,6 +71,33 @@ phase=chat
     assert strip_enriched_user_prompt(raw) == "こんばんは"
 
 
+def test_strip_enriched_user_prompt_with_tail_web_search_prefetch() -> None:
+    """Regression: tail prefetch after utterance must not hide まー's line in UI."""
+    raw = """[gateway_turn_context — not for the user]
+[interaction_context]
+phase=chat
+
+今回は日本もいい感じみたいだね。調べてみて。
+
+[web_search_prefetch]
+query=日本 いい感じ
+status=empty
+[/web_search_prefetch]
+
+[Gateway directive — not for the user]
+Tell まー honestly.
+
+[url_prefetch]
+source=search_loop
+url=https://example.com
+status=empty
+[/url_prefetch]
+
+[Gateway directive — not for the user]
+No page text."""
+    assert strip_enriched_user_prompt(raw) == "今回は日本もいい感じみたいだね。調べてみて。"
+
+
 def test_strip_enriched_user_prompt_stm_recent_inside_gateway() -> None:
     raw = """[gateway_turn_context — not for the user]
 [interaction_context]

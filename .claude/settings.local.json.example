@@ -33,6 +33,10 @@
       "Read(//c/Users/ma/src/embodied-claude/**)",
       "Edit(//c/Users/ma/src/embodied-claude/**)",
       "Write(//c/Users/ma/src/embodied-claude/**)"
+    ],
+    "deny": [
+      "WebSearch",
+      "WebFetch"
     ]
   },
   "hooks": {

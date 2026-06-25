@@ -47,6 +47,7 @@ install -m 755 "$SCRIPT_DIR/koyori-kiosk.sh" /usr/local/bin/koyori-kiosk
 install -m 755 "$SCRIPT_DIR/koyori-ime-start.sh" /usr/local/bin/koyori-ime-start
 install -m 755 "$SCRIPT_DIR/koyori-display-setup.sh" /usr/local/bin/koyori-display-setup
 install -m 755 "$SCRIPT_DIR/koyori-screen-idle-server.py" /usr/local/bin/koyori-screen-idle-server
+install -m 755 "$SCRIPT_DIR/koyori-audio-server.py" /usr/local/bin/koyori-audio-server
 install -m 755 "$SCRIPT_DIR/koyori-input-leap-start.sh" /usr/local/bin/koyori-input-leap-start
 install -m 755 "$SCRIPT_DIR/koyori-keyboard-layout.sh" /usr/local/bin/koyori-keyboard-layout
 install -d -m 755 /usr/local/share/koyori-kiosk
@@ -221,6 +222,25 @@ if [[ -n "${KOYORI_CONSOLEBLANK_SEC:-}" ]] && [[ -f /etc/default/grub ]]; then
 fi
 
 systemctl enable --now iptsd 2>/dev/null || true
+
+# Surface hardware volume keys (acpid → PipeWire + kiosk overlay :18791)
+ACPI_PKGS=(acpid curl)
+missing_acpi=()
+for pkg in "${ACPI_PKGS[@]}"; do
+  if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+    missing_acpi+=("$pkg")
+  fi
+done
+if ((${#missing_acpi[@]})); then
+  echo "Installing volume key packages: ${missing_acpi[*]}"
+  apt-get install -y "${missing_acpi[@]}"
+fi
+install -d -m 755 /etc/acpi/events
+install -m 755 "$SCRIPT_DIR/surface-volume.sh" /etc/acpi/surface-volume.sh
+install -m 644 "$SCRIPT_DIR/surface-vol-up" /etc/acpi/events/surface-vol-up
+install -m 644 "$SCRIPT_DIR/surface-vol-down" /etc/acpi/events/surface-vol-down
+systemctl enable --now acpid 2>/dev/null || true
+
 systemctl enable lightdm
 systemctl set-default graphical.target
 
@@ -258,3 +278,7 @@ echo "    grep screen-idle /tmp/koyori-kiosk.log | tail -3"
 echo "  SSH alone returns empty if kiosk session is not running or install was skipped."
 echo "  optional kernel fallback: KOYORI_CONSOLEBLANK_SEC=900 sudo $0  (then reboot)"
 echo "  check: cat /sys/module/kernel/parameters/consoleblank"
+echo ""
+echo "Hardware volume keys (C11f+):"
+echo "  acpid → /etc/acpi/surface-volume.sh → wpctl + http://127.0.0.1:18791/volume-notify"
+echo "  verify: curl -sS http://127.0.0.1:18791/health; sudo acpi_listen  # press Vol+/-"

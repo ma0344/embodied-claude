@@ -29,9 +29,13 @@ _VALID_CATEGORIES = frozenset(
     }
 )
 
+_TRAILING_REMEMBER_TAIL = (
+    r"(?:[。．!！]|(?:よ|ね|な|わ|さ|かな|や|で)[。．!！]?)?$"
+)
+
 _CONTENT_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(
-        r"^(.+?)(?:を|って)?(?:覚えておいて|覚えといて|覚えとく|記憶して|記憶しといて)[。．!！]?$",
+        rf"^(.+?)(?:を|って)?(?:覚えておいて|覚えといて|覚えとく|記憶して|記憶しといて){_TRAILING_REMEMBER_TAIL}",
         re.DOTALL,
     ),
     re.compile(
@@ -50,7 +54,7 @@ _CONTENT_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 
 _IMPERATIVE_ONLY = re.compile(
-    r"^(?:これ|それ|あれ)?(?:を)?(?:覚えておいて|覚えといて|記憶して|記憶しといて)[。．!！]?$",
+    rf"^(?:これ|それ|あれ)?(?:を)?(?:覚えておいて|覚えといて|記憶して|記憶しといて){_TRAILING_REMEMBER_TAIL}",
 )
 
 _TRIGGER_HINT = re.compile(
@@ -91,6 +95,40 @@ _PERSONAL_FACT_PATTERNS: tuple[re.Pattern[str], ...] = (
     ),
 )
 
+_SELF_DISCLOSURE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(
+        r"^(?:僕|俺|私|わたし|自分)(?:は|の).+"
+        r"(?:会社|仕事|勤め|働|運営|グループホーム|事業|施設)",
+        re.DOTALL,
+    ),
+    re.compile(
+        r"^(?:僕|俺|私|わたし|自分)(?:が|は).+"
+        r"(?:やってる|している|してる|担当).+"
+        r"(?:会社|仕事|グループホーム|事業)",
+        re.DOTALL,
+    ),
+    re.compile(
+        r"(?:名前|名称)(?:が|は)[「『]([^」』]+)[」』]",
+        re.DOTALL,
+    ),
+    re.compile(
+        r"[「『]([^」』]+)[」』].*(?:グループホーム|会社|事業|施設)(?:の名前|という)",
+        re.DOTALL,
+    ),
+)
+
+_CORRECTION_HINT = re.compile(
+    r"(?:ちがう|違う|そうじゃない|そうではない|そういう意味じゃない|違うよ|ちがうよ)",
+)
+
+_DISAMBIGUATION_HINT = re.compile(
+    r"(?:とは別|じゃない|ではない|じゃなくて|ではなくて|別の|別物)",
+)
+
+_WORK_CONTEXT_HINT = re.compile(
+    r"(?:会社|仕事|勤め|働|運営|グループホーム|事業|施設|ネットワン|ねっとわん)",
+)
+
 _RECALL_QUESTION = re.compile(
     r"(?:覚えて(?:い)?る|知って(?:い)?る|覚えて(?:い)?ます|知って(?:い)?ます)"
     r"(?:か|？|\?)?$",
@@ -121,6 +159,16 @@ _TRAILING_FILLER = re.compile(
 class RememberIntent:
     content: str
     category: str = "conversation"
+
+
+@dataclass(slots=True, frozen=True)
+class SelfDisclosureIntent:
+    """MEM-8e: declarative self-disclosure or entity correction (not explicit remember)."""
+
+    text: str
+    gist: str
+    promote_ltm: bool = False
+    ltm_content: str | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -187,6 +235,85 @@ def detect_remember_intent(user_text: str) -> RememberIntent | None:
         if len(content) >= 2:
             return RememberIntent(content=content, category=_guess_category(content))
     return None
+
+
+def _self_disclosure_gist(text: str) -> str:
+    content = _normalize_personal_fact_content(text)
+    quoted = _QUOTED_JA.findall(content)
+    if quoted and _WORK_CONTEXT_HINT.search(content):
+        name = quoted[-1].strip()
+        if _DISAMBIGUATION_HINT.search(content):
+            return f"固有名詞「{name}」— 文脈上こより/embodied-claude の「こっち」とは別（{_truncate_gist(content)}）"
+        return f"まーの仕事・所属: 「{name}」（{_truncate_gist(content)}）"
+    return _truncate_gist(content)
+
+
+def _truncate_gist(text: str, *, max_len: int = 120) -> str:
+    compact = re.sub(r"\s+", " ", text).strip()
+    if len(compact) <= max_len:
+        return compact
+    return compact[: max_len - 1].rstrip() + "…"
+
+
+def _ltm_content_for_self_disclosure(text: str) -> str:
+    content = _normalize_personal_fact_content(text)
+    quoted = _QUOTED_JA.findall(content)
+    if quoted and _DISAMBIGUATION_HINT.search(content):
+        name = quoted[-1].strip()
+        return (
+            f"まーに関する固有名詞「{name}」: {content} "
+            f"（embodied-claude/こよりプロジェクトの口語「こっち」と混同しない）"
+        )
+    if re.search(r"(?:名前|名称)(?:が|は)[「『]", content):
+        return f"まーの自己開示（名称・所属）: {content}"
+    if _CORRECTION_HINT.search(content) and _WORK_CONTEXT_HINT.search(content):
+        return f"まーの訂正・所属fact: {content}"
+    return f"まーの自己開示: {content}"
+
+
+def _should_promote_self_disclosure(text: str) -> bool:
+    if _CORRECTION_HINT.search(text) and _WORK_CONTEXT_HINT.search(text):
+        return True
+    if re.search(r"(?:名前|名称)(?:が|は)[「『]", text):
+        return True
+    if _QUOTED_JA.search(text) and _DISAMBIGUATION_HINT.search(text):
+        return True
+    if _QUOTED_JA.search(text) and _WORK_CONTEXT_HINT.search(text):
+        return True
+    return False
+
+
+def detect_self_disclosure(user_text: str) -> SelfDisclosureIntent | None:
+    """MEM-8e: broad encode for declarative life/work facts and entity corrections."""
+    text = (user_text or "").strip()
+    if len(text) < 8:
+        return None
+    if _TRIGGER_HINT.search(text):
+        return None
+    if text.endswith(("?", "？")) or _RECALL_QUESTION.search(text):
+        return None
+    if _looks_like_memory_list_request(text):
+        return None
+
+    matched = False
+    for pattern in _SELF_DISCLOSURE_PATTERNS:
+        if pattern.search(text):
+            matched = True
+            break
+    if not matched and _CORRECTION_HINT.search(text) and _WORK_CONTEXT_HINT.search(text):
+        matched = True
+    if not matched:
+        return None
+
+    gist = _self_disclosure_gist(text)
+    promote = _should_promote_self_disclosure(text)
+    ltm = _ltm_content_for_self_disclosure(text) if promote else None
+    return SelfDisclosureIntent(
+        text=text,
+        gist=gist,
+        promote_ltm=promote,
+        ltm_content=ltm,
+    )
 
 
 def detect_personal_fact_intent(user_text: str) -> RememberIntent | None:
@@ -404,6 +531,10 @@ def memory_saved_prompt_note(outcome: RememberOutcome) -> str:
 def try_auto_remember(user_text: str) -> str | None:
     """Detect remember intent, persist, return prompt note for injection (or None)."""
     intent = detect_remember_intent(user_text) or detect_personal_fact_intent(user_text)
+    if not intent:
+        sd = detect_self_disclosure(user_text)
+        if sd and sd.promote_ltm and sd.ltm_content:
+            intent = RememberIntent(content=sd.ltm_content, category="memory")
     if not intent:
         return None
     outcome = persist_remember_intent(intent)

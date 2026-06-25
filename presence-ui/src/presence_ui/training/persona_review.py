@@ -5,6 +5,8 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from presence_ui.training.persona_curation import (
+    PersonaCurationStats,
+    apply_persona_curation,
     curation_stats_from_examples,
     load_rejected_fingerprints,
     pair_fingerprint,
@@ -14,7 +16,11 @@ from presence_ui.training.persona_curation import (
     reject_training_pairs,
     resolve_candidates_jsonl_path,
 )
-from presence_ui.training.persona_export import load_persona_jsonl
+from presence_ui.training.persona_export import (
+    PersonaExportStats,
+    export_persona_jsonl,
+    load_persona_jsonl,
+)
 
 
 class PersonaTrainingPair(BaseModel):
@@ -61,6 +67,18 @@ class PersonaRejectResponse(BaseModel):
     candidates_total: int
     curated_total: int
     rejected_total: int
+
+
+class PersonaExportResponse(BaseModel):
+    ok: bool
+    sessions_scanned: int = 0
+    pairs_written: int = 0
+    pairs_skipped: int = 0
+    curated_total: int = 0
+    rejected_total: int = 0
+    candidates_path: str = ""
+    curated_path: str = ""
+    error: str | None = None
 
 
 def fetch_persona_training_review(
@@ -133,4 +151,52 @@ def reject_persona_training_pairs(body: PersonaRejectRequest) -> PersonaRejectRe
         candidates_total=stats.candidates,
         curated_total=stats.curated,
         rejected_total=stats.rejected,
+    )
+
+
+def run_persona_training_export(
+    *,
+    max_sessions: int = 40,
+    max_pairs: int = 2000,
+) -> PersonaExportResponse:
+    """Export native chat JSONL → candidates JSONL and rebuild curated file."""
+    from presence_ui.gateway.ccs_integration import embodied_repo_root
+
+    candidates_path = persona_candidates_jsonl_path()
+    curated_path = persona_curated_jsonl_path()
+    try:
+        stats: PersonaExportStats = export_persona_jsonl(
+            repo_root=embodied_repo_root(),
+            output_path=candidates_path,
+            max_sessions=max_sessions,
+            max_pairs=max_pairs,
+        )
+        curation: PersonaCurationStats = apply_persona_curation(
+            candidates_path=candidates_path,
+            curated_path=curated_path,
+        )
+    except FileNotFoundError as exc:
+        return PersonaExportResponse(
+            ok=False,
+            candidates_path=str(candidates_path),
+            curated_path=str(curated_path),
+            error=str(exc),
+        )
+    except OSError as exc:
+        return PersonaExportResponse(
+            ok=False,
+            candidates_path=str(candidates_path),
+            curated_path=str(curated_path),
+            error=str(exc),
+        )
+
+    return PersonaExportResponse(
+        ok=True,
+        sessions_scanned=stats.sessions_scanned,
+        pairs_written=stats.pairs_written,
+        pairs_skipped=stats.pairs_skipped,
+        curated_total=curation.curated,
+        rejected_total=curation.rejected,
+        candidates_path=str(candidates_path),
+        curated_path=str(curated_path),
     )

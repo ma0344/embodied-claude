@@ -18,6 +18,7 @@ from presence_ui.gateway.ccs_integration import (
     agent_config_from_intercept,
     default_agent_config,
 )
+from presence_ui.gateway.claude_session_mode import ClaudeSessionRegistry
 from presence_ui.gateway.deterministic_memory import (
     MemoryListRequest,
     detect_memory_list_request,
@@ -25,14 +26,17 @@ from presence_ui.gateway.deterministic_memory import (
     format_memory_list_reply,
 )
 from presence_ui.gateway.hybrid_intent import resolve_hybrid_intent
+from presence_ui.gateway.search_prefetch import prefetch_web_search_for_message
+from presence_ui.gateway.url_prefetch import prefetch_urls_for_turn
 from presence_ui.gateway.see_prefetch import prefetch_camera_for_message
 from presence_ui.gateway.social_chat import ChatInterceptResult, intercept_chat_request_async
 
 logger = logging.getLogger(__name__)
 
 _TOKENS: set[str] = set()
-# Session IDs that Claude CLI actually created (direct-reply paths must not register here).
-_CLAUDE_SESSION_IDS: set[str] = set()
+# Session lifecycle for Claude CLI (--session-id vs --resume).
+_CLAUDE_SESSIONS = ClaudeSessionRegistry()
+_SESSION_CHAT_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 def _require_auth(request: Request) -> None:
@@ -78,6 +82,14 @@ async def _stream_memory_list(
     yield _sse("done", {"cost": 0.0, "duration_ms": 0, "direct": True, "claude_session": False})
 
 
+def _session_chat_lock(session_id: str) -> asyncio.Lock:
+    lock = _SESSION_CHAT_LOCKS.get(session_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _SESSION_CHAT_LOCKS[session_id] = lock
+    return lock
+
+
 async def _stream_agent_chat(
     *,
     req: ChatRequest,
@@ -88,34 +100,40 @@ async def _stream_agent_chat(
     cfg = agent_config_from_intercept(intercept, base_config)
     enriched = intercept.payload or {}
     prompt = str(enriched.get("message") or req.prompt).strip()
-    sid = req.session_id or str(uuid.uuid4())
-    is_new = req.session_id is None or req.session_id not in _CLAUDE_SESSION_IDS
+    sid, is_new = _CLAUDE_SESSIONS.resolve(req.session_id)
+    if is_new:
+        _CLAUDE_SESSIONS.mark_in_flight(sid)
     reply_parts: list[str] = []
     # Tell the browser the session id immediately (CLI init can arrive much later).
     yield _sse("session", {"session_id": sid, "claude_session": True})
     agent = ClaudeAgent()
-    try:
-        async for event in agent.chat(
-            prompt=prompt,
-            session_id=sid,
-            config=cfg,
-            is_new=is_new,
-        ):
-            evt_type = event["event"]
-            evt_data = event["data"]
-            if evt_type == "session":
-                registered = evt_data.get("session_id")
-                if isinstance(registered, str) and registered:
-                    _CLAUDE_SESSION_IDS.add(registered)
-            if evt_type == "text":
-                content = evt_data.get("content")
-                if content:
-                    reply_parts.append(str(content))
-            yield _sse(evt_type, evt_data)
-    except Exception as exc:
-        yield _sse("error", {"message": str(exc)})
-    finally:
-        await agent.cancel()
+    async with _session_chat_lock(sid):
+        try:
+            async for event in agent.chat(
+                prompt=prompt,
+                session_id=sid,
+                config=cfg,
+                is_new=is_new,
+            ):
+                evt_type = event["event"]
+                evt_data = event["data"]
+                if evt_type == "session":
+                    registered = evt_data.get("session_id")
+                    if isinstance(registered, str) and registered:
+                        _CLAUDE_SESSIONS.mark_created(registered)
+                if evt_type == "text":
+                    content = evt_data.get("content")
+                    if content:
+                        reply_parts.append(str(content))
+                yield _sse(evt_type, evt_data)
+        except Exception as exc:
+            yield _sse("error", {"message": str(exc)})
+        finally:
+            _CLAUDE_SESSIONS.clear_in_flight(sid)
+            await agent.cancel()
+
+    if reply_parts:
+        _CLAUDE_SESSIONS.mark_created(sid)
 
     reply = "".join(reply_parts).strip()
     if intercept.plan and intercept.ctx:
@@ -195,6 +213,30 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
 
         hybrid = resolve_hybrid_intent(req.prompt)
         vision_note: str | None = None
+        web_search_note: str | None = None
+        url_note: str | None = None
+        search_hits = []
+        search_query = ""
+        try:
+            web_search_note, _web_events, search_hits, search_query = (
+                await prefetch_web_search_for_message(req.prompt)
+            )
+            if web_search_note:
+                logger.info("native chat web search prefetch ok (%d chars)", len(web_search_note))
+        except Exception as exc:
+            logger.warning("native chat web search prefetch failed: %s", exc)
+            web_search_note = None
+        try:
+            url_note, _url_events = await prefetch_urls_for_turn(
+                req.prompt,
+                search_hits=search_hits,
+                search_query=search_query,
+            )
+            if url_note:
+                logger.info("native chat url prefetch ok (%d chars)", len(url_note))
+        except Exception as exc:
+            logger.warning("native chat url prefetch failed: %s", exc)
+            url_note = None
         try:
             from presence_ui.deps import get_stores
 
@@ -227,6 +269,8 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
             person_id=person_id,
             lite=True,
             vision_prefetch=vision_note,
+            web_search_prefetch=web_search_note,
+            url_prefetch=url_note,
             hybrid=hybrid,
         )
         if not intercept.forward:

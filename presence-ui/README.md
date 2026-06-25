@@ -68,6 +68,18 @@ $env:PRESENCE_CCS_PASSWORD = "koyori-poc"   # optional
 | `POST /api/native/chat` | SSE; 記憶リストは **Claude を経由せず直接返答**（8192 ctx 対策） |
 | `GET /poc/native` | 最小ブラウザテスタ |
 
-記憶リスト以外の native chat は compose **lite**（`PRESENCE_LITE_*`）で append を抑える。LM Studio の ctx が 8192 のときは MCP 定義だけで溢れやすい — リスト質問は direct 経路を使う。
+記憶リスト以外の native chat は compose **lite**（`PRESENCE_LITE_*`）で注入量を抑える。
+ma-home（LM Studio ctx ~87k）の既定: compose **8000** / turn_delta **12000** / enrich **12000** 字。
+8192 ctx 向けに 1200/2500 だった上限は 2026-06 に引き上げ済み — 記憶リスト質問は direct 経路のまま。
+
+| 環境変数 | 既定 | 役割 |
+|----------|------|------|
+| `PRESENCE_LITE_COMPOSE_MAX_CHARS` | 8000 | lite compose の `compact_prompt_block` |
+| `PRESENCE_LITE_APPEND_MAX_CHARS` | 12000 | lite の `gateway_turn_context` 全体 |
+| `PRESENCE_ENRICH_MAX_CHARS` | 12000 | somatic + STM 追記後の compact 上限 |
+| `PRESENCE_LITE_STM_MAX_CHARS` | 2500 | chat の `[stm_recent]` 上限（`0` で無制限） |
+| `PRESENCE_COMPOSE_MAX_CHARS` | 10000 | lite 以外の compose |
+
+Tier 0（Must include 等）は `truncate_lite_turn_delta` で cap 対象外。詳細は `gateway/context_limits.py`。
 
 `:8080` プロキシは従来どおり。Native PoC は **並行** で試せる（将来 Node 層を置き換える想定）。

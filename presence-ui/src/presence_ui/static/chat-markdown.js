@@ -54,6 +54,23 @@
     }
   }
 
+  /** WS-1: drop Sources blocks that cite no real URL (empty WebSearch hallucination). */
+  function stripFabricatedSourcesBlock(text) {
+    let raw = String(text ?? "");
+    const trailMatch = raw.match(/\n(?:\*\*)?Sources(?:\*\*)?:?\s*\n([\s\S]*)$/i);
+    if (trailMatch) {
+      const body = trailMatch[1].trim();
+      if (!/https?:\/\/[^\s)<>"]+/i.test(body)) {
+        raw = raw.slice(0, trailMatch.index).trimEnd();
+      }
+    }
+    const inlineMatch = raw.match(/\n(?:\*\*)?Sources(?:\*\*)?:\s*[^\n]+$/i);
+    if (inlineMatch && !/https?:\/\//i.test(inlineMatch[0])) {
+      raw = raw.slice(0, inlineMatch.index).trimEnd();
+    }
+    return raw;
+  }
+
   /** Fix model-fabricated Google citation links after empty WebSearch tool results. */
   function repairCitationMarkdown(text) {
     return String(text ?? "").replace(
@@ -62,7 +79,7 @@
         const trimmed = String(label || "").trim();
         const labelMatch = GOOGLE_SEARCH_RESULTS_LABEL_RE.exec(trimmed);
         if (labelMatch) {
-          return `[${trimmed}](${rebuildGoogleSearchUrl(labelMatch[1])})`;
+          return trimmed;
         }
         if (!isValidHttpUrl(href)) {
           return trimmed;
@@ -100,7 +117,9 @@
   }
 
   function toSafeHtml(text) {
-    const body = repairCitationMarkdown(String(text ?? "").trim());
+    const body = stripFabricatedSourcesBlock(
+      repairCitationMarkdown(String(text ?? "").trim()),
+    );
     if (!body) return "";
     if (typeof marked === "undefined" || typeof DOMPurify === "undefined") {
       return escapePlain(body);
@@ -115,5 +134,10 @@
     });
   }
 
-  window.ChatMarkdown = { toSafeHtml, repairCitationMarkdown, rebuildGoogleSearchUrl };
+  window.ChatMarkdown = {
+    toSafeHtml,
+    repairCitationMarkdown,
+    stripFabricatedSourcesBlock,
+    rebuildGoogleSearchUrl,
+  };
 })();

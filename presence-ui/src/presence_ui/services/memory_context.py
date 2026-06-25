@@ -9,6 +9,7 @@ from interaction_orchestrator_mcp.schemas import InteractionContext
 from social_core.stm import StmStore, build_stm_prompt_block
 
 from presence_ui.deps import get_stores
+from presence_ui.gateway.context_limits import enrich_max_chars, lite_stm_max_chars
 from presence_ui.gateway.prompt_block_safe import truncate_prompt_text
 from presence_ui.services.dream_digest import load_dream_digest
 from presence_ui.services.somatic_context import is_morning_digest_window
@@ -42,7 +43,30 @@ def build_dream_digest_block(*, local_time: str, timezone: str) -> str:
     return record.summary.strip()
 
 
-def build_live_stm_block(*, person_id: str = "ma", limit: int = 10) -> str:
+def build_overnight_inner_voice_block(*, local_time: str, timezone: str) -> str:
+    """Surface synthesized overnight inner voice during morning compose (MEM-5f-c)."""
+    if not is_morning_digest_window(local_time=local_time, timezone=timezone):
+        return ""
+    record = load_dream_digest()
+    if record is None or not (record.inner_voice_summary or "").strip():
+        return ""
+    dreamed = _parse_local_ts(record.dreamed_at, timezone)
+    if dreamed is None:
+        return ""
+    now = _parse_local_ts(local_time, timezone)
+    if now is None:
+        return ""
+    if (now - dreamed).total_seconds() > 36 * 3600:
+        return ""
+    return record.inner_voice_summary.strip()
+
+
+def build_live_stm_block(
+    *,
+    person_id: str = "ma",
+    limit: int = 10,
+    max_chars: int | None = None,
+) -> str:
     """Today's undreamed STM buffer for conversational continuity."""
     stores = get_stores()
     stm = StmStore(stores.db)
@@ -59,7 +83,10 @@ def build_live_stm_block(*, person_id: str = "ma", limit: int = 10) -> str:
     )
     if not entries:
         entries = stm.recent(person_id=person_id, limit=limit, undreamed_only=True)
-    return build_stm_prompt_block(entries)
+    block = build_stm_prompt_block(entries)
+    if max_chars and len(block) > max_chars:
+        block = truncate_prompt_text(block, max_chars)
+    return block
 
 
 def enrich_memory_context(
@@ -67,12 +94,25 @@ def enrich_memory_context(
     *,
     person_id: str = "ma",
     channel: str | None = None,
+    user_text: str | None = None,
 ) -> InteractionContext:
     blocks: list[str] = []
     dream_block = build_dream_digest_block(local_time=ctx.local_time, timezone=ctx.timezone)
     if dream_block:
         blocks.append(dream_block)
-    stm_block = build_live_stm_block(person_id=person_id)
+    inner_voice_block = build_overnight_inner_voice_block(
+        local_time=ctx.local_time,
+        timezone=ctx.timezone,
+    )
+    if inner_voice_block:
+        blocks.append(inner_voice_block)
+    stm_limit = 10
+    stm_max_chars = lite_stm_max_chars() if channel == "chat" else None
+    stm_block = build_live_stm_block(
+        person_id=person_id,
+        limit=stm_limit,
+        max_chars=stm_max_chars,
+    )
     if stm_block:
         blocks.append(stm_block)
     if not blocks:
@@ -80,4 +120,6 @@ def enrich_memory_context(
     extra = "\n\n".join(blocks)
     compact = ctx.compact_prompt_block.strip()
     compact = f"{compact}\n\n{extra}" if compact else extra
-    return ctx.model_copy(update={"compact_prompt_block": truncate_prompt_text(compact, 12000)})
+    return ctx.model_copy(
+        update={"compact_prompt_block": truncate_prompt_text(compact, enrich_max_chars())}
+    )

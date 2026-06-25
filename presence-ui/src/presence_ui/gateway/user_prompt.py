@@ -18,12 +18,19 @@ _SYSTEM_BLOCK_RES = (
     re.compile(r"^\[memory_save_failed\]", re.I),
     re.compile(r"^\[memory_list_prefetch\]", re.I),
     re.compile(r"^\[vision_prefetch\]\s*$", re.I),
+    re.compile(r"^\[web_search_prefetch\]\s*$", re.I),
+    re.compile(r"^\[/web_search_prefetch\]", re.I),
+    re.compile(r"^\[url_prefetch\]\s*$", re.I),
+    re.compile(r"^\[/url_prefetch\]", re.I),
     re.compile(r"^\[Gateway directive\b", re.I),
     re.compile(r"^\[stm_recent\]\s*$", re.I),
     re.compile(r"^\[/stm_recent\]", re.I),
     re.compile(r"^\[dream_digest\]\s*$", re.I),
     re.compile(r"^\[/dream_digest\]", re.I),
+    re.compile(r"^\[overnight_inner_voice\]\s*$", re.I),
+    re.compile(r"^\[/overnight_inner_voice\]", re.I),
     re.compile(r"^\[inbound_nudge\b", re.I),
+    re.compile(r"^\[inbound_reply\b", re.I),
     re.compile(r"^\[somatic_state\]\s*$", re.I),
     re.compile(r"^\[relevant_memories\]\s*$", re.I),
     re.compile(r"^\[commitments_due\]\s*$", re.I),
@@ -36,12 +43,17 @@ _DIRECTIVE_BLOCK_RES = (
     re.compile(r"^\[memory_save_failed\]", re.I),
     re.compile(r"^\[memory_list_prefetch\]", re.I),
     re.compile(r"^\[vision_prefetch\]\s*$", re.I),
+    re.compile(r"^\[web_search_prefetch\]\s*$", re.I),
+    re.compile(r"^\[/web_search_prefetch\]", re.I),
+    re.compile(r"^\[url_prefetch\]\s*$", re.I),
+    re.compile(r"^\[/url_prefetch\]", re.I),
     re.compile(r"^\[Gateway directive\b", re.I),
 )
 
 _PAIRED_BLOCK_OPENERS = {
     "[stm_recent]": "[/stm_recent]",
     "[dream_digest]": "[/dream_digest]",
+    "[overnight_inner_voice]": "[/overnight_inner_voice]",
 }
 
 _STM_BULLET_RE = re.compile(r"^- \([a-z_]+\)", re.I)
@@ -53,6 +65,12 @@ _STM_ORPHAN_LINE_RES = (
 )
 
 _GATEWAY_WRAPPER_RE = re.compile(r"^\[gateway_turn_context\b", re.I)
+
+_TAIL_PREFETCH_RES = (
+    re.compile(r"\n\[url_prefetch\][\s\S]*$", re.I),
+    re.compile(r"\n\[web_search_prefetch\][\s\S]*$", re.I),
+    re.compile(r"\n\[vision_prefetch\][\s\S]*$", re.I),
+)
 
 _ROOM_CONTEXT_BODY_RES = (
     re.compile(r"^Room arc:", re.I),
@@ -161,6 +179,13 @@ def _block_indices(lines: list[str], header_index: int, next_header: int | None)
             start += 1
         return range(header_index, start)
 
+    if header.strip().startswith("[inbound_reply"):
+        while start < end and lines[start].strip():
+            start += 1
+        while start < end and not lines[start].strip():
+            start += 1
+        return range(header_index, start)
+
     if _is_directive_block_header(header):
         while start < end and lines[start].strip():
             start += 1
@@ -169,6 +194,24 @@ def _block_indices(lines: list[str], header_index: int, next_header: int | None)
         return range(header_index, start)
 
     return range(header_index, header_index + 1)
+
+
+def _strip_one_trailing_tail_prefetch(remainder: str) -> tuple[str, bool]:
+    """Drop KV-tail prefetch blocks appended after the user utterance."""
+    for pattern in _TAIL_PREFETCH_RES:
+        match = pattern.search(remainder)
+        if match:
+            return remainder[: match.start()].rstrip(), True
+    return remainder, False
+
+
+def _strip_trailing_tail_prefetch(remainder: str) -> str:
+    out = remainder or ""
+    for _ in range(5):
+        out, changed = _strip_one_trailing_tail_prefetch(out)
+        if not changed:
+            break
+    return out
 
 
 def _strip_gateway_wrapper_tail(text: str) -> str | None:
@@ -185,6 +228,7 @@ def _strip_gateway_wrapper_tail(text: str) -> str | None:
     if not lines or not _GATEWAY_WRAPPER_RE.match(lines[0].strip()):
         return None
     remainder = "\n".join(lines[1:])
+    remainder = _strip_trailing_tail_prefetch(remainder)
     if "\n\n" not in remainder:
         tail = remainder.strip()
         return tail if tail and not looks_like_injected_prompt(tail) else None

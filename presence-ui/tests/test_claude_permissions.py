@@ -46,7 +46,7 @@ def test_list_permission_state(settings_file: Path) -> None:
 
     presets, preserved = list_permission_state()
     enabled = {p.id for p in presets if p.enabled}
-    assert "web_fetch" in enabled
+    assert "web_fetch" not in enabled
     assert "memory" in enabled
     assert "wifi_cam" not in enabled
     assert "Read(//c/Users/ma/src/embodied-claude/**)" in preserved
@@ -72,7 +72,7 @@ def test_get_claude_permissions_api(settings_file: Path) -> None:
     assert res.status_code == 200
     body = res.json()
     assert body["editable"] is True
-    assert any(p["id"] == "web_fetch" and p["enabled"] for p in body["presets"])
+    assert any(p["id"] == "web_fetch" and not p["enabled"] for p in body["presets"])
     assert "ANTHROPIC_AUTH_TOKEN" not in json.dumps(body)
 
 

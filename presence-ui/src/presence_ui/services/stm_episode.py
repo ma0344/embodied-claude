@@ -8,6 +8,10 @@ import httpx
 from social_core.stm import StmStore
 from social_core.stm_episode import summarize_episode_turns
 
+from presence_ui.deps import get_stores
+from presence_ui.gateway.user_prompt import strip_enriched_user_prompt
+from presence_ui.services.llm import _lm_studio_settings, _parse_openai_chat_content
+
 
 def _episode_ts_from_turns(turns: list[dict[str, str | None]]) -> str | None:
     for turn in reversed(turns):
@@ -18,8 +22,44 @@ def _episode_ts_from_turns(turns: list[dict[str, str | None]]) -> str | None:
                 return text
     return None
 
-from presence_ui.deps import get_stores
-from presence_ui.services.llm import _lm_studio_settings, _parse_openai_chat_content
+
+def _sanitize_episode_turn_message(sender: str, message: str) -> str:
+    """Strip compose injection from stored turns before STM summarization (MEM-5g)."""
+    text = (message or "").strip()
+    if not text:
+        return ""
+    if sender == "ma":
+        return strip_enriched_user_prompt(text)
+    return text
+
+
+def _sanitize_episode_turns(turns: list[dict[str, str | None]]) -> list[dict[str, str | None]]:
+    from social_core.stm_episode import drop_adjacent_echo_turns
+
+    cleaned: list[dict[str, str | None]] = []
+    for turn in turns:
+        sender = str(turn.get("sender") or "").strip().lower()
+        message = _sanitize_episode_turn_message(sender, str(turn.get("message") or ""))
+        if sender not in {"ma", "koyori"} or not message:
+            continue
+        cleaned.append(
+            {
+                "sender": sender,
+                "message": message,
+                "timestamp": turn.get("timestamp") or turn.get("ts"),
+            }
+        )
+    kept = drop_adjacent_echo_turns([(row["sender"], row["message"]) for row in cleaned])
+    if len(kept) == len(cleaned):
+        return cleaned
+    out: list[dict[str, str | None]] = []
+    cursor = 0
+    for row in cleaned:
+        pair = (row["sender"], row["message"])
+        if cursor < len(kept) and kept[cursor] == pair:
+            out.append(row)
+            cursor += 1
+    return out
 
 
 def _episode_salience_metadata(
@@ -90,6 +130,7 @@ async def summarize_episode_for_stm(
     use_llm: bool | None = None,
 ) -> str | None:
     """Rule-based summary; optional LM Studio polish when enabled."""
+    turns = _sanitize_episode_turns(turns)
     base = summarize_episode_turns(turns)
     if not base:
         return None
@@ -202,6 +243,9 @@ def _turns_from_chat_messages(messages: list) -> list[dict[str, str | None]]:
             text = str(getattr(msg, "message", "") or "").strip()
             ts = getattr(msg, "timestamp", None)
         if sender not in {"ma", "koyori"} or not text:
+            continue
+        text = _sanitize_episode_turn_message(str(sender), text)
+        if not text:
             continue
         turns.append({"sender": str(sender), "message": text, "timestamp": ts})
     return turns

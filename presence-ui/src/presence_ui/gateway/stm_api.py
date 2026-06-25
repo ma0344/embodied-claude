@@ -130,7 +130,19 @@ class StmDreamResponse(BaseModel):
     consolidate_ok: bool = False
     consolidate_stats: dict[str, Any] | None = None
     digest_summary: str = ""
+    inner_voice_summary: str = ""
     daybook_day: str | None = None
+
+
+class StmRebuildDreamDigestRequest(BaseModel):
+    person_id: str = "ma"
+    regenerate_inner_voice: bool = True
+    use_llm: bool | None = None
+
+
+class StmRebuildDreamDigestResponse(BaseModel):
+    ok: bool = True
+    digest: dict[str, Any] | None = None
 
 
 class StmDreamDigestResponse(BaseModel):
@@ -154,3 +166,16 @@ async def stm_dream(body: StmDreamRequest) -> StmDreamResponse:
         force=body.force,
     )
     return StmDreamResponse.model_validate(result.to_dict())
+
+
+async def stm_rebuild_dream_digest(body: StmRebuildDreamDigestRequest) -> StmRebuildDreamDigestResponse:
+    from presence_ui.services.dreaming import rebuild_saved_dream_digest
+
+    record = rebuild_saved_dream_digest(
+        person_id=body.person_id,
+        regenerate_inner_voice=body.regenerate_inner_voice,
+        use_llm=body.use_llm,
+    )
+    if record is None:
+        return StmRebuildDreamDigestResponse(ok=False, digest=None)
+    return StmRebuildDreamDigestResponse(ok=True, digest=record.to_dict())

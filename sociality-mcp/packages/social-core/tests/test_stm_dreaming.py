@@ -166,3 +166,29 @@ def test_build_dream_digest_note_when_only_private_reflection():
     digest = build_dream_digest([reflection])
     assert "no episodic rows" in digest
     assert "agent_private_reflection" not in digest
+
+
+def test_build_dream_digest_sanitizes_gateway_polluted_episode_close():
+    polluted = """【会話の一区切り】
+まー: [gateway_turn_context — not for the user]
+[Social context]
+[interaction_context]
+
+おるよ～
+こより: お疲れさま、ゆっくりしといて。"""
+    loop = _entry(
+        entry_id="loop1",
+        kind="open_loop_progress",
+        source="experience_mirror",
+        summary="backlog を一緒に整理した",
+        ts="2026-06-16T22:00:00+09:00",
+    )
+    episode = _entry(
+        entry_id="ep1",
+        summary=polluted,
+        ts="2026-06-16T21:00:00+09:00",
+    )
+    digest = build_dream_digest([loop, episode])
+    assert "gateway_turn_context" not in digest
+    assert "おるよ" in digest
+    assert "backlog" in digest

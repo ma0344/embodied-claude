@@ -27,7 +27,10 @@ from .inference import (
     FUTURE_MARKERS,
     STRESS_KEYWORDS,
     compute_snapshot_metrics,
+    extract_archive_remember_content,
     extract_dismiss_topic,
+    has_remember_save_trigger,
+    is_archive_remember_utterance,
     is_dismiss_utterance,
     is_recall_loop_topic,
     is_recall_utterance,
@@ -331,6 +334,43 @@ class RelationshipStore:
                 ts=ts,
                 source_event_id=source_event_id,
                 source_text=source_text,
+            )
+            closed.append(loop.topic)
+        return closed
+
+    def close_loops_after_remember_save(
+        self,
+        *,
+        person_id: str,
+        utterance: str,
+        saved_content: str | None,
+        ts: str,
+        source_event_id: str = "",
+    ) -> list[str]:
+        """Close open loops superseded by successful LTM/gist archival (MEM-8f / OL-ARCHIVE 1)."""
+        if not has_remember_save_trigger(utterance):
+            return []
+        archive_content = extract_archive_remember_content(utterance)
+        if not archive_content and not saved_content:
+            return []
+
+        closed: list[str] = []
+        for loop in self.list_open_loops(person_id=person_id, limit=20):
+            if not self._matches_archive_remember_target(
+                loop.topic,
+                utterance=utterance,
+                archive_content=archive_content,
+                saved_content=saved_content,
+            ):
+                continue
+            self._close_open_loop(
+                loop_id=loop.id,
+                person_id=person_id,
+                topic=loop.topic,
+                ts=ts,
+                source_event_id=source_event_id,
+                source_text=utterance,
+                close_kind="archived_remember",
             )
             closed.append(loop.topic)
         return closed
@@ -683,6 +723,78 @@ class RelationshipStore:
         )
         return {"boundary_id": boundary_id}
 
+    def record_self_disclosure_gist(
+        self,
+        *,
+        person_id: str,
+        text: str,
+        gist: str,
+        ts: str,
+        source_event_id: str | None = None,
+    ) -> None:
+        """MEM-8e: append a compact gist to persons.profile_json (L0 retrieve)."""
+        self._ensure_person(person_id)
+        gist_text = gist.strip()
+        if not gist_text:
+            return
+        row = self.db.fetchone(
+            "SELECT profile_json FROM persons WHERE person_id = ?",
+            (person_id,),
+        )
+        if row is None:
+            return
+        try:
+            profile = json.loads(str(row["profile_json"] or "{}"))
+        except json.JSONDecodeError:
+            profile = {}
+        if not isinstance(profile, dict):
+            profile = {}
+        entries: list[dict[str, str]] = [
+            item
+            for item in profile.get("self_disclosure_gists", [])
+            if isinstance(item, dict) and item.get("gist") != gist_text
+        ]
+        entries.insert(
+            0,
+            {
+                "gist": gist_text,
+                "text": text[:500],
+                "ts": ensure_iso8601(ts),
+                **({"source_event_id": source_event_id} if source_event_id else {}),
+            },
+        )
+        profile["self_disclosure_gists"] = entries[:10]
+        with self.db.transaction() as connection:
+            connection.execute(
+                """
+                UPDATE persons
+                SET profile_json = ?, updated_at = ?
+                WHERE person_id = ?
+                """,
+                (json.dumps(profile, ensure_ascii=False), ensure_iso8601(ts), person_id),
+            )
+
+    def _profile_gists_for(self, person_id: str) -> list[str]:
+        row = self.db.fetchone(
+            "SELECT profile_json FROM persons WHERE person_id = ?",
+            (person_id,),
+        )
+        if row is None:
+            return []
+        try:
+            profile = json.loads(str(row["profile_json"] or "{}"))
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(profile, dict):
+            return []
+        gists: list[str] = []
+        for item in profile.get("self_disclosure_gists", []):
+            if isinstance(item, dict):
+                gist = str(item.get("gist") or "").strip()
+                if gist and gist not in gists:
+                    gists.append(gist)
+        return gists[:5]
+
     def get_person_model(self, *, person_id: str) -> PersonModel:
         self.refresh_snapshot(person_id)
         person = self.db.fetchone(
@@ -764,6 +876,7 @@ class RelationshipStore:
             rituals=rituals,
             boundaries=boundaries,
             relationship_summary=summary,
+            profile_gists=self._profile_gists_for(person_id),
             last_updated=str(snapshot["ts"] if snapshot else person["updated_at"]),
         )
 
@@ -1090,6 +1203,8 @@ class RelationshipStore:
             return None
         if is_recall_utterance(text):
             return None
+        if is_archive_remember_utterance(text):
+            return None
         lowered = text.lower()
         if any(marker in lowered or marker in text for marker in FUTURE_MARKERS):
             if "dentist" in lowered or "歯医者" in text:
@@ -1098,6 +1213,32 @@ class RelationshipStore:
                 return "pr review"
             return _normalize_topic(text)
         return None
+
+    def _matches_archive_remember_target(
+        self,
+        loop_topic: str,
+        *,
+        utterance: str,
+        archive_content: str | None,
+        saved_content: str | None,
+    ) -> bool:
+        norm_utter = _normalize_topic(utterance)
+        if loop_topic == norm_utter:
+            return True
+        for candidate in (archive_content, saved_content):
+            if not candidate:
+                continue
+            norm = _normalize_topic(candidate)
+            if loop_topic == norm:
+                return True
+            if len(norm) >= 4 and (norm in loop_topic or loop_topic in norm):
+                return True
+        explicit = archive_content or saved_content
+        if explicit and self._matches_dismiss_target(
+            loop_topic, utterance, _normalize_topic(explicit)
+        ):
+            return True
+        return False
 
     def _loop_matches_dismiss(
         self,
@@ -1164,6 +1305,7 @@ class RelationshipStore:
         ts: str,
         source_event_id: str,
         source_text: str,
+        close_kind: str = "dismissed",
     ) -> None:
         with self.db.transaction() as connection:
             connection.execute(
@@ -1178,7 +1320,7 @@ class RelationshipStore:
                     source_event_id,
                     json.dumps(
                         {
-                            "kind": "dismissed",
+                            "kind": close_kind,
                             "source_text": source_text[:240],
                         },
                         ensure_ascii=False,

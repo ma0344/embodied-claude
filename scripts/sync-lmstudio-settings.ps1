@@ -48,5 +48,5 @@ if ($WhatIf) {
     Write-Host ""
     Write-Host "Restart claude-code-webui if it is running."
     Write-Host "To change the model ID: .\scripts\set-lmstudio-model.ps1 -Model <id>"
-    Write-Host "Docs: docs/lmstudio-model-change.md"
+    Write-Host "Docs: docs/ops/lmstudio-model-change.md"
 }

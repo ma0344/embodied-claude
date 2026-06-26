@@ -5,7 +5,7 @@
 #   .\scripts\set-lmstudio-model.ps1 -VisionModel qwen/qwen2.5-vl-3b-instruct
 #   .\scripts\set-lmstudio-model.ps1 -Model google/gemma-4-12b-qat -VisionModel qwen/qwen2.5-vl-3b-instruct
 #
-# See docs/lmstudio-model-change.md for the full checklist.
+# See docs/ops/lmstudio-model-change.md for the full checklist.
 
 param(
     [string]$Model,
@@ -126,7 +126,7 @@ if ($VisionModel) {
     Write-Host "  2. LM Studio: also load vision $VisionModel (+ mmproj), Concurrent=1"
 }
 Write-Host "  3. .\scripts\check-lmstudio-model.ps1"
-Write-Host "  4. Add vision env to presence-ui.local.env (see docs/lmstudio-model-change.md)"
+Write-Host "  4. Add vision env to presence-ui.local.env (see docs/ops/lmstudio-model-change.md)"
 Write-Host "  5. .\scripts\restart-presence-ui.ps1"
 Write-Host ""
-Write-Host "Docs: docs/lmstudio-model-change.md"
+Write-Host "Docs: docs/ops/lmstudio-model-change.md"

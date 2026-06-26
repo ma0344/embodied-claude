@@ -128,15 +128,16 @@ koyori（Surface Go）          ma-home（Windows + RTX 3090）
 
 | 知りたいこと | 読む場所 |
 |--------------|----------|
+| **ドキュメント全体の読み方** | [README.md](./README.md) |
 | **なぜ・何を目指すか（本文）** | `docs/VISION.md` |
 | ハード・インストール・MCP 一覧 | [README-ja.md](../README-ja.md) |
 | 開発・MCP ツール・Heartbeat | [CLAUDE.md](../CLAUDE.md) |
 | こよりの人格 | `SOUL.md`（`SOUL.md.example` から作成） |
-| LM Studio・モデル切替 | [lmstudio-model-change.md](./lmstudio-model-change.md) |
-| koyori キオスク・IME・BT キーボード | [koyori-kiosk-ime.md](./koyori-kiosk-ime.md)、[koyori-input-sharing.md](./koyori-input-sharing.md) |
+| LM Studio・モデル切替 | [ops/lmstudio-model-change.md](./ops/lmstudio-model-change.md) |
+| koyori キオスク・IME・BT キーボード | [ops/koyori-kiosk-ime.md](./ops/koyori-kiosk-ime.md)、[ops/koyori-input-sharing.md](./ops/koyori-input-sharing.md) |
 | ma-home 運用バックログ | [backlog-ma-home.md](./backlog-ma-home.md) |
-| セッション JSONL → MD export | [session-export-ma-home.md](./session-export-ma-home.md) |
-| セットアップ会話の全文アーカイブ | [cursor_system_setup_for_local_llm_with.md](./cursor_system_setup_for_local_llm_with.md) |
+| セッション JSONL → MD export | [archive/session-export-ma-home.md](./archive/session-export-ma-home.md) |
+| セットアップ会話の全文アーカイブ | [archive/cursor_system_setup_for_local_llm_with.md](./archive/cursor_system_setup_for_local_llm_with.md) |
 | **ma-home で Cursor を開き直すときのプロンプト** | [ma-home-cursor-handoff.md](./ma-home-cursor-handoff.md) |
 
 ---

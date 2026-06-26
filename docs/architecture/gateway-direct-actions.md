@@ -15,7 +15,7 @@
 | compose / plan | `social_chat.intercept_chat_request` in-process | ✓ |
 | human / agent ingest | `room_ingest` | ✓ |
 
-**設計（未実装）**: **黙考ルート** — 表の会話と同じ Claude セッション + stable `appendSystemPrompt` で internal turn を回し、まーに見せず構造化結果だけ stores へ。OL5 完了語セット生成の第一用途。→ [backlog-ma-home.md § GW-SILENT](./backlog-ma-home.md#gw-silent--黙考ルートsilent-internal-turn合意-2026-06-25)
+**設計（未実装）**: **黙考ルート** — 表の会話と同じ Claude セッション + stable `appendSystemPrompt` で internal turn を回し、まーに見せず構造化結果だけ stores へ。OL5 完了語セット生成の第一用途。→ [tracks/gw-silent.md](../tracks/gw-silent.md)
 
 参照: `presence-ui/src/presence_ui/gateway/deterministic_memory.py`
 
@@ -157,6 +157,7 @@ Invoke-RestMethod -Method POST http://127.0.0.1:8090/api/v1/autonomous-tick `
 
 ## 関連
 
-- [lmstudio-kv-cache.md](./lmstudio-kv-cache.md) — daily MCP プロファイル
-- [backlog-ma-home.md](./backlog-ma-home.md) — A3 トラック
+- [ops/lmstudio-kv-cache.md](../ops/lmstudio-kv-cache.md) — daily MCP プロファイル
+- [backlog-ma-home.md](../backlog-ma-home.md) — ダッシュボード
+- [tracks/alive-lw-read.md](../tracks/alive-lw-read.md) — LW-READ v0/v1
 - [mission-A_Investigation-Report.md](./mission-A_Investigation-Report.md) — compose 経路

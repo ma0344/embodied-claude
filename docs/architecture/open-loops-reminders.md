@@ -14,7 +14,7 @@
 - **OL1c（2026-06-19）**: 日曜始まりの週界 + 曜日 lookup（コードのみ）— `来週の火曜` / `再来週の月曜` / `一週間後` / `N日後` / `来月の頭` / `今週末` / `6月20日` など
 - **OL2（temporal）（2026-06-19）**: `次の{曜}` / `今度の{曜}`（同義・次に来るその曜日）、`来週中` 等の曖昧スパンはアンカーせず `needs_date_confirmation` → compose `[date_confirmation_needed]` / plan `must_include` でまーに聞く。`social_core.ja_timex_bridge`（任意・PoC/ベンチ用）
 - 期限切れ loop は ingest / 自律 tick 前の `close_stale_open_loops` で `status=closed`（アンカー後は `resolved_date` でも判定）
-- **OL5（未）**: 予定消化（作った/できた）でも loop close — [backlog OL5](./backlog-ma-home.md#ol5--予定消化で-loop-終了合意-2026-06-25)
+- **OL5（未）**: 予定消化（作った/できた）でも loop close — [tracks/ol5.md](../tracks/ol5.md)
 - 手動掃除: `scripts/purge-stale-open-loops.py`（共有ロジックは `social_core.date_resolution`）
 
 ### OL2 — リマインド

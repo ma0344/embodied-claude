@@ -1,7 +1,7 @@
 # RP Phase 1 — LM Studio carries SOUL.core; presence-ui skips duplicate append.
 #
 # Prerequisite: paste presets/koyori-SOUL.core.md into LM Studio chat model System Prompt
-# (google/gemma-4-12b-qat). See docs/lmstudio-model-change.md § SOUL.core
+# See docs/ops/lmstudio-model-change.md § SOUL.core
 #
 # Usage:
 #   cd C:\Users\ma\src\embodied-claude

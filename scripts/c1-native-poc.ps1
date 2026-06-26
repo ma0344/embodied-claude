@@ -6,7 +6,7 @@
 # Disable (remove flag + restart):
 #   .\scripts\c1-native-poc.ps1 -Disable
 #
-# Docs: docs/c1-native-poc.md
+# Docs: docs/archive/c1-native-poc.md
 
 param(
     [switch]$Enable,
@@ -56,7 +56,7 @@ C1 Native PoC toggle
   .\scripts\c1-native-poc.ps1 -Disable   # back to gateway-only
   .\scripts\c1-native-poc.ps1 -Status
 
-See docs/c1-native-poc.md
+See docs/archive/c1-native-poc.md
 "@
     exit 0
 }
@@ -103,7 +103,7 @@ Write-Host ""
 if ($Enable) {
     Write-Host "Open:  http://localhost:$Port/poc/native"
     Write-Host "Password (default): koyori-poc"
-    Write-Host "Checklist: docs/c1-native-poc.md"
+    Write-Host "Checklist: docs/archive/c1-native-poc.md"
 } else {
     Write-Host "Back to gateway-only. Room: http://localhost:$Port/"
 }

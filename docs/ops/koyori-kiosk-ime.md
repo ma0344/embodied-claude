@@ -173,11 +173,11 @@ KOYORI_DISPLAY_MODE=1800x1200
 
 **Keychron K4 MAX** — `Fn+1` ma-home / `Fn+2` koyori。ペア: `koyori-pair-keychron.sh`（MAC は変わっても名前で検出）
 
-→ `docs/koyori-input-sharing.md`
+→ [ops/koyori-input-sharing.md](../ops/koyori-input-sharing.md)
 
 ## 関連
 
-- `docs/koyori-input-sharing.md`
+- [ops/koyori-input-sharing.md](../ops/koyori-input-sharing.md)
 - `docs/backlog-koyori.md`
 - `docs/backlog-ma-home.md` — webui + presence-ui 常時起動（後で）
 - `scripts/koyori-kiosk/koyori-kiosk.sh`

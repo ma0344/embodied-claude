@@ -16,7 +16,7 @@
 
 | **1. handoff 1 枚** | 索引・済・次・**運用ウォッチ**・Linksee 運用 | `docs/handoffs/YYYY-MM-DD-<topic>.md` |
 
-| **2. backlog** | 設計・事例・未着手 ID（詳細の正） | `docs/backlog-ma-home.md` の MEM-* 節 |
+| **2. backlog** | 設計・事例・未着手 ID（詳細の正） | `docs/archive/backlog-ma-home-full-2026-06-26.md` または `docs/tracks/` |
 
 | **3. Linksee** | 開発セッションの決定・ caveat・**状況更新**（積極利用） | entity `embodied-claude-Win`、`recall` / `remember` |
 

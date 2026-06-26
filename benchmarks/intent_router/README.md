@@ -28,7 +28,7 @@ LM Studio: same env as gateway (`ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` or 
 
 `chat`, `speech`, `remember`, `observe_*`, `ptz_*` — see `taxonomy.py`.
 
-Aligned with [intent-bucket-flow.md §5](../docs/intent-bucket-flow.md) buckets + observe/ptz sub-modes.
+Aligned with [intent-bucket-flow.md §5](../docs/architecture/intent-bucket-flow.md) buckets + observe/ptz sub-modes.
 
 ## Floors
 
@@ -74,5 +74,5 @@ Drop `fixtures/NN_name.json`:
 
 ## Related
 
-- [intent-bucket-flow.md §7.2](../docs/intent-bucket-flow.md) — LLM fallback design
+- [intent-bucket-flow.md §7.2](../docs/architecture/intent-bucket-flow.md) — LLM fallback design
 - [backlog C12](../docs/backlog-ma-home.md) — production router (after IBF-7 data)

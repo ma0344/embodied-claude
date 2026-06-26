@@ -12,7 +12,7 @@ Input Leap 無効時は `KOYORI_INPUT_LEAP_SERVER` 未設定のまま → BT の
 
 **動いている構成（LAN）**: 両方 `--disable-crypto`。Server は **1 プロセスだけ**。
 
-**日本語（確認済み）**: Input Leap は半/全を **`'`** として転送（US 配列扱い）。**Mozc プロパティで Ctrl+Shift+Space** を IME トグルに設定 → キーボードで切替可。IBUS パネル あ/A も可。BT なら半/全。→ `docs/koyori-kiosk-ime.md`
+**日本語（確認済み）**: Input Leap は半/全を **`'`** として転送（US 配列扱い）。**Mozc プロパティで Ctrl+Shift+Space** を IME トグルに設定 → キーボードで切替可。IBUS パネル あ/A も可。BT なら半/全。→ [ops/koyori-kiosk-ime.md](./koyori-kiosk-ime.md)
 
 **再起動後**: koyori はキオスク起動時に client + **watch**（30s ごとに再起動）。ma-home Server は **WinGet 3.0.2 の Windows サービス `InputLeap`**（自動起動）+ 任意で GUI トレイ。Surface だけ先に起動すると数分待つか watch が拾う。
 
@@ -288,4 +288,4 @@ sudo systemctl start bluetooth
 
 - `scripts/koyori-kiosk/koyori-pair-keychron.sh`
 - `scripts/koyori-kiosk/koyori-connect-keychron.sh`
-- `docs/koyori-kiosk-ime.md` — 半/全 / Mozc
+- [ops/koyori-kiosk-ime.md](./koyori-kiosk-ime.md) — 半/全 / Mozc

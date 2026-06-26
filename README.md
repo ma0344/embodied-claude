@@ -45,7 +45,7 @@ Traditional LLMs were passive — they could only see what was shown to them. Wi
 **Supported:** macOS, Linux, WSL2 (Ubuntu 24 recommended), **Windows native** (this fork’s production host: ma-home)
 
 > Upstream docs often assume WSL2. **This fork runs in production on ma-home (Windows + LM Studio).**
-> See `scripts/*.ps1` and [docs/backlog-ma-home.md](./docs/backlog-ma-home.md).
+> See `scripts/*.ps1`, [docs/README.md](./docs/README.md), and [docs/backlog-ma-home.md](./docs/backlog-ma-home.md).
 
 ### Hardware
 - **USB Webcam** (optional): nuroum V11 etc.

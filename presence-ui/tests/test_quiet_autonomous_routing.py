@@ -152,3 +152,43 @@ async def test_quiet_literary_wander_reads_aozora() -> None:
 
     read_mock.assert_called_once()
     assert outcome.action == "read_aozora_passage"
+
+
+@pytest.mark.asyncio
+async def test_pause_phase_routes_to_reflect_not_read() -> None:
+    stores = MagicMock()
+    ctx = _quiet_ctx(dominant="literary_wander")
+    plan = _plan(
+        allowed=["read_aozora_passage", "reflect_on_aozora_passage", "write_private_reflection"]
+    )
+
+    with (
+        patch(
+            "presence_ui.gateway.direct_actions.reading_phase",
+            return_value="pause",
+        ),
+        patch(
+            "presence_ui.gateway.direct_actions.reflect_on_aozora_passage_direct",
+            return_value=direct_actions.DirectActionOutcome(
+                ok=True,
+                action="reflect_on_aozora_passage",
+                summary="噛んだ",
+                desire_satisfied="cognitive_load",
+            ),
+        ) as reflect_mock,
+        patch(
+            "presence_ui.gateway.direct_actions.read_aozora_passage_direct",
+            new=AsyncMock(),
+        ) as read_mock,
+    ):
+        outcome = await direct_actions.execute_autonomous_plan(
+            stores,
+            person_id="ma",
+            ctx=ctx,
+            plan=plan,
+        )
+
+    reflect_mock.assert_called_once()
+    read_mock.assert_not_called()
+    assert outcome.action == "reflect_on_aozora_passage"
+

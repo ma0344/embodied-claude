@@ -11,28 +11,39 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from interaction_orchestrator_mcp.plan import inward_autonomous_window
 from interaction_orchestrator_mcp.schemas import (
     AppendPrivateReflectionInput,
     InteractionContext,
     RecordAgentExperienceInput,
     ResponsePlan,
 )
-from interaction_orchestrator_mcp.plan import inward_autonomous_window
 from social_core import utc_now
 
 from presence_ui.deps import PresenceStores
-from presence_ui.gateway.aozora import aozora_passage_max_chars, pick_passage
+from presence_ui.gateway.aozora import (
+    aozora_passage_max_chars,
+    complete_reading_pause,
+    finish_close_book,
+    load_reading_state,
+    pick_passage,
+    reading_phase,
+)
 from presence_ui.gateway.memory_http import http_recall, http_recall_divergent, http_remember
+from presence_ui.gateway.reading_prompts import (
+    build_close_book_reflection,
+    build_pause_reflection_v0,
+)
 from presence_ui.gateway.room_events import activity_event, progress_event
 from presence_ui.gateway.web_search import ddg_instant_answer, pick_browse_query
 from presence_ui.services.camera_locations import CAMERA_LOCATIONS, PresetLocation
-from presence_ui.services.somatic_context import quiet_from_context
 from presence_ui.services.outbound import (
     default_surface_channels,
     enqueue_outbound_nudge,
     outbound_delivery_artifacts,
     voice_local_enabled,
 )
+from presence_ui.services.somatic_context import quiet_from_context
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +203,15 @@ async def read_aozora_passage_direct(
     ctx: InteractionContext,
     plan: ResponsePlan,
 ) -> DirectActionOutcome:
-    """Fetch one Aozora passage, remember it, and write a private reflection."""
+    """READ phase: one Aozora chunk → remember; reflection is PAUSE (LW-READ)."""
+    if reading_phase() == "pause":
+        return DirectActionOutcome(
+            ok=False,
+            action="read_aozora_passage",
+            summary="Reading phase is pause — chew before next passage.",
+            detail="wrong_phase",
+        )
+
     picked = await asyncio.to_thread(pick_passage)
     if picked is None:
         return DirectActionOutcome(
@@ -226,32 +245,6 @@ async def read_aozora_passage_direct(
     )
     remember_ok = bool(remember_result.get("ok"))
 
-    why = (plan.why_this_move or "").strip()
-    reflection_parts = [
-        "（青空の一節）",
-        f"『{title}』{f' — {author}' if author else ''}",
-        passage,
-    ]
-    if why:
-        reflection_parts.append(why)
-    reflection_body = "\n\n".join(reflection_parts)[:2000]
-
-    reflection_outcome = write_private_reflection_direct(
-        stores,
-        person_id=person_id,
-        ctx=ctx,
-        plan=plan,
-        body=reflection_body,
-    )
-    if not reflection_outcome.ok:
-        return DirectActionOutcome(
-            ok=False,
-            action="read_aozora_passage",
-            summary="Fetched passage but private reflection failed.",
-            detail=picked.source_url,
-            events=reflection_outcome.events,
-        )
-
     summary = f"青空『{title}』— {passage[:220]}"
     stores.orchestrator.record_agent_experience(
         RecordAgentExperienceInput(
@@ -259,7 +252,7 @@ async def read_aozora_passage_direct(
             person_id=person_id,
             kind="agent_autonomous_action",
             summary=summary,
-            private_summary=reflection_body[:400],
+            private_summary=passage[:400],
             public_summary="",
             importance=4,
             privacy_level="private",
@@ -270,6 +263,7 @@ async def read_aozora_passage_direct(
                     "work_id": work.work_id,
                     "passage_index": picked.passage_index,
                     "remember_ok": remember_ok,
+                    "lw_read_phase": "read",
                 }
             ],
         )
@@ -286,6 +280,181 @@ async def read_aozora_passage_direct(
                 kind="read",
                 label="青空文庫",
                 detail=f"{title}: {summary[:80]}",
+                ok=True,
+            ),
+        ],
+    )
+
+
+def close_aozora_reading_direct(
+    stores: PresenceStores,
+    *,
+    person_id: str,
+    ctx: InteractionContext,
+    plan: ResponsePlan,
+) -> DirectActionOutcome:
+    """CLOSE phase: summarize one finished book and open the next."""
+    state = load_reading_state()
+    last = state.last_passage or {}
+    title = str(last.get("title") or "（作品）")
+    author = str(last.get("author") or "")
+    sections = state.sections_this_session
+    body = build_close_book_reflection(
+        title=title,
+        author=author,
+        sections_read=sections,
+        last_hook=state.last_hook,
+    )
+    outcome = write_private_reflection_direct(
+        stores,
+        person_id=person_id,
+        ctx=ctx,
+        plan=plan,
+        body=body,
+    )
+    if not outcome.ok:
+        return DirectActionOutcome(
+            ok=False,
+            action="close_aozora_reading",
+            summary="Could not save book-close note.",
+            detail=outcome.detail,
+            events=outcome.events,
+        )
+
+    finish_close_book()
+    summary = f"青空『{title}』を閉じた（{sections} 節）"
+    stores.orchestrator.record_agent_experience(
+        RecordAgentExperienceInput(
+            ts=utc_now(),
+            person_id=person_id,
+            kind="agent_autonomous_action",
+            summary=summary,
+            private_summary=body[:400],
+            public_summary="",
+            importance=4,
+            privacy_level="private",
+            related_event_ids=[],
+            artifacts=[{"lw_read_phase": "close", "title": title}],
+        )
+    )
+    return DirectActionOutcome(
+        ok=True,
+        action="close_aozora_reading",
+        summary=summary,
+        detail=title,
+        events=[
+            progress_event(phase="read", label="一冊読み終えた"),
+            activity_event(
+                kind="read",
+                label="青空文庫",
+                detail=summary[:120],
+                ok=True,
+            ),
+        ],
+    )
+
+
+def reflect_on_aozora_passage_direct(
+    stores: PresenceStores,
+    *,
+    person_id: str,
+    ctx: InteractionContext,
+    plan: ResponsePlan,
+) -> DirectActionOutcome:
+    """PAUSE phase: chew the last passage (v0 template; v1 = GW-S1)."""
+    state = load_reading_state()
+    if state.phase == "close":
+        return close_aozora_reading_direct(
+            stores, person_id=person_id, ctx=ctx, plan=plan
+        )
+    if state.phase != "pause":
+        return DirectActionOutcome(
+            ok=False,
+            action="reflect_on_aozora_passage",
+            summary="No passage waiting to reflect on.",
+            detail=f"phase={state.phase}",
+        )
+
+    last = state.last_passage or {}
+    title = str(last.get("title") or "（作品）")
+    author = str(last.get("author") or "")
+    passage = str(last.get("text") or "")
+    if not passage.strip():
+        complete_reading_pause(next_move="advance")
+        return DirectActionOutcome(
+            ok=False,
+            action="reflect_on_aozora_passage",
+            summary="Last passage empty; advanced.",
+            detail="empty_last_passage",
+        )
+
+    body = build_pause_reflection_v0(
+        title=title,
+        author=author,
+        passage=passage,
+        passage_index=int(last.get("passage_index") or 0),
+        total_passages=int(last.get("total_passages") or 1),
+        sections_this_session=state.sections_this_session,
+    )
+    outcome = write_private_reflection_direct(
+        stores,
+        person_id=person_id,
+        ctx=ctx,
+        plan=plan,
+        body=body,
+    )
+    if not outcome.ok:
+        return DirectActionOutcome(
+            ok=False,
+            action="reflect_on_aozora_passage",
+            summary="Pause reflection failed.",
+            detail=outcome.detail,
+            events=outcome.events,
+        )
+
+    # v0: always advance; v1 will pass GW-S1 next_move / hook / followup_query
+    after = complete_reading_pause(next_move="advance")
+    summary = f"青空『{title}』— 一節を噛んだ"
+    stores.orchestrator.record_agent_experience(
+        RecordAgentExperienceInput(
+            ts=utc_now(),
+            person_id=person_id,
+            kind="agent_private_reflection",
+            summary=summary,
+            private_summary=body[:400],
+            public_summary="",
+            importance=3,
+            privacy_level="private",
+            related_event_ids=[],
+            artifacts=[{"lw_read_phase": "pause", "title": title}],
+        )
+    )
+
+    if after.phase == "close":
+        closed = close_aozora_reading_direct(
+            stores, person_id=person_id, ctx=ctx, plan=plan
+        )
+        return DirectActionOutcome(
+            ok=closed.ok,
+            action="reflect_on_aozora_passage",
+            summary=f"{summary} → {closed.summary}",
+            detail=closed.detail,
+            desire_satisfied="cognitive_load",
+            events=outcome.events + closed.events,
+        )
+
+    return DirectActionOutcome(
+        ok=True,
+        action="reflect_on_aozora_passage",
+        summary=summary,
+        detail=title,
+        desire_satisfied="cognitive_load",
+        events=[
+            progress_event(phase="reflect", label="青空を噛んでる"),
+            activity_event(
+                kind="reflect",
+                label="青空の咀嚼",
+                detail=f"{title}: {body[:80]}",
                 ok=True,
             ),
         ],
@@ -1193,6 +1362,8 @@ async def _finalize_autonomous_outcome(
             "quietly_prepare",
             "web_search",
             "read_aozora_passage",
+            "reflect_on_aozora_passage",
+            "close_aozora_reading",
             "think_or_discuss_topic",
             "recall_memories",
         }
@@ -1260,6 +1431,20 @@ async def execute_autonomous_plan(
         not inward and dominant == "browse_curiosity"
     ):
         outcome = await web_search_direct(
+            stores, person_id=person_id, ctx=ctx, plan=plan
+        )
+    elif inward and reading_phase() == "pause" and (
+        "reflect_on_aozora_passage" in allowed or "read_aozora_passage" in allowed
+    ):
+        outcome = reflect_on_aozora_passage_direct(
+            stores, person_id=person_id, ctx=ctx, plan=plan
+        )
+    elif inward and reading_phase() == "close" and (
+        "reflect_on_aozora_passage" in allowed
+        or "read_aozora_passage" in allowed
+        or "close_aozora_reading" in allowed
+    ):
+        outcome = close_aozora_reading_direct(
             stores, person_id=person_id, ctx=ctx, plan=plan
         )
     elif "read_aozora_passage" in allowed:

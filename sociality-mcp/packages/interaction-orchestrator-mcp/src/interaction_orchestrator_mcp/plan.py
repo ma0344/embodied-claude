@@ -286,6 +286,8 @@ def _pick_initiative(
                 allowed.append("web_search")
         if inward_active:
             allowed.append("read_aozora_passage")
+            allowed.append("reflect_on_aozora_passage")
+            allowed.append("close_aozora_reading")
             allowed.append("think_or_discuss_topic")
         if dominant == "identity_coherence":
             allowed.append("recall_memories")

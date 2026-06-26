@@ -107,8 +107,8 @@
 **運用メモ（2026-06-25）**: いまは **このまま試す**。青空は `inward_evening`（20–6）+ quiet で優先しやすいが、**夜間限定は要件ではない**（昼の `literary_wander` も将来可）。
 
 ```
-tick wake → phase=read → READ（active_work 1 冊・1600 字）
-  → phase=pause → GW-S1 黙考（hook / followup_query / next_move）
+tick wake → phase=read → READ（active_work 1 冊・1600 字・remember）
+  → phase=pause → reflect（**v0: テンプレ** / **v1: GW-S1** 黙考）
   → [reread_same | advance] → … → CLOSE（完読 or N 節 or 飽き）
   → [LW-7] followup_query → Web / 朝 compose
 ```
@@ -117,13 +117,13 @@ tick wake → phase=read → READ（active_work 1 冊・1600 字）
 |----|------|------|
 | ALIVE-0 | 方針・北極星（本節） | **済** |
 | ALIVE-1 | **LW-2** `literary_wander` desire + plan 結線 | **済** 2026-06-25 |
-| ALIVE-2 | **GW-S1** — **LW-READ PAUSE** で一節への内省 + `next_move` | 未 |
+| ALIVE-2 | **GW-S1** — `run_silent_internal_turn` + LW-READ PAUSE | **未**（プロンプト草案のみ済） |
 | ALIVE-3 | **LW-5** 状態カード / live_inner_voice（`active_work` 表示） | 未 |
 | ALIVE-4 | 翌朝 `[overnight_inner_voice]` / compose surface | 部分済（MEM-5f-c） |
 | ALIVE-5 | **LW-7** 読書 → 興味 → Web 連鎖 | 未 |
-| ALIVE-6 | **LW-READ** 一冊完走・READ/PAUSE/CLOSE | 未 |
+| ALIVE-6 | **LW-READ** 一冊完走・READ/PAUSE/CLOSE | **v0 済** 2026-06-26 |
 
-**今夜の運用**: `desire-updater` → `restart-presence-ui.ps1`。**LW-2b** quiet の observe フォールバック修正。**LW-2c** `quiet_hours` は 00–07 のみ → **20–6 JST を `inward_evening`** として plan でも内向き（22時台も青空優先、Web/カメラ抑制）。確認: tick log に `read_aozora_passage`。
+**運用（2026-06-26）**: `restart-presence-ui.ps1` で LW-READ v0 反映。tick log で **read / reflect が交互** になること。`~/.claude/aozora_read_state.json` の `phase` を確認。GW-S1 は **まだ配線していない** — PAUSE はテンプレ内省。
 
 ---
 　
@@ -1295,15 +1295,16 @@ MVP チェックリスト:
 | C12 ルーター補助 | `hybrid_intent` の rules 未決時のみ（v2 と同型） |
 | MEM 多視点 encode | episode 前の `gist` / 視点ラベル生成 |
 | 夜間 digest 前処理 | `open_loop_progress` merge 用のトピック正規化 |
-| LW 読書後 | 一節の thematic tag（private reflection へ） |
+| LW 読書後 | 一節の thematic tag（private reflection へ）— **プロンプト草案済** `reading_prompts.py`；**GW-S1 本体未** |
 
-**実装候補（未着手）**
+**実装候補**
 
-| ID | 内容 |
-|----|------|
-| GW-S1 | `run_silent_internal_turn(session_id, task, schema)` — ClaudeAgent + stable append + `forward=False` |
-| GW-S2 | ingest 後「新規 open loop」検知 → GW-S1 を enqueue |
-| GW-S3 | 共通 JSON parse / validate + 失敗時 metrics（`f_keep` は LM Studio ログで別途確認） |
+| ID | 内容 | 状態 |
+|----|------|------|
+| GW-S1 | `run_silent_internal_turn(session_id, task, schema)` — ClaudeAgent + stable append + `forward=False` | **未** |
+| GW-S2 | ingest 後「新規 open loop」検知 → GW-S1 を enqueue | 未 |
+| GW-S3 | 共通 JSON parse / validate + 失敗時 metrics | 未 |
+| GW-S1-prompt | LW-READ PAUSE 用 `build_gw_s1_pause_task` + `PAUSE_RESPONSE_SCHEMA`（`felt` に bored / つまらなかった 可） | **済** 2026-06-26 |
 
 参照: [gateway-direct-actions.md](./gateway-direct-actions.md)、`social_chat.py`（`stream_silent_response`）、`prompt_injection.py`
 
@@ -1446,9 +1447,16 @@ Gemma 出力から採用しうる **完了動詞・表現の族**（分類の説
 
 **インフラ（済）**: HeartbeatLoop、`desire-system` v2（`literary_wander`）、`read_aozora_passage`、`web_search_direct`、`inward_evening` plan（LW-2c）。
 
-**いま（2026-06-26）**: 第一縦スライス（青空が動く）は **済**。昨晩 28 tick 連続読書は **並列斜め読み**（3 作品ローテ）— 「読んだだけ」問題のため **LW-READ** 読書状態機械へ移行する（合意 2026-06-26）。
+**いま（2026-06-26）**
 
-**ギャップ（次の縦スライス）**: 一節摂取だけで **咀嚼（PAUSE）・完走（CLOSE）** がない。読書 → Web 連鎖（LW-7）は **PAUSE 後の GW-S1 出力** を前提にする。
+| 層 | 状態 |
+|----|------|
+| LW-2 | 青空が inward tick で動く — **済** |
+| LW-READ **v0** | 一冊完走・READ/PAUSE 交互・CLOSE — **済**（`reflect_on_aozora_passage` はテンプレ） |
+| GW-S1 | **未配線** — `reading_prompts.py` にタスク文・JSON schema のみ |
+| LW-7 | PAUSE の `followup_query` → Web — **未** |
+
+**ギャップ（次）**: GW-S1 黙考（`next_move` / `reread_same` / `close_book` の本物判断）、LW-7 Web 連鎖、LW-5 UI、朝 compose surface。
 
 ```
 wake → desire/discomfort + SOUL
@@ -1470,7 +1478,7 @@ read_aozora → remember（一節）
 | ID | 層 | 内容 | 状態 |
 |----|-----|------|------|
 | **LW-0** | 方針 | 希望/恐れ・5層整理（本節） | **済** |
-| **LW-1** | 実行 | gateway `read_aozora_passage` — 節取得・`remember` + private 内省 | **済** |
+| **LW-1** | 実行 | gateway `read_aozora_passage` — 節取得・`remember`（咀嚼は PAUSE へ分離） | **済**（LW-READ v0 で更新） |
 | **LW-2** | 動機 | `literary_wander` + inward_evening plan + satisfy 回路 | **済** 2026-06-25 |
 | **LW-2d** | 運用 | 段落バンドル最大 1600 字、`PRESENCE_AOZORA_PASSAGE_MAX_CHARS` | **済** 2026-06-25 |
 | **LW-3** | 判断 | plan: 読むだけ黙る vs 短く共有 / `evaluate_action` | 未 |
@@ -1478,20 +1486,20 @@ read_aozora → remember（一節）
 | **LW-5** | 可視性 | UI「青空読んでる」/ live_inner_voice | 未 |
 | **LW-6** | Web 散歩 | `browse_curiosity` — memory / open loop からクエリ → `web_search_direct` | 未 |
 | **LW-7** | **連鎖** | **読書 → 興味 → Web** — PAUSE の `followup_query` を DDG へ（LW-READ 後） | 未 |
-| **LW-READ** | **読書モデル** | 一冊完走・READ/PAUSE 交互・GW-S1 咀嚼・CLOSE まとめ（合意 2026-06-26） | 未 |
+| **LW-READ** | **読書モデル** | 一冊完走・READ/PAUSE 交互・GW-S1 咀嚼・CLOSE まとめ | **v0 済** 2026-06-26 |
 
 ##### LW-READ — 読書状態機械（合意 2026-06-26）
 
 **きっかけ**: まー — 読書にはタイプがある（深読み一冊完走 vs 並行斜め読み）。「読んだ」だけでは行為に意味がない。こよりの記憶容量では長編を一度に載せられない → **外付け状態** で「読む → 考える → 繰り返す → まとめる」を tick 粒度に分割する。
 
-**現状（LW-1/LW-2）**: `pick_passage` が毎 tick **3 作品ローテ**（並列斜め読み）。READ のみで PAUSE なし → 摂取 > 咀嚼。
+**旧問題（LW-1/LW-2 のみ）**: 3 作品ローテ・READ のみ — **v0 で解消**（一冊完走・READ↔PAUSE）。
 
 **合意パラメータ**
 
 | # | 論点 | 決定 |
 |---|------|------|
 | 1 | デフォルト | **一冊完走** — `active_work` 1 冊、他は開かない |
-| 2 | PAUSE | **GW-S1 黙考**（可能なら） |
+| 2 | PAUSE | **GW-S1 黙考**（v1）— v0 はテンプレ `build_pause_reflection_v0` |
 | 3a | 一節の長さ | **1600 字** 試行値（`PRESENCE_AOZORA_PASSAGE_MAX_CHARS`） |
 | 3b | 読み返し | **READ tick 中に延長しない** — **PAUSE 後**に `next_move` で判断 |
 | 4 | CLOSE | passage **終端** / **N 節で区切り** / **飽きたら** — いずれも可 |
@@ -1501,7 +1509,7 @@ read_aozora → remember（一節）
 ```
 active_work（1 冊、完走までローテしない）
   READ   → 一節 → remember（作品・位置・本文）→ phase=pause
-  PAUSE  → GW-S1（hook, felt, interest_tags, followup_query, next_move）
+  PAUSE  → reflect（v0 テンプレ / v1 GW-S1: hook, felt, interest_tags, followup_query, next_move）
            next_move: advance | reread_same | close_book
   READ   → advance: 次の一節 / reread_same: index 据え置き
   … READ ↔ PAUSE …
@@ -1513,7 +1521,7 @@ active_work（1 冊、完走までローテしない）
 ```json
 {
   "hook": "刺さった一語や情景",
-  "felt": "moved | uneasy | curious | …",
+  "felt": "moved | uneasy | curious | bored | flat | つまらなかった | …",
   "interest_tags": ["…"],
   "followup_query": "調べたいこと（LW-7 用、任意）",
   "next_move": "advance | reread_same | close_book"
@@ -1522,7 +1530,20 @@ active_work（1 冊、完走までローテしない）
 
 **外付け状態**（`aozora_read_state.json` 拡張）: `phase`, `active_work`, `passage_index`, `last_passage`, `sections_this_session`, `pending_followup_query`
 
-**実装順**: v0 状態 JSON + 一冊完走 + READ/PAUSE 交互 → v1 PAUSE=GW-S1 + `next_move` → v2 CLOSE + LW-7
+**実装順**: ~~v0 状態 JSON + 一冊完走 + READ/PAUSE 交互~~ **済 2026-06-26** → v1 PAUSE=GW-S1 + `next_move` → v2 CLOSE + LW-7
+
+**v0 実装（2026-06-26）**
+
+| ファイル | 内容 |
+|----------|------|
+| `aozora.py` | `ReadingState`、`pick_passage` 一冊完走、legacy state マイグレーション |
+| `direct_actions.py` | `read_aozora_passage`（remember のみ）、`reflect_on_aozora_passage`、`close_aozora_reading`、phase ルーティング |
+| `plan.py` | inward: `reflect_on_aozora_passage` / `close_aozora_reading` を allowed に追加 |
+| `reading_prompts.py` | v0 テンプレ + **GW-S1 タスク草案**（`build_gw_s1_pause_task`）— **実行は v1** |
+
+**v1 次**: `reflect_on_aozora_passage_direct` 内で GW-S1 → JSON parse → `complete_reading_pause(next_move=…)`。
+
+**第二縦スライス**: ~~LW-READ v0~~ **済** → **GW-S1 PAUSE** → LW-7 Web。
 
 **実装候補（LW-7 — LW-READ PAUSE 後）**
 
@@ -1532,7 +1553,7 @@ active_work（1 冊、完走までローテしない）
 | v1 | GW-S1 黙考 JSON: `{ interest_tags, followup_query }` → `detail_json` or STM |
 | v2 | `browse_curiosity` keywords に「青空のあと調べた」；desire 連鎖で次 tick が自然に Web |
 
-**第一縦スライス（済）**: 青空 1 節が動く（並列ローテ）。**第二縦スライス**: **LW-READ** → GW-S1 PAUSE → LW-7 Web。
+**第一縦スライス（済）**: 青空が動く（LW-2）。**第二縦スライス（済 v0）**: LW-READ READ/PAUSE/CLOSE。**第三縦スライス（次）**: GW-S1 → LW-7。
 
 **関連**: [heartbeat-loop.md](./heartbeat-loop.md)、[gateway-direct-actions.md](./gateway-direct-actions.md)、`desire-system/desire_updater.py`、`SOUL.md`、`exported-session.md`（ステータス UI 案）
 
@@ -1544,7 +1565,8 @@ active_work（1 冊、完走までローテしない）
 - [ ] **LW-5** UI ステータス
 - [ ] **LW-6** Web 散歩クエリ拡張（open loop / memory 一般）
 - [ ] **LW-7** 読書 → 興味 → Web 連鎖（LW-READ PAUSE 後）
-- [ ] **LW-READ** 読書状態機械（一冊完走・READ/PAUSE/CLOSE）
+- [x] **LW-READ** v0 読書状態機械（2026-06-26）
+- [ ] **LW-READ** v1 GW-S1 PAUSE
 
 ### OBS — 能動観察（`/observe` 完遂不能 + gateway フェーズ化）（合意 2026-06-20）
 

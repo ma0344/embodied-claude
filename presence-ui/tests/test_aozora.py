@@ -13,9 +13,12 @@ from presence_ui.gateway import direct_actions
 from presence_ui.gateway.aozora import (
     AozoraPassage,
     AozoraWork,
+    complete_reading_pause,
     join_passages_from,
+    load_reading_state,
     load_works,
     pick_passage,
+    reading_phase,
     split_main_text_passages,
     strip_html_text,
 )
@@ -53,7 +56,7 @@ def test_join_passages_from_bundles_short_paragraphs() -> None:
     assert next_idx == 0
 
 
-def test_pick_passage_round_robin(tmp_path: Path) -> None:
+def test_pick_passage_single_book_then_pause(tmp_path: Path) -> None:
     work = AozoraWork(
         author_id="000879",
         work_id="127",
@@ -71,14 +74,20 @@ def test_pick_passage_round_robin(tmp_path: Path) -> None:
         return_value=12,
     ):
         first = pick_passage([work], state_path=state_path)
+        assert reading_phase(state_path) == "pause"
         second = pick_passage([work], state_path=state_path)
+        complete_reading_pause(state_path=state_path)
+        third = pick_passage([work], state_path=state_path)
 
     assert first is not None
-    assert second is not None
+    assert second is None
+    assert third is not None
     assert first.text == "passage A"
-    assert second.text == "passage B"
-    saved = json.loads(state_path.read_text(encoding="utf-8"))
-    assert saved["passage_indices"]["000879:127"] == 0
+    assert third.text == "passage B"
+    state = load_reading_state(state_path)
+    assert state.phase == "pause"
+    assert state.active_work is not None
+    assert state.active_work["work_id"] == "127"
 
 
 def test_load_works_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -165,6 +174,10 @@ async def test_read_aozora_passage_direct_remembers_and_reflects() -> None:
             return_value=picked,
         ),
         patch(
+            "presence_ui.gateway.direct_actions.reading_phase",
+            return_value="read",
+        ),
+        patch(
             "presence_ui.gateway.direct_actions.http_remember",
             return_value={"ok": True, "id": "m-aozora"},
         ),
@@ -184,5 +197,5 @@ async def test_read_aozora_passage_direct_remembers_and_reflects() -> None:
     assert outcome.action == "read_aozora_passage"
     assert outcome.desire_satisfied == "literary_wander"
     satisfy_mock.assert_called_once()
-    stores.orchestrator.append_private_reflection.assert_called_once()
-    assert stores.orchestrator.record_agent_experience.call_count >= 2
+    stores.orchestrator.append_private_reflection.assert_not_called()
+    stores.orchestrator.record_agent_experience.assert_called_once()

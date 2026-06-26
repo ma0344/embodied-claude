@@ -31,6 +31,22 @@
 
 **子供に指示を出す比喩**: 分解して一歩ずつ。LLM は **言葉と解釈**、身体は **フロー（gateway）**。
 
+### 5W1H と「覚えておくべきこと」（合意 2026-06-26）
+
+IBF の ①「欠落を穴埋めして 5W1H を主観的に完成」は **会話理解** だけでなく、**何を open loop / 記憶に残すか** のゲートにも同型。
+
+| 5W1H | open loop（OL-GATE） | いま |
+|------|----------------------|------|
+| **When** いつ | 明日、来週、9:30 | ✅ `FUTURE_MARKERS` |
+| **What** 何を | 角煮、会議、散歩 | 一部のみ |
+| **How** どうする | 作る、行く、連絡する | ❌ 未要求 |
+| Who / Where / Why | だいたい暗黙で足りる | — |
+
+「また明日！」は When だけ主観完成 → **What/How が空** → フォローアップではない（phatic）。  
+「明日角煮作る」は When + What + How が揃う → loop 候補。
+
+詳細 → [open-loops-reminders.md § OL-GATE](./open-loops-reminders.md#ol-gate--loop-作成条件設計メモ合意-2026-06-26)。OL5 の close 側は **What + 完了 How** のセット照合で対になる。実装候補は **GW-S2**（Gemma 手動スモーク済み → [gw-silent.md](../tracks/gw-silent.md#gw-s2--ol-gate5w1h-抽出)）。
+
 ---
 
 ## 2. 設計原則

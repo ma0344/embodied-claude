@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ（ダッシュボード）
 
-**最終更新**: 2026-06-26  
+**最終更新**: 2026-06-26（BIO/GW 優先・K 後回し）  
 **詳細の正（アーカイブ）**: [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md)  
 **完了一覧**: [backlog-archive-ma-home.md](./backlog-archive-ma-home.md)
 
@@ -11,6 +11,8 @@
 **こよりがもっと「生きてる」感** — まーと話してない時間にも内側が動き、部屋でさりげなく見える。
 
 第一シーン: **LW-READ**（一冊完走・READ/PAUSE/CLOSE）→ **GW-S1** 黙考 → **LW-7** Web 連鎖。
+
+**骨格（合意 2026-06-26）**: LW・**BIO**・将来の K は同じループ — `notice → interpret → choose → act → remember → schedule`。**interpret = GW-SILENT**。インフラ（pulse・somatic・tick）は **BIO 済**；いまの穴は **interpret 層の未配線**。
 
 ---
 
@@ -27,11 +29,23 @@
 
 ---
 
+## 優先順（骨格）
+
+| 順 | トラック | 内容 | 状態 |
+|----|---------|------|------|
+| **★** | **ALIVE / LW** | 生きてる感の第一シーン（青空読書） | 🔥 v0 運用 → v1 GW-S1 |
+| **1** | **BIO** | Heartbeat ループ骨格（pulse・somatic・tick） | ✅ 基盤済 — **interpret 穴 = GW** |
+| **2** | **GW** | 黙考ルート（shared interpret） | 📋 S1 未配線 — **BIO/LW の次の主作業** |
+| **3** | **OL5** | 予定消化で loop close | 📋 GW-S1 依存 |
+| **—** | **K** | こより自身のコード | 💤 **GW + BIO ループが閉じてから** |
+
+---
+
 ## 次の 3 手
 
-1. **LW-READ v0 様子見** — tick log で `read` / `reflect` が交互か。`~/.claude/aozora_read_state.json` の `phase` を確認。→ [tracks/alive-lw-read.md](./tracks/alive-lw-read.md)
-2. **v1 GW-S1 判断** — PAUSE をテンプレから黙考へ配線するか決める。→ [tracks/gw-silent.md](./tracks/gw-silent.md)
-3. **K1** — こより自身のコード経路（急がない）。→ [tracks/k-self-code.md](./tracks/k-self-code.md)
+1. **LW-READ v0 様子見** — tick log で `read` / `reflect` が交互か。→ [tracks/alive-lw-read.md](./tracks/alive-lw-read.md)
+2. **v1 GW-S1 判断・配線** — BIO ループの **interpret** を PAUSE に載せる。→ [tracks/gw-silent.md](./tracks/gw-silent.md)
+3. **BIO ループ実戦確認** — pulse / somatic / tick が「次にいつ」を回しているか、GW 配線後に interpret→choose が閉じるか。→ [architecture/heartbeat-loop.md](./architecture/heartbeat-loop.md)
 
 反映後: `.\scripts\restart-presence-ui.ps1`
 
@@ -42,9 +56,9 @@
 | トラック | 内容 | 状態 | 詳細 |
 |---------|------|------|------|
 | **ALIVE / LW** | 生きてる感・青空読書 | 🔥 v0 運用中 → v1 GW-S1 | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md) |
-| **GW** | 黙考ルート（shared interpret） | 📋 プロンプト済・S1 未配線 | [tracks/gw-silent.md](./tracks/gw-silent.md) |
+| **BIO** | ループ骨格（pulse・somatic・経験→wake） | ✅ 基盤済 · 📋 interpret 穴 | [architecture/heartbeat-loop.md](./architecture/heartbeat-loop.md) |
+| **GW** | 黙考ルート（**interpret** 層） | 📋 プロンプト済・S1 未配線 | [tracks/gw-silent.md](./tracks/gw-silent.md) |
 | **OL5** | 予定消化で loop close | 📋 GW-S1 依存 | [tracks/ol5.md](./tracks/ol5.md) |
-| **K** | こより自身のコード | 💤 方針メモのみ | [tracks/k-self-code.md](./tracks/k-self-code.md) |
 
 ---
 
@@ -53,10 +67,9 @@
 | トラック | 内容 | 状態 | 参照 |
 |---------|------|------|------|
 | **A3** | Gateway 直実行（see / observe / tick / 青空） | ✅ | [architecture/gateway-direct-actions.md](./architecture/gateway-direct-actions.md) |
-| **BIO** | HeartbeatLoop + pulse | ✅ | [architecture/heartbeat-loop.md](./architecture/heartbeat-loop.md) |
 | **BIO-8** | Somatic loop（目・声・memory） | ✅ a–d | アーカイブ § BIO-8 |
 | **IBF** | Intent→Bucket→Flow | ✅ | [architecture/intent-bucket-flow.md](./architecture/intent-bucket-flow.md) |
-| **OL** | Open loops / リマインド | ✅ 運用確認 | [architecture/open-loops-reminders.md](./architecture/open-loops-reminders.md) |
+| **OL** | Open loops / リマインド | ✅ 運用確認 · 📋 OL-GATE 未 | [architecture/open-loops-reminders.md](./architecture/open-loops-reminders.md) |
 | **A4** | Outbound（着信・tick・ntfy） | ✅ | アーカイブ § A4 |
 | **MEM** | 記憶層・Dreaming | ✅ 5a–5f-c | アーカイブ § MEM |
 | **RP** | SOUL.core / stable append | ✅ Phase 0–1 | [ops/role-persistence-ma-home.md](./ops/role-persistence-ma-home.md) |
@@ -69,6 +82,7 @@
 
 | トラック | 内容 | 状態 |
 |---------|------|------|
+| **K** | こより自身のコード | 💤 GW + BIO ループ後 — [tracks/k-self-code.md](./tracks/k-self-code.md) |
 | **A** | 記憶・gateway 身体の大追加 | 💤 |
 | **OBS** | `/observe` gateway フェーズ化 | 📋 |
 | **CAM** | Tapo PTZ / ONVIF 細かい操作 | 💤 |
@@ -116,6 +130,7 @@
 |----|------|
 | 記憶 | HTTP `:18900` 常駐。compose / gateway remember OK |
 | Gateway `:8090` | compose/plan + 身体直実行 + LW-READ v0 |
+| **BIO** | pulse + somatic + tick — **interpret は GW 待ち** |
 | UI | Native 本線 + キオスク（`?kiosk=1`） |
 | TTS | Aivis るな + `voice_local` |
 | Outbound | 着信・15m tick・ntfy |

@@ -10,6 +10,8 @@
 
 open loop は **カレンダー日** が過ぎたら `close_stale_open_loops` で close。「角煮を作った」「散歩行ってきた」では閉じない。
 
+**作成側（OL-GATE、未）**: いまは **いつ** だけで loop ができる（「また明日！」→「また2026年6月27日！」）。あるべきは **いつ・何を・どうする** が揃うこと → [OL-GATE](../architecture/open-loops-reminders.md#ol-gate--loop-作成条件設計メモ合意-2026-06-26)。
+
 ---
 
 ## 望ましい将来

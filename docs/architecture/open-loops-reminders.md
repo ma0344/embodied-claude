@@ -63,6 +63,64 @@ uv run python -c "from relationship_mcp.store import RelationshipStore; print(ha
 
 ---
 
+## OL-GATE — loop 作成条件（設計メモ、合意 2026-06-26）
+
+**あるべき条件**: **いつ**・**何を**・**どうする** がはっきり揃ったときだけ open loop にする — いわば会話から抜き出す **5W1H のうち When / What / How**（IBF のコミュニケーションモデルと同型 → [intent-bucket-flow.md § 5W1H](./intent-bucket-flow.md#5w1h-と覚えておくべきこと合意-2026-06-26)）。
+
+| 要素 | 例 | いま |
+|------|-----|------|
+| **いつ** | 明日、来週火曜、9:30 | ✅ `FUTURE_MARKERS` で検出 |
+| **何を** | 角煮、会議、散歩、PR review | 一部のみ（dentist / pr review / 会議 ハードコード） |
+| **どうする** | 作る、行く、連絡する、リマインド | ❌ 未要求 |
+
+**現状（v0）**: `relationship_mcp/inference.py` の `FUTURE_MARKERS` が **いつ** だけで `_extract_topic` が通る → loop 作成。  
+→ 「また明日！」のような **挨拶（phatic）** も「また2026年6月27日！」loop になる。
+
+**方針**: 否定的リスト（「また明日」を禁止）は **よほどの再発例がなければ作らない**。
+
+**v1（ルール）**: **いつ AND 行動の核** — 時間マーカーに加え、タスク名詞・動作語・引用句のいずれかが同じ発話にあるときだけ loop。
+
+```
+loop を作る ⇔ has_temporal_anchor(text) AND has_action_nucleus(text)
+```
+
+行動の核の族: 作る/行く/やる/連絡/確認…、会議・散歩・角煮…、「覚えといて」+ 中身（MEM-8f と役割分担）。
+
+**v2（GW-S2）**: ingest 後の黙考で **推測なし** に temporal / object / action を抜き出し → `is_follow_up_task` → gateway が `create_open_loop` を決める。
+
+手動スモーク v2（Gemma 4-12b-qat, 2026-06-26）— 4 例すべて期待どおり:
+
+| 例文 | `is_follow_up_task` | loop |
+|------|---------------------|------|
+| いつも一緒にいたかった | false | なし（願望） |
+| 明日、角煮を作る | true | **あり**（+ `is_future_commitment`） |
+| 昨日、ロバがコケた | true | なし（過去 → remember 側） |
+| また明日！ | false | なし（phatic） |
+
+→ [gw-silent.md § GW-S2](../tracks/gw-silent.md#gw-s2--ol-gatewhen--what--how-抽出)
+
+LLM 出力（抜粋）:
+
+```json
+{
+  "temporal_phrase": "明日",
+  "object_phrase": "角煮を",
+  "action_phrase": "作る",
+  "is_follow_up_task": true,
+  "ineligibility_reason": null
+}
+```
+
+Gateway: `create_open_loop = is_follow_up_task && is_future_commitment`（`resolved_date` は OL1 既存ロジック）。
+
+ルール v1 で足りる例はルールのまま。**境界・曖昧**だけ GW（IBF-7 と同型ハイブリッド）。
+
+**close 側（OL5）**: 作成ゲートと対になる — 消化時も **何を + どうした** のセット照合（日跨ぎ stale だけに頼らない）。
+
+実装: 未。観測ログ（「また明日」系）を溜めてから v1 着手。
+
+---
+
 ## 残リスク・既知の制限（運用メモ）
 
 | 項目 | 内容 | 対策 |

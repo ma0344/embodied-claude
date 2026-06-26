@@ -24,7 +24,31 @@ from .schemas import (
 )
 
 # Quiet hours: inward desires may still run (private DB / recall only).
-_QUIET_INWARD_DESIRES = frozenset({"cognitive_load", "identity_coherence"})
+_QUIET_INWARD_DESIRES = frozenset(
+    {"cognitive_load", "identity_coherence", "literary_wander"}
+)
+
+
+def inward_evening_from_context(ctx: InteractionContext) -> bool:
+    """20:00–05:59 local — matches desire_updater literary allostasis (LW-2).
+
+    ``quiet_hours`` in socialPolicy may start at midnight; evening literary
+    wandering should still win over observe/web before that.
+    """
+    raw = (ctx.local_time or ctx.ts or "").strip()
+    if not raw:
+        return False
+    try:
+        from datetime import datetime
+
+        local = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return local.hour >= 20 or local.hour < 6
+
+
+def inward_autonomous_window(*, ctx: InteractionContext, quiet_active: bool) -> bool:
+    return quiet_active or inward_evening_from_context(ctx)
 
 
 def plan_response(payload: PlanResponseInput) -> ResponsePlan:
@@ -46,6 +70,7 @@ def plan_response(payload: PlanResponseInput) -> ResponsePlan:
         any("quiet hours are active" in hint for hint in ctx.boundary_hints)
         or availability == "do_not_interrupt"
     )
+    inward = inward_autonomous_window(ctx=ctx, quiet_active=quiet_active)
 
     user_text = (payload.user_text or "").strip()
     is_autonomous = not user_text
@@ -56,6 +81,7 @@ def plan_response(payload: PlanResponseInput) -> ResponsePlan:
         phase=phase,
         availability=availability,
         quiet_active=quiet_active,
+        inward_active=inward,
         is_autonomous=is_autonomous,
     )
 
@@ -64,6 +90,7 @@ def plan_response(payload: PlanResponseInput) -> ResponsePlan:
     initiative = _pick_initiative(
         primary_move=primary_move,
         quiet_active=quiet_active,
+        inward_active=inward,
         ctx=ctx,
     )
     boundary = _pick_boundary(ctx=ctx, quiet_active=quiet_active)
@@ -102,19 +129,20 @@ def _pick_primary_move(
     phase: str,
     availability: str,
     quiet_active: bool,
+    inward_active: bool,
     is_autonomous: bool,
 ) -> tuple[PrimaryMove, str]:
     if is_autonomous:
-        if quiet_active:
+        if inward_active:
             dominant = ctx.agent_state.dominant_desire
-            if dominant in _QUIET_INWARD_DESIRES:
+            if dominant in _QUIET_INWARD_DESIRES or inward_evening_from_context(ctx):
                 return (
                     "act_autonomously",
-                    "Quiet hours — inward desire calls for private thinking or recall only.",
+                    "Inward window — literary / private moves over outward camera or web.",
                 )
             return (
                 "write_private_reflection",
-                "Autonomous tick during quiet hours — prefer a private note over any speech.",
+                "Autonomous tick during inward hours — prefer a private note over any speech.",
             )
         if ctx.commitments_due:
             return (
@@ -224,13 +252,14 @@ def _pick_initiative(
     *,
     primary_move: PrimaryMove,
     quiet_active: bool,
+    inward_active: bool,
     ctx: InteractionContext,
 ) -> InitiativeHint:
     forbidden: list[str] = []
     allowed: list[str] = []
     level: str = "moderate"
 
-    if quiet_active:
+    if inward_active:
         forbidden.extend(
             [
                 "camera_speaker_audio",
@@ -245,29 +274,30 @@ def _pick_initiative(
         level = "low"
 
     if primary_move == "act_autonomously":
-        if ctx.commitments_due and not quiet_active:
+        if ctx.commitments_due and not inward_active:
             allowed.append("remind_commitment")
         dominant = ctx.agent_state.dominant_desire
-        if not quiet_active:
+        if not inward_active:
             if dominant == "look_outside":
                 allowed.append("camera_look_outside")
             if dominant == "observe_room":
                 allowed.append("camera_look_around")
             if dominant == "browse_curiosity":
                 allowed.append("web_search")
+        if inward_active:
+            allowed.append("read_aozora_passage")
+            allowed.append("think_or_discuss_topic")
         if dominant == "identity_coherence":
             allowed.append("recall_memories")
-        if dominant == "cognitive_load":
-            if quiet_active:
-                allowed.append("read_aozora_passage")
+        if dominant == "cognitive_load" and not inward_active:
             allowed.append("think_or_discuss_topic")
         if dominant == "miss_companion":
-            if quiet_active:
+            if inward_active:
                 allowed.append("write_private_reflection")
                 forbidden.append("talk_to_companion")
             else:
                 allowed.append("talk_to_companion")
-        level = "low" if quiet_active else "moderate"
+        level = "low" if inward_active else "moderate"
 
     if primary_move == "stay_silent":
         level = "none"

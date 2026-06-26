@@ -24,7 +24,8 @@ if (-not (Test-Path $desiresJson)) {
     "browse_curiosity": 0.0,
     "miss_companion": 0.0,
     "identity_coherence": 0.0,
-    "cognitive_load": 0.0
+    "cognitive_load": 0.0,
+    "literary_wander": 0.0
   },
   "discomforts": {
     "observe_room": 0.0,
@@ -32,7 +33,8 @@ if (-not (Test-Path $desiresJson)) {
     "browse_curiosity": 0.0,
     "miss_companion": 0.0,
     "identity_coherence": 0.0,
-    "cognitive_load": 0.0
+    "cognitive_load": 0.0,
+    "literary_wander": 0.0
   },
   "dominant": "observe_room"
 }

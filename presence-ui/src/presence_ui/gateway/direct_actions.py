@@ -17,14 +17,16 @@ from interaction_orchestrator_mcp.schemas import (
     RecordAgentExperienceInput,
     ResponsePlan,
 )
+from interaction_orchestrator_mcp.plan import inward_autonomous_window
 from social_core import utc_now
 
 from presence_ui.deps import PresenceStores
-from presence_ui.gateway.aozora import pick_passage
+from presence_ui.gateway.aozora import aozora_passage_max_chars, pick_passage
 from presence_ui.gateway.memory_http import http_recall, http_recall_divergent, http_remember
 from presence_ui.gateway.room_events import activity_event, progress_event
 from presence_ui.gateway.web_search import ddg_instant_answer, pick_browse_query
 from presence_ui.services.camera_locations import CAMERA_LOCATIONS, PresetLocation
+from presence_ui.services.somatic_context import quiet_from_context
 from presence_ui.services.outbound import (
     default_surface_channels,
     enqueue_outbound_nudge,
@@ -209,7 +211,7 @@ async def read_aozora_passage_direct(
         )
 
     work = picked.work
-    passage = picked.text[:900]
+    passage = picked.text[: aozora_passage_max_chars()]
     title = work.title
     author = work.author
     memory_line = (
@@ -250,7 +252,7 @@ async def read_aozora_passage_direct(
             events=reflection_outcome.events,
         )
 
-    summary = passage[:240]
+    summary = f"青空『{title}』— {passage[:220]}"
     stores.orchestrator.record_agent_experience(
         RecordAgentExperienceInput(
             ts=utc_now(),
@@ -277,7 +279,7 @@ async def read_aozora_passage_direct(
         action="read_aozora_passage",
         summary=summary,
         detail=picked.source_url,
-        desire_satisfied="cognitive_load",
+        desire_satisfied="literary_wander",
         events=[
             progress_event(phase="read", label="青空を読んだ"),
             activity_event(
@@ -1243,6 +1245,8 @@ async def execute_autonomous_plan(
 
     allowed = list(plan.initiative.allowed_actions or [])
     dominant = ctx.agent_state.dominant_desire
+    quiet_active = quiet_from_context(ctx)
+    inward = inward_autonomous_window(ctx=ctx, quiet_active=quiet_active)
 
     if "remind_commitment" in allowed and ctx.commitments_due:
         outcome = await remind_commitment_direct(
@@ -1252,7 +1256,9 @@ async def execute_autonomous_plan(
             plan=plan,
             text=speech_text,
         )
-    elif "web_search" in allowed or dominant == "browse_curiosity":
+    elif "web_search" in allowed or (
+        not inward and dominant == "browse_curiosity"
+    ):
         outcome = await web_search_direct(
             stores, person_id=person_id, ctx=ctx, plan=plan
         )
@@ -1260,7 +1266,9 @@ async def execute_autonomous_plan(
         outcome = await read_aozora_passage_direct(
             stores, person_id=person_id, ctx=ctx, plan=plan
         )
-    elif "think_or_discuss_topic" in allowed or dominant == "cognitive_load":
+    elif "think_or_discuss_topic" in allowed or (
+        not inward and dominant == "cognitive_load"
+    ):
         outcome = think_or_discuss_topic_direct(
             stores, person_id=person_id, ctx=ctx, plan=plan
         )
@@ -1268,11 +1276,17 @@ async def execute_autonomous_plan(
         outcome = recall_memories_direct(
             stores, person_id=person_id, ctx=ctx, plan=plan
         )
-    elif "camera_look_around" in allowed or dominant == "observe_room":
+    elif "camera_look_around" in allowed or (
+        not inward and dominant == "observe_room"
+    ):
         outcome = await observe_room_direct(stores, person_id=person_id)
-    elif "camera_look_outside" in allowed or dominant == "look_outside":
+    elif "camera_look_outside" in allowed or (
+        not inward and dominant == "look_outside"
+    ):
         outcome = await look_outside_direct(stores, person_id=person_id)
-    elif "talk_to_companion" in allowed or dominant == "miss_companion":
+    elif "talk_to_companion" in allowed or (
+        not inward and dominant == "miss_companion"
+    ):
         outcome = await talk_to_companion_direct(
             stores,
             person_id=person_id,

@@ -39,6 +39,11 @@ class TestDesireConfig:
     def test_cognitive_load_exists(self):
         assert "cognitive_load" in DESIRE_CONFIGS
 
+    def test_literary_wander_exists(self):
+        assert "literary_wander" in DESIRE_CONFIGS
+        cfg = DESIRE_CONFIGS["literary_wander"]
+        assert "青空文庫で読んだ" in cfg.keywords
+
     def test_identity_coherence_set_point_is_high(self):
         """identity_coherence のセットポイントは高い（自分がここねである確信）"""
         cfg = DESIRE_CONFIGS["identity_coherence"]
@@ -226,6 +231,23 @@ class TestAllostasis:
         # つまり深夜は「一人でも平気」= 満たされてない(level高い)けど不快度の性質が変わる
         # ここでは、深夜と日中で不快度が異なることだけを確認する
         assert state_night.discomforts["miss_companion"] != state_day.discomforts["miss_companion"]
+
+    def test_inward_evening_boosts_literary_wander_discomfort(self):
+        from datetime import timezone as tz
+
+        jst = tz(timedelta(hours=9))
+        coll = MagicMock()
+        coll.get.return_value = {"documents": [], "metadatas": []}
+        evening = datetime(2026, 6, 25, 22, 0, 0, tzinfo=jst)
+        daytime = datetime(2026, 6, 25, 14, 0, 0, tzinfo=jst)
+
+        evening_state = compute_desires(coll, evening)
+        daytime_state = compute_desires(coll, daytime)
+
+        assert evening_state.discomforts["literary_wander"] > daytime_state.discomforts[
+            "literary_wander"
+        ]
+        assert evening_state.discomforts["literary_wander"] >= 0.9
 
 
 # ──────────────────────────────────────────────

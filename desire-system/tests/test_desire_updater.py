@@ -116,6 +116,7 @@ class TestComputeDesires:
             "observe_room",
             "identity_coherence",
             "cognitive_load",
+            "literary_wander",
         }
 
     def test_all_max_when_no_memories(self):

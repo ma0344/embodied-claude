@@ -13,6 +13,7 @@ from presence_ui.gateway import direct_actions
 from presence_ui.gateway.aozora import (
     AozoraPassage,
     AozoraWork,
+    join_passages_from,
     load_works,
     pick_passage,
     split_main_text_passages,
@@ -44,6 +45,14 @@ def test_split_main_text_passages() -> None:
     assert "雨の音" in passages[1]
 
 
+def test_join_passages_from_bundles_short_paragraphs() -> None:
+    passages = ["短い一節。", "もう一つ続く段落で、夜の読書に少し足す。"]
+    text, next_idx = join_passages_from(passages, 0, max_chars=1600)
+    assert "短い一節" in text
+    assert "もう一つ" in text
+    assert next_idx == 0
+
+
 def test_pick_passage_round_robin(tmp_path: Path) -> None:
     work = AozoraWork(
         author_id="000879",
@@ -57,6 +66,9 @@ def test_pick_passage_round_robin(tmp_path: Path) -> None:
     with patch(
         "presence_ui.gateway.aozora.fetch_work_passages",
         return_value=(["passage A", "passage B"], "https://example/a.html"),
+    ), patch(
+        "presence_ui.gateway.aozora.aozora_passage_max_chars",
+        return_value=12,
     ):
         first = pick_passage([work], state_path=state_path)
         second = pick_passage([work], state_path=state_path)
@@ -158,7 +170,7 @@ async def test_read_aozora_passage_direct_remembers_and_reflects() -> None:
         ),
         patch(
             "presence_ui.gateway.direct_actions.satisfy_desire_direct",
-            return_value=(True, "cognitive_load"),
+            return_value=(True, "literary_wander"),
         ) as satisfy_mock,
     ):
         outcome = await direct_actions.execute_autonomous_plan(
@@ -170,7 +182,7 @@ async def test_read_aozora_passage_direct_remembers_and_reflects() -> None:
 
     assert outcome.ok is True
     assert outcome.action == "read_aozora_passage"
-    assert outcome.desire_satisfied == "cognitive_load"
+    assert outcome.desire_satisfied == "literary_wander"
     satisfy_mock.assert_called_once()
     stores.orchestrator.append_private_reflection.assert_called_once()
     assert stores.orchestrator.record_agent_experience.call_count >= 2

@@ -151,6 +151,43 @@ def strip_html_text(fragment: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def aozora_passage_max_chars() -> int:
+    raw = os.getenv("PRESENCE_AOZORA_PASSAGE_MAX_CHARS", "1600").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 1600
+    return max(400, min(value, 4000))
+
+
+def join_passages_from(
+    passages: list[str],
+    start_index: int,
+    *,
+    max_chars: int | None = None,
+) -> tuple[str, int]:
+    """Join consecutive br-split passages until roughly max_chars (LW-1)."""
+    if not passages:
+        return "", start_index
+    limit = max_chars if max_chars is not None else aozora_passage_max_chars()
+    parts: list[str] = []
+    idx = start_index % len(passages)
+    used = 0
+    for _ in range(len(passages)):
+        chunk = passages[idx]
+        extra = len(chunk) + (1 if parts else 0)
+        if parts and used + extra > limit:
+            break
+        parts.append(chunk)
+        used += extra
+        idx = (idx + 1) % len(passages)
+        if used >= limit:
+            break
+    text = "\n".join(parts)[:limit]
+    next_index = (start_index + len(parts)) % len(passages)
+    return text, next_index
+
+
 def split_main_text_passages(html: str, *, min_chars: int = 24) -> list[str]:
     """Extract readable passages from an Aozora main_text block."""
     match = _MAIN_TEXT_RE.search(html)
@@ -230,13 +267,16 @@ def pick_passage(
 
         key = f"{work.author_id}:{work.work_id}"
         passage_index = int(passage_indices.get(key, 0)) % len(passages)
-        text = passages[passage_index]
+        text, next_passage_index = join_passages_from(
+            passages,
+            passage_index,
+        )
 
         next_state = {
             "work_index": (work_index + offset + 1) % len(catalog),
             "passage_indices": {
                 **passage_indices,
-                key: (passage_index + 1) % len(passages),
+                key: next_passage_index % len(passages),
             },
         }
         _save_state(path, next_state)

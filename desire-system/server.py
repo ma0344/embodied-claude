@@ -98,7 +98,8 @@ async def list_tools() -> list[Tool]:
                 "miss_companion -> talk to まー proactively; "
                 "observe_room -> use camera to observe room; "
                 "identity_coherence -> recall memories to reinforce self-model; "
-                "cognitive_load -> think about or discuss something interesting."
+                "cognitive_load -> think about or discuss something interesting; "
+                "literary_wander -> read one passage from Aozora Bunko (quiet hours)."
             ),
             inputSchema={
                 "type": "object",

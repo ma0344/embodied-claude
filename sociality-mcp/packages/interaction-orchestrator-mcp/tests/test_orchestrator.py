@@ -444,6 +444,79 @@ class TestPlan:
         assert plan.voice is not None
         assert plan.voice.speak is False
 
+    def test_autonomous_quiet_inward_literary_wander(self, stores, monkeypatch, tmp_path):
+        import json as _json
+
+        stores["social_state"].ingest_social_event(
+            {
+                "ts": "2026-04-18T16:30:00Z",
+                "source": "camera",
+                "kind": "scene_parse",
+                "person_id": "ma",
+                "confidence": 0.8,
+                "payload": {"scene_summary": "Dim room."},
+            }
+        )
+        fake_desires = tmp_path / "desires.json"
+        fake_desires.write_text(
+            _json.dumps(
+                {
+                    "updated_at": "2026-04-19T10:00:00+00:00",
+                    "desires": {"literary_wander": 1.0, "observe_room": 0.2},
+                    "discomforts": {"literary_wander": 0.95, "observe_room": 0.3},
+                    "dominant": "literary_wander",
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("DESIRES_PATH", str(fake_desires))
+        ctx = _compose(stores, user_text=None, channel="autonomous")
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text=None)
+        )
+        assert plan.primary_move == "act_autonomously"
+        assert "read_aozora_passage" in plan.initiative.allowed_actions
+        assert "camera_look_around" not in plan.initiative.allowed_actions
+        assert plan.voice is not None
+        assert plan.voice.speak is False
+
+    def test_autonomous_evening_browse_dominant_prefers_aozora(self, stores, monkeypatch, tmp_path):
+        import json as _json
+
+        stores["social_state"].ingest_social_event(
+            {
+                "ts": "2026-06-25T13:00:00Z",
+                "source": "camera",
+                "kind": "scene_parse",
+                "person_id": "ma",
+                "confidence": 0.8,
+                "payload": {"scene_summary": "Dim room."},
+            }
+        )
+        fake_desires = tmp_path / "desires.json"
+        fake_desires.write_text(
+            _json.dumps(
+                {
+                    "updated_at": "2026-06-25T13:20:00+00:00",
+                    "desires": {"browse_curiosity": 0.97, "literary_wander": 0.0},
+                    "discomforts": {"browse_curiosity": 0.67, "literary_wander": 0.05},
+                    "dominant": "browse_curiosity",
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("DESIRES_PATH", str(fake_desires))
+        ctx = _compose(stores, user_text=None, channel="autonomous")
+        # 22:20 JST — not policy quiet (00-07) but inward evening
+        ctx = ctx.model_copy(update={"local_time": "2026-06-25T22:20:00+09:00"})
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text=None)
+        )
+        assert plan.primary_move == "act_autonomously"
+        assert "read_aozora_passage" in plan.initiative.allowed_actions
+        assert "web_search" not in plan.initiative.allowed_actions
+        assert "camera_look_around" not in plan.initiative.allowed_actions
+
     def test_autonomous_quiet_inward_identity_coherence(self, stores, monkeypatch, tmp_path):
         import json as _json
 

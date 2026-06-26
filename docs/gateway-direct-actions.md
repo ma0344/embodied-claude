@@ -15,6 +15,8 @@
 | compose / plan | `social_chat.intercept_chat_request` in-process | ✓ |
 | human / agent ingest | `room_ingest` | ✓ |
 
+**設計（未実装）**: **黙考ルート** — 表の会話と同じ Claude セッション + stable `appendSystemPrompt` で internal turn を回し、まーに見せず構造化結果だけ stores へ。OL5 完了語セット生成の第一用途。→ [backlog-ma-home.md § GW-SILENT](./backlog-ma-home.md#gw-silent--黙考ルートsilent-internal-turn合意-2026-06-25)
+
 参照: `presence-ui/src/presence_ui/gateway/deterministic_memory.py`
 
 ---

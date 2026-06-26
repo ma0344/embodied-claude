@@ -9,7 +9,7 @@ v2: ホメオスタシス/アロスタシス拡張
 - 不快度（discomfort）= セットポイントからの乖離度
 - dominantは不快度が最も高いものに
 - アロスタシス: 時間帯によるセットポイントの予測的調整
-- 新欲求: identity_coherence, cognitive_load
+- 新欲求: identity_coherence, cognitive_load, literary_wander
 
 cronで5分ごとに実行:
   */5 * * * * cd /path/to/desire-system && uv run python desire_updater.py
@@ -105,6 +105,18 @@ DESIRE_CONFIGS: dict[str, DesireConfig] = {
         ],
         label="頭を使いたい",
     ),
+    "literary_wander": DesireConfig(
+        satisfaction_hours=float(os.getenv("DESIRE_LITERARY_WANDER_HOURS", "3.0")),
+        set_point=0.25,
+        keywords=[
+            "青空文庫で読んだ",
+            "青空文庫",
+            "青空を読んだ",
+            "一節を読んだ",
+            "読みふけた",
+        ],
+        label="青空を読みたい",
+    ),
 }
 
 # 後方互換: 旧モジュールが参照していた変数
@@ -147,27 +159,42 @@ def calculate_discomfort(level: float, set_point: float) -> float:
     return abs(level - set_point)
 
 
+def _jst_hour(now: datetime) -> int:
+    if now.tzinfo is None:
+        now_jst = now.replace(tzinfo=timezone.utc).astimezone(JST)
+    else:
+        now_jst = now.astimezone(JST)
+    return now_jst.hour
+
+
+def _is_inward_evening_hour(hour: int) -> bool:
+    """20:00–05:59 JST — quiet inward time (literary wander, less outward observe)."""
+    return hour >= 20 or hour < 6
+
+
 def get_allostatic_set_point(desire_name: str, now: datetime) -> float:
     """
     アロスタシス: 時間帯によるセットポイントの予測的調整。
 
     深夜(0-5時)はsocial系欲求のセットポイントを下げる（一人でも平気）。
+    夜間(20-6時)は literary_wander を強め、observe/look を弱める（LW-2）。
     identity_coherenceは常に高いまま。
     """
     cfg = DESIRE_CONFIGS[desire_name]
     base_sp = cfg.set_point
-
-    # JSTに変換（naive datetimeの場合はUTCとみなす）
-    if now.tzinfo is None:
-        now_jst = now.replace(tzinfo=timezone.utc).astimezone(JST)
-    else:
-        now_jst = now.astimezone(JST)
-
-    hour = now_jst.hour
+    hour = _jst_hour(now)
 
     # identity_coherenceは時間帯に関係なく不変
     if desire_name == "identity_coherence":
         return base_sp
+
+    if _is_inward_evening_hour(hour):
+        if desire_name == "literary_wander":
+            return min(base_sp, 0.05)
+        if desire_name in ("look_outside", "observe_room"):
+            return min(1.0, base_sp + 0.2)
+        if desire_name == "browse_curiosity":
+            return min(1.0, base_sp + 0.35)
 
     # 深夜帯（0-5時JST）の調整
     if 0 <= hour < 5:

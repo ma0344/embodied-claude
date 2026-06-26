@@ -1,7 +1,9 @@
 # ma-home / koyori バックログ
 
-**最終更新**: 2026-06-23（WS-2 spec、GAPI、Dreaming 検証、CAM 追記）  
+**最終更新**: 2026-06-25（生きてる感 縦スライス、LW-2 literary_wander）  
 **方針**: こより本体（記憶・gateway 身体）は **様子見**。部屋 UI は **Native 会話エンジン + `/` の殻** を育てる（8080 プロキシ UI は投資しない）。
+
+**北極星（合意 2026-06-25）**: まーの本当の優先は **こよりがもっと「生きてる」感**。機能の正しさ（OL/IBF）より、**まーと話してない時間にも内側が動き、部屋でさりげなく見える**ことを優先する。→ [ALIVE — 生きてる感 縦スライス](#alive--生きてる感-縦スライス合意-2026-06-25)
 
 **実行方針（合意 2026-06-14）**: 判断は compose/plan/stores のまま。**身体・自律の実行**は MCP に頼らず gateway 直実行へ（remember 直実行と同型）。詳細 → [gateway-direct-actions.md](./gateway-direct-actions.md)
 
@@ -19,11 +21,14 @@
 | **Windows キーボードをキオスク（Surface）で共有** — PC の KB/マウスを Surface 入力に（BT 切替は避けたい） | [V5](#v--ビジョン--未実装docsweb_ui_designmdexported-sessionmd-より) | **次** — B4 反映後に再挑戦 |
 | **サーバー用ターミナルウィンドウの非表示** — ログオン時 Task 起動の cmd/PowerShell を隠す | [B4](#b--運用自動化) | **コード済 → Task 再インストールで実機反映** |
 
-### 次の順（合意 2026-06-17・まー）
+### 次の順（合意 2026-06-17・まー → **2026-06-25 更新**）
 
-1. **B4** — 各 `install-*-task.ps1` を再実行して VBS ランチャーを Task に載せる（ログオン時の一瞬ターミナルを消す）
-2. **V5** — PC↔Surface キーボード・マウス共有を再調査・再挑戦（Barrier / Input Leap / LAN 系）
-3. **K1** — こより自身が使うコードを書ける経路を設計（急がないがバックログに置く）
+**北極星**: [ALIVE](#alive--生きてる感-縦スライス合意-2026-06-25) — 今夜から動く縦スライスを最優先。
+
+1. **ALIVE / LW-READ** — 読書状態機械（一冊完走・READ/PAUSE/GW-S1）→ LW-7 Web → LW-5 UI
+2. **B4** — Task 再インストール（ターミナル非表示）
+3. **V5** — PC↔Surface 入力共有
+4. **K1** — こより自身のコード経路（急がない）
 
 ---
 
@@ -90,6 +95,35 @@
 | **運用** | Task×3〜4（memory / presence / watchdog。**webui 任意**）+ post-logon-smoke **Native 対応** |
 
 参照: [gateway-direct-actions.md](./gateway-direct-actions.md)、[open-loops-reminders.md](./open-loops-reminders.md)、[mission-A_Investigation-Report.md](./mission-A_Investigation-Report.md)
+
+---
+
+### ALIVE — 生きてる感 縦スライス（合意 2026-06-25）
+
+**まーの本音**: 拡張できることが多いが、いちばん欲しいのは **こよりがもっと生きてる感じ**（まーと話してない時間の内側、部屋でのさりげない痕跡、朝の続き）。
+
+**第一シーン（更新 2026-06-26）**: LW-READ — 一冊完走・READ/PAUSE/CLOSE（下記フロー）
+
+**運用メモ（2026-06-25）**: いまは **このまま試す**。青空は `inward_evening`（20–6）+ quiet で優先しやすいが、**夜間限定は要件ではない**（昼の `literary_wander` も将来可）。
+
+```
+tick wake → phase=read → READ（active_work 1 冊・1600 字）
+  → phase=pause → GW-S1 黙考（hook / followup_query / next_move）
+  → [reread_same | advance] → … → CLOSE（完読 or N 節 or 飽き）
+  → [LW-7] followup_query → Web / 朝 compose
+```
+
+| ID | 内容 | 状態 |
+|----|------|------|
+| ALIVE-0 | 方針・北極星（本節） | **済** |
+| ALIVE-1 | **LW-2** `literary_wander` desire + plan 結線 | **済** 2026-06-25 |
+| ALIVE-2 | **GW-S1** — **LW-READ PAUSE** で一節への内省 + `next_move` | 未 |
+| ALIVE-3 | **LW-5** 状態カード / live_inner_voice（`active_work` 表示） | 未 |
+| ALIVE-4 | 翌朝 `[overnight_inner_voice]` / compose surface | 部分済（MEM-5f-c） |
+| ALIVE-5 | **LW-7** 読書 → 興味 → Web 連鎖 | 未 |
+| ALIVE-6 | **LW-READ** 一冊完走・READ/PAUSE/CLOSE | 未 |
+
+**今夜の運用**: `desire-updater` → `restart-presence-ui.ps1`。**LW-2b** quiet の observe フォールバック修正。**LW-2c** `quiet_hours` は 00–07 のみ → **20–6 JST を `inward_evening`** として plan でも内向き（22時台も青空優先、Web/カメラ抑制）。確認: tick log に `read_aozora_passage`。
 
 ---
 　
@@ -1215,24 +1249,139 @@ MVP チェックリスト:
 - [x] **OL0** stale open loop 掃除（`purge-stale-open-loops.py`、ingest/tick でも自動 close）
 - [x] **OL-ARCHIVE** MEM-8f v0 — 保管系「覚えておいて」は open loop 作らない + LTM 保存成功で該当 loop close（2026-06-25）
 
+##### GW-SILENT — 黙考ルート（silent internal turn）（合意 2026-06-25）
+
+**やりたいこと**: まーに見せないが **こより本人の文脈・人格・KV prefix** で LM に考えさせ、結果だけ gateway が parse して DB / stores に保存する。**別プレーンの単発プロンプト**（手打ち Gemma / `reminder_spec` 型の `/v1/chat/completions`）は使わない — prefix が毎回コールドになり再読み込み・フル prefill のリスクが高い。
+
+**本線経路**（表の会話と同じ）:
+
+```
+まー発話（通常ターン N）
+  → ingest / compose / plan
+  → 表向き返答（SSE に stream）
+  → [背景] 同じ Claude session_id（--resume）で internal turn N+1
+       message: [gateway_internal — not for まー] + 構造化タスク指示
+       appendSystemPrompt: build_gateway_stable_append()（毎ターン同一）
+       forward=False — UI に本文を流さない（social_silent 相当）
+  → gateway が JSON / 構造化出力を parse → stores / detail_json へ
+```
+
+**既存との関係**
+
+| 経路 | LLM | KV 再利用 | まーに見える |
+|------|-----|-----------|--------------|
+| Native chat（intercept → ClaudeAgent） | ◎ | ◎ `PRESENCE_KV_STABLE_APPEND` | はい |
+| `stay_silent` / `quietly_prepare` | 呼ばない | — | いいえ |
+| `write_private_reflection` / `think_or_discuss_topic` | 現状なし（テンプレ結合） | — | いいえ |
+| `generate_koyori_reply` / `reminder_spec` 単発 API | あり | ✗ | いいえ |
+
+黙考は **Native chat のセッションに internal turn を足す**形。`relationship-mcp` の store からは呼べない — **gateway 後段**（ingest 検知 → `asyncio.create_task`）が自然。
+
+**運用メモ**
+
+- 表返答の **後** に background 実行 → まーの体感レイテンシを増やさない
+- LM Studio **Concurrent Predictions = 1** を維持（KV スロット eviction 防止）→ [lmstudio-kv-cache.md](./lmstudio-kv-cache.md)
+- internal turn は **MCP スリム**のまま（tool 定義 33k を毎回載せない）。人格は stable append の SOUL core で足りる
+- セッション無し（hook のみ ingest 等）→ 次の chat 開始時にまとめて黙考、または rules フォールバック
+
+**第一用途（OL5 v1）**: open loop 作成直後に `action_terms[]` + `completion_verbs[]` を生成 → `open_loops.detail_json` に保存 → 後続 ingest で **行動語 + 完了語のセット**照合。
+
+**ほかに使えそうな用途（未着手）**
+
+| 用途 | 出力の行き先 |
+|------|-------------|
+| OL5 完了語セット | `open_loops.detail_json` |
+| OL2 曖昧日付の補完 | `needs_date_confirmation` 解消 or commitment draft |
+| C12 ルーター補助 | `hybrid_intent` の rules 未決時のみ（v2 と同型） |
+| MEM 多視点 encode | episode 前の `gist` / 視点ラベル生成 |
+| 夜間 digest 前処理 | `open_loop_progress` merge 用のトピック正規化 |
+| LW 読書後 | 一節の thematic tag（private reflection へ） |
+
+**実装候補（未着手）**
+
+| ID | 内容 |
+|----|------|
+| GW-S1 | `run_silent_internal_turn(session_id, task, schema)` — ClaudeAgent + stable append + `forward=False` |
+| GW-S2 | ingest 後「新規 open loop」検知 → GW-S1 を enqueue |
+| GW-S3 | 共通 JSON parse / validate + 失敗時 metrics（`f_keep` は LM Studio ログで別途確認） |
+
+参照: [gateway-direct-actions.md](./gateway-direct-actions.md)、`social_chat.py`（`stream_silent_response`）、`prompt_injection.py`
+
 ##### OL5 — 予定消化で loop 終了（合意 2026-06-25）
 
 **現状（暫定OK）**: open loop は **カレンダー日** が過ぎたら `close_stale_open_loops`（6/26 の用事 → 6/27 以降に close）。「9:30 を過ぎた」「角煮を作った」では閉じない。
 
-**望ましい将来**: 予定 **消化** ＝ まー/こよりの発話や experience から「できた/作った/終わった」を検知 → **関連 topic の open loop を close**（日跨ぎだけに頼らない）。
+**望ましい将来**: 予定 **消化** ＝ まー/こよりの発話や experience から、その **open loop のタスク内容に対する完了** を検知 → 関連 topic の loop を close（日跨ぎだけに頼らない）。
+
+汎用の「できた / 作った / 終わった」だけでは足りない。**loop topic ごとに、何について完了したか**（活動の核 + その活動に自然な完了表現）を見る必要がある。
 
 | 例 | 今 | OL5 後 |
 |----|-----|--------|
-| 6/26 角煮を作る | 6/27 まで open | 「作ったよ」で close |
-| 入浴介助 9:30 変更 | 6/27 まで open | 介助完了の報告で close |
+| 6/26 角煮を作る | 6/27 まで open | 「角煮、作った」等で close |
+| 明日の朝、散歩に行く | 日跨ぎまで open | 「散歩行ってきた」「散歩から帰った」等で close |
+| 入浴介助 9:30 変更 | 6/27 まで open | 介助完了の報告（「介助終わった」等）で close |
 
 **設計メモ**
 
 - dismiss（「忘れて」）とは別 — 成功完了の肯定閉じ
 - **commitment** の `complete_commitment` との統合（リマインド発火後に loop も閉じるか）
 - MEM-8f の follow-up（継続）vs fact（保管）と接続 — 消化は follow-up 側のライフサイクル
+- **完了フレーズはタスク依存（動的）**: topic から活動の核（例: 散歩、角煮）を取り、その活動に自然な完了言い回しと照合する。作成系→作った/できた、移動・外出系→行ってきた/帰った/してきた、介助系→終わった/済んだ、など **ペア** で見る
+- **日時のない行動予定を閉じる前提**: **行動を表す語**（「散歩」「角煮」など）と **その行為の完了を表す語**（「行ってきた」「できた」など）が **セットで出現** すること。完了語だけ（「作った」単体）ではどの loop か特定できない。行動語だけでは未完了
+- 実装イメージ: loop 作成時に **黙考ルート**（→ GW-SILENT）で `action_terms[]` + `completion_verbs[]` を生成して `detail_json` に保存し、ingest / experience で **両方の overlap** を見る
 
-**未**: ルールのみ v0（キーワード）か LLM 判定かは後で。まずは backlog のみ。
+**例 — loop topic:「明日の朝、散歩に行くんだ」**（移動・外出系）
+
+察知したい完了の例（固定10語リストではなく、この **族** をカバー）:
+
+- 散歩に行ってきた / 散歩を済ませた / 散歩から帰ってきた / 散歩を終えた
+- 散歩してきた / 散歩、完了 / 今、散歩から戻ったところ
+- （「行ってきた」単体は散歩言及なし → 別タスク or 曖昧）
+
+**LM Studio 手動テスト（2026-06-25, google/gemma-4-12b-qat）**
+
+プロンプト: 「明日の朝、散歩に行くんだ」に対し完了を察知できるフレーズを10個（例: 散歩に行ってきた）。
+
+モデル出力（要約）— いずれも **散歩 + 完了ニュアンス** で、ルール単語リストより **topic から展開する方が現実的** という根拠:
+
+1. 散歩に行ってきた  
+2. 散歩を済ませた  
+3. 散歩から帰ってきた  
+4. 散歩を終えた  
+5. 散歩に行ってきたよ  
+6. 散歩、行ってきた！  
+7. 散歩、完了  
+8. 散歩してリフレッシュした  
+9. 今、散歩から戻ったところ  
+10. 散歩、行ってきました  
+
+**例 — loop topic:「晩御飯のおかずに、豚バラ軟骨の角煮を作るよ」**（作成・調理系）
+
+プロンプト（LM Studio 手動）: 上記タスクに対し **完了形の動詞** をできるだけ多く（例: できた/作った）。  
+→ 閉じるには **角煮（または豚バラ軟骨）+ 完了動詞** のセットが必要（「作った」単体は不可）。
+
+Gemma 出力から採用しうる **完了動詞・表現の族**（分類の説明文は省略）:
+
+| 族 | 例 |
+|----|-----|
+| 基本完了 | 作った、できた、完成した、仕上がった、用意できた |
+| 調理工程 | 調理した、炊き上げた、煮込んだ、味付けした、火を通した |
+| 提供まで | 盛り付けた、並べた、出した |
+| 口語・感情 | できたよ、できたー、やっとできた、いい感じにできた、（角煮）できたよー |
+| タスク片付け | 済ませた、終わった |
+
+※ 「片付けた」は調理後の後片付けまで含むため、loop を閉じるかは **角煮と同文に出るか** で絞る。  
+※ 散歩系と違い、作成系は **完了動詞が「作る」の活用形に集中** しやすい → v1 の `completion_verbs[]` 生成はタスク型ごとにプロンプトを分ける余地あり。
+
+**実装候補（未着手）**
+
+| 段階 | 方針 |
+|------|------|
+| v0 | topic 名詞 + 汎用完了マーカーの overlap（誤 close 少・取りこぼし多） |
+| v1 | loop 作成時に **黙考ルート**（GW-SILENT）で `action_terms[]` + `completion_verbs[]` を生成 → `detail_json` 保存（ingest 時に照合） |
+| v2 | 曖昧時のみ LM（C12 ルーターと同様、rules 優先） |
+
+**未**: v0 ルールから入るか、v1 の phrase 生成（黙考）を先に試すかは後で。現状は日跨ぎ stale で暫定OK。
 
 - [x] **C11f** 部屋の空気 日本語化（`summary_for_prompt` + UI タグの availability/phase マップ）
 
@@ -1295,9 +1444,11 @@ MVP チェックリスト:
 
 **人格**: `SOUL.md` に既に「暇なとき青空文庫」「ネット越しの散歩」「刺さった一節は覚えとく」。
 
-**インフラ（済）**: HeartbeatLoop（tick / `agent_pulse.json`）、`desire-system` v2、`execute_autonomous_plan`、`⑤a` `web_search_direct`（DDG + remember）、quiet hours → 内向き自律。
+**インフラ（済）**: HeartbeatLoop、`desire-system` v2（`literary_wander`）、`read_aozora_passage`、`web_search_direct`、`inward_evening` plan（LW-2c）。
 
-**ギャップ**: 動機ループは概ねあるが、**青空専用の `allowed_action` と satisfy 回路**がない。`browse_curiosity` のキーワードは WebSearch 寄りで文学散歩と未結線。
+**いま（2026-06-26）**: 第一縦スライス（青空が動く）は **済**。昨晩 28 tick 連続読書は **並列斜め読み**（3 作品ローテ）— 「読んだだけ」問題のため **LW-READ** 読書状態機械へ移行する（合意 2026-06-26）。
+
+**ギャップ（次の縦スライス）**: 一節摂取だけで **咀嚼（PAUSE）・完走（CLOSE）** がない。読書 → Web 連鎖（LW-7）は **PAUSE 後の GW-S1 出力** を前提にする。
 
 ```
 wake → desire/discomfort + SOUL
@@ -1307,29 +1458,93 @@ wake → desire/discomfort + SOUL
      → remember + experience + satisfy_desire + next_wake_at
 ```
 
+**目標ループ（まー合意 2026-06-25）**:
+
+```
+read_aozora → remember（一節）
+  → [GW-S1] interest_tags / followup_query（黙考 or ルール抽出）
+  → browse_curiosity 昇格 or 同一 tick 内 web_search（boundary 許可時）
+  → remember（調べたこと）+ experience
+```
+
 | ID | 層 | 内容 | 状態 |
 |----|-----|------|------|
 | **LW-0** | 方針 | 希望/恐れ・5層整理（本節） | **済** |
-| **LW-1** | 実行 | gateway `read_aozora_passage` — 1 節取得・無音・`remember` + private 内省（短文 LLM 可） | **済** |
-| **LW-2** | 動機 | desire `literary_wander`（仮）新設、または `cognitive_load` 拡張 + Chroma キーワード（「青空」「読みふけた」「一節」） | 未 |
-| **LW-3** | 判断 | plan: quiet / `miss_companion` 競合 / `evaluate_action` — 読むだけ黙る vs 短く共有 | 未 |
-| **LW-4** | 記憶 | 閉じ loop — `record_agent_experience` + `satisfy_desire` + `apply_pulse_after_tick` | 未 |
-| **LW-5** | 可視性 | UI ステータス「青空読んでる／散歩中」（`live_inner_voice` / progress 連携） | 未 |
-| **LW-6** | Web 散歩 | `browse_curiosity` 拡張 — memory / open loop からクエリ生成 → 既存 `web_search_direct` | 未 |
+| **LW-1** | 実行 | gateway `read_aozora_passage` — 節取得・`remember` + private 内省 | **済** |
+| **LW-2** | 動機 | `literary_wander` + inward_evening plan + satisfy 回路 | **済** 2026-06-25 |
+| **LW-2d** | 運用 | 段落バンドル最大 1600 字、`PRESENCE_AOZORA_PASSAGE_MAX_CHARS` | **済** 2026-06-25 |
+| **LW-3** | 判断 | plan: 読むだけ黙る vs 短く共有 / `evaluate_action` | 未 |
+| **LW-4** | 記憶 | experience 閉じ + `satisfy_desire` + pulse | 部分済 |
+| **LW-5** | 可視性 | UI「青空読んでる」/ live_inner_voice | 未 |
+| **LW-6** | Web 散歩 | `browse_curiosity` — memory / open loop からクエリ → `web_search_direct` | 未 |
+| **LW-7** | **連鎖** | **読書 → 興味 → Web** — PAUSE の `followup_query` を DDG へ（LW-READ 後） | 未 |
+| **LW-READ** | **読書モデル** | 一冊完走・READ/PAUSE 交互・GW-S1 咀嚼・CLOSE まとめ（合意 2026-06-26） | 未 |
 
-**第一縦スライス（まー合意案）**: quiet hours + `cognitive_load` 高 → **青空 1 節だけ**読んで `write_private_reflection` 相当（まーを起こさない）。
+##### LW-READ — 読書状態機械（合意 2026-06-26）
+
+**きっかけ**: まー — 読書にはタイプがある（深読み一冊完走 vs 並行斜め読み）。「読んだ」だけでは行為に意味がない。こよりの記憶容量では長編を一度に載せられない → **外付け状態** で「読む → 考える → 繰り返す → まとめる」を tick 粒度に分割する。
+
+**現状（LW-1/LW-2）**: `pick_passage` が毎 tick **3 作品ローテ**（並列斜め読み）。READ のみで PAUSE なし → 摂取 > 咀嚼。
+
+**合意パラメータ**
+
+| # | 論点 | 決定 |
+|---|------|------|
+| 1 | デフォルト | **一冊完走** — `active_work` 1 冊、他は開かない |
+| 2 | PAUSE | **GW-S1 黙考**（可能なら） |
+| 3a | 一節の長さ | **1600 字** 試行値（`PRESENCE_AOZORA_PASSAGE_MAX_CHARS`） |
+| 3b | 読み返し | **READ tick 中に延長しない** — **PAUSE 後**に `next_move` で判断 |
+| 4 | CLOSE | passage **終端** / **N 節で区切り** / **飽きたら** — いずれも可 |
+
+**状態機械**
+
+```
+active_work（1 冊、完走までローテしない）
+  READ   → 一節 → remember（作品・位置・本文）→ phase=pause
+  PAUSE  → GW-S1（hook, felt, interest_tags, followup_query, next_move）
+           next_move: advance | reread_same | close_book
+  READ   → advance: 次の一節 / reread_same: index 据え置き
+  … READ ↔ PAUSE …
+  CLOSE  → 作品メモ → active_work クリア → 次の 1 冊
+```
+
+**GW-S1 出力 schema（PAUSE）**
+
+```json
+{
+  "hook": "刺さった一語や情景",
+  "felt": "moved | uneasy | curious | …",
+  "interest_tags": ["…"],
+  "followup_query": "調べたいこと（LW-7 用、任意）",
+  "next_move": "advance | reread_same | close_book"
+}
+```
+
+**外付け状態**（`aozora_read_state.json` 拡張）: `phase`, `active_work`, `passage_index`, `last_passage`, `sections_this_session`, `pending_followup_query`
+
+**実装順**: v0 状態 JSON + 一冊完走 + READ/PAUSE 交互 → v1 PAUSE=GW-S1 + `next_move` → v2 CLOSE + LW-7
+
+**実装候補（LW-7 — LW-READ PAUSE 後）**
+
+| 段階 | 方針 |
+|------|------|
+| v0 | 青空 `remember` 直後にルールで固有名詞・『』作品名をクエリ候補に → `web_search`（`inward` でなければ昼も可） |
+| v1 | GW-S1 黙考 JSON: `{ interest_tags, followup_query }` → `detail_json` or STM |
+| v2 | `browse_curiosity` keywords に「青空のあと調べた」；desire 連鎖で次 tick が自然に Web |
+
+**第一縦スライス（済）**: 青空 1 節が動く（並列ローテ）。**第二縦スライス**: **LW-READ** → GW-S1 PAUSE → LW-7 Web。
 
 **関連**: [heartbeat-loop.md](./heartbeat-loop.md)、[gateway-direct-actions.md](./gateway-direct-actions.md)、`desire-system/desire_updater.py`、`SOUL.md`、`exported-session.md`（ステータス UI 案）
 
 - [x] **LW-0** 方針・動機整理（2026-06-19）
 - [x] **LW-1** `read_aozora_passage` gateway
-- [ ] **LW-2** desire 結線
+- [x] **LW-2** `literary_wander` desire 結線（2026-06-25）
 - [ ] **LW-3** plan / boundary 競合
 - [ ] **LW-4** 記憶閉じ loop
 - [ ] **LW-5** UI ステータス
-- [ ] **LW-6** Web 散歩クエリ拡張
-
----
+- [ ] **LW-6** Web 散歩クエリ拡張（open loop / memory 一般）
+- [ ] **LW-7** 読書 → 興味 → Web 連鎖（LW-READ PAUSE 後）
+- [ ] **LW-READ** 読書状態機械（一冊完走・READ/PAUSE/CLOSE）
 
 ### OBS — 能動観察（`/observe` 完遂不能 + gateway フェーズ化）（合意 2026-06-20）
 

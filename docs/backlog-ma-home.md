@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ（ダッシュボード）
 
-**最終更新**: 2026-06-25（GW-S1 配線・LW-7 次）  
+**最終更新**: 2026-06-25（GW-S2 / OL5-a 運用確認）  
 **詳細の正（アーカイブ）**: [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md)  
 **完了一覧**: [backlog-archive-ma-home.md](./backlog-archive-ma-home.md)
 
@@ -37,19 +37,19 @@
 |----|---------|------|------|
 | **★** | **ALIVE / LW** | 生きてる感の第一シーン（青空読書） | 🔥 v1 GW-S1 運用 → **LW-7** |
 | **1** | **BIO** | Heartbeat ループ骨格（pulse・somatic・tick） | ✅ 基盤済 — interpret 一部閉（PAUSE） |
-| **2** | **GW** | 黙考ルート（shared interpret） | ✅ S1 配線 · 📋 S2 / Claude resume |
-| **3** | **OL5** | 予定消化で loop close | 📋 GW-S2 依存 |
+| **2** | **GW** | 黙考ルート（shared interpret） | ✅ S1 · ✅ S2（`PRESENCE_GW_S2_ENABLED=1`）· 📋 Claude resume |
+| **3** | **OL5** | 予定消化で loop close | 🔥 OL5-a 確認済 · 📋 close 照合の運用確認 |
 | **—** | **K** | こより自身のコード | 💤 **GW + BIO ループが閉じてから** |
 
 ---
 
 ## 次の 3 手
 
-1. **GW-S1 様子見** — tick log の reflect summary が **hook** になっているか。`last_hook` / `next_move` を state JSON で確認。→ [tracks/gw-silent.md](./tracks/gw-silent.md)
-2. **LW-7** — PAUSE の `followup_query` → `web_search` 連鎖。→ [tracks/alive-lw-read.md](./tracks/alive-lw-read.md)
-3. **GW-S2 / OL-GATE** — ingest 後 5W1H 抽出（別セッション分類器）。→ [tracks/gw-silent.md](./tracks/gw-silent.md) · [architecture/open-loops-reminders.md](./architecture/open-loops-reminders.md)
+1. **OL5 close 運用確認** — 「行ってきた」「作った」等で loop が close するか。`list_open_loops` の `detail.completion_verbs` と照合。→ [tracks/ol5.md](./tracks/ol5.md)
+2. **GW-S2 様子見** — `PRESENCE_GW_S2_ENABLED=1` で phatic（「また明日！」）が loop にならないか、W/W/H が `detail` に載るか。→ [tracks/gw-silent.md](./tracks/gw-silent.md)
+3. **LW-7** — PAUSE の `followup_query` → `web_search` 連鎖。→ [tracks/alive-lw-read.md](./tracks/alive-lw-read.md)
 
-反映後: `.\scripts\restart-presence-ui.ps1`
+デプロイ: `cd presence-ui` → `uv pip install --reinstall "relationship-mcp @ file:///…/relationship-mcp"` → `.\scripts\restart-presence-ui.ps1`
 
 ---
 
@@ -59,8 +59,8 @@
 |---------|------|------|------|
 | **ALIVE / LW** | 生きてる感・青空読書 | 🔥 v1 GW-S1 運用 → LW-7 | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md) |
 | **BIO** | ループ骨格（pulse・somatic・経験→wake） | ✅ 基盤済 · PAUSE interpret 閉 | [architecture/heartbeat-loop.md](./architecture/heartbeat-loop.md) |
-| **GW** | 黙考ルート（**interpret** 層） | ✅ S1 配線 · 📋 S2 / resume | [tracks/gw-silent.md](./tracks/gw-silent.md) |
-| **OL5** | 予定消化で loop close | 📋 GW-S1 依存 | [tracks/ol5.md](./tracks/ol5.md) |
+| **GW** | 黙考ルート（**interpret** 層） | ✅ S1 · ✅ S2（opt-in）· 📋 resume | [tracks/gw-silent.md](./tracks/gw-silent.md) |
+| **OL5** | 予定消化で loop close | 🔥 OL5-a 確認 · 📋 close 照合 | [tracks/ol5.md](./tracks/ol5.md) |
 
 ---
 
@@ -71,7 +71,7 @@
 | **A3** | Gateway 直実行（see / observe / tick / 青空） | ✅ | [architecture/gateway-direct-actions.md](./architecture/gateway-direct-actions.md) |
 | **BIO-8** | Somatic loop（目・声・memory） | ✅ a–d | [heartbeat-loop.md](./architecture/heartbeat-loop.md) · [vis-health.md](./tracks/vis-health.md) |
 | **IBF** | Intent→Bucket→Flow | ✅ | [architecture/intent-bucket-flow.md](./architecture/intent-bucket-flow.md) |
-| **OL** | Open loops / リマインド | ✅ 運用確認 · 📋 OL-GATE 未 | [architecture/open-loops-reminders.md](./architecture/open-loops-reminders.md) |
+| **OL** | Open loops / リマインド | ✅ 運用 · ✅ OL-GATE（GW-S2 opt-in）· ✅ `list_open_loops.detail` | [architecture/open-loops-reminders.md](./architecture/open-loops-reminders.md) |
 | **A4** | Outbound（着信・tick・ntfy） | ✅ | [outbound-channels.md](./architecture/outbound-channels.md) |
 | **MEM** | 記憶層・Dreaming | ✅ 5a–5f-c · 📋 MEM-8 概念 | [mem-pipeline.md](./architecture/mem-pipeline.md) · [mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) |
 | **RP** | SOUL.core / stable append | ✅ Phase 0–1 | [ops/role-persistence-ma-home.md](./ops/role-persistence-ma-home.md) |
@@ -133,7 +133,7 @@
 | 層 | 状態 |
 |----|------|
 | 記憶 | HTTP `:18900` 常駐。compose / gateway remember OK |
-| Gateway `:8090` | compose/plan + 身体直実行 + LW-READ v1（GW-S1 PAUSE） |
+| Gateway `:8090` | compose/plan + 身体直実行 + LW-READ v1（GW-S1 PAUSE）+ OL-GATE ingest（GW-S2 opt-in） |
 | **BIO** | pulse + somatic + tick — PAUSE で interpret 一部稼働 |
 | UI | Native 本線 + キオスク（`?kiosk=1`） |
 | TTS | Aivis るな + `voice_local` |

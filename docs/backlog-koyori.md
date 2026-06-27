@@ -11,8 +11,8 @@
 |---------|------|----------|
 | **設計方針** | ✅ | [architecture/cognitive-layers.md](./architecture/cognitive-layers.md) |
 | **ALIVE / LW** | 🔥 | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md) |
-| **GW-SILENT** | 📋 | [tracks/gw-silent.md](./tracks/gw-silent.md) |
-| **OL5** | 📋 | [tracks/ol5.md](./tracks/ol5.md) |
+| **GW-SILENT** | ✅ S1 · ✅ S2（opt-in） | [tracks/gw-silent.md](./tracks/gw-silent.md) |
+| **OL5** | 🔥 OL5-a 確認 · 📋 close | [tracks/ol5.md](./tracks/ol5.md) |
 | **MEM-8** | 概念済 | [architecture/mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) |
 | **MEM パイプライン** | 運用+未 | [architecture/mem-pipeline.md](./architecture/mem-pipeline.md) |
 | **OBS** | 📋 | [tracks/obs.md](./tracks/obs.md) |

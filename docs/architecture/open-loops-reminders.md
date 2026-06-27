@@ -69,12 +69,14 @@ uv run python -c "from relationship_mcp.store import RelationshipStore; print(ha
 
 | 要素 | 例 | いま |
 |------|-----|------|
-| **いつ** | 明日、来週火曜、9:30 | ✅ `FUTURE_MARKERS` で検出 |
-| **何を** | 角煮、会議、散歩、PR review | 一部のみ（dentist / pr review / 会議 ハードコード） |
-| **どうする** | 作る、行く、連絡する、リマインド | ❌ 未要求 |
+| **いつ** | 明日、来週火曜、9:30 | ✅ GW-S2 または v0 `FUTURE_MARKERS` |
+| **何を** | 角煮、会議、散歩、PR review | ✅ GW-S2 `object_phrase`（opt-in） |
+| **どうする** | 作る、行く、連絡する、リマインド | ✅ GW-S2 `action_phrase`（opt-in） |
 
-**現状（v0）**: `relationship_mcp/inference.py` の `FUTURE_MARKERS` が **いつ** だけで `_extract_topic` が通る → loop 作成。  
+**現状（v0、GW-S2 OFF）**: `relationship_mcp/inference.py` の `FUTURE_MARKERS` が **いつ** だけで `_extract_topic` が通る → loop 作成。  
 → 「また明日！」のような **挨拶（phatic）** も「また2026年6月27日！」loop になる。
+
+**現状（v1、GW-S2 ON）**: ingest 後分類器で When / What / How を抽出。phatic は loop なし。`list_open_loops.detail` で W/W/H と `completion_verbs` を確認可。
 
 **方針**: 否定的リスト（「また明日」を禁止）は **よほどの再発例がなければ作らない**。
 
@@ -117,7 +119,7 @@ Gateway: `create_open_loop = utterance_kind == future_commitment && object && ac
 
 **close 側（OL5）**: 作成ゲートと対になる — 消化時も **何を + どうした** のセット照合（日跨ぎ stale だけに頼らない）。
 
-実装: 未。観測ログ（「また明日」系）を溜めてから v1 着手。
+**実装（2026-06-25）**: GW-S2 + OL5-a/b 配線済。`completion_verbs` は作成時 seed、close は ingest `past_completion` と union。本番 ON: `PRESENCE_GW_S2_ENABLED=1` + `presence-ui` venv へ `relationship-mcp` reinstall。
 
 ---
 

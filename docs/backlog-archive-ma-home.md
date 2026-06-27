@@ -1,6 +1,6 @@
 # ma-home バックログ — 完了アーカイブ
 
-**最終更新**: 2026-06-25（GW-S2 / OL5-a）  
+**最終更新**: 2026-06-27（OL5 close）  
 **ダッシュボード**: [backlog-ma-home.md](./backlog-ma-home.md)  
 **全文アーカイブ（2026-06-26 時点）**: [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md)  
 **索引・漏れチェック**: [archive/archive-index.md](./archive/archive-index.md)
@@ -8,6 +8,10 @@
 月ごとに完了した項目をここへ移す。詳細仕様は全文アーカイブを参照。
 
 ---
+
+## 2026-06-27
+
+- **OL5 close** — ma-home DB 確認。`loop_ea4dbebeb3`「ライブに行く」→ ingest「ライブ、行ってきた」で `ol5_completion` close
 
 ## 2026-06-25
 

@@ -19,6 +19,8 @@
 
 **ma-home 確認（2026-06-27）**: ingest「ちょっと早かったけど、ライブ、行ってきた」で loop `loop_ea4dbebeb3`（topic: 2026年6月27日、18:00にライブに行く）が `status=closed`、`detail_json.kind=ol5_completion`。
 
+**修正（2026-06-27）**: ingest の `action_terms` を全 open loop に union していたため、ライブ close で肉じゃが loop も誤 close した → loop 固有 term のみ照合に変更（`0aa773e`）。
+
 **作成側（v0 残）**: GW-S2 OFF 時は **いつ** だけで loop ができる（「また明日！」→ phatic loop）。本番は GW-S2 ON 推奨。
 
 ---

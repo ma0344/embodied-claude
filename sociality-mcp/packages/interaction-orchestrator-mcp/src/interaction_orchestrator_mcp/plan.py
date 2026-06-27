@@ -304,6 +304,7 @@ def _pick_initiative(
             allowed.append("reflect_on_aozora_passage")
             allowed.append("close_aozora_reading")
             allowed.append("think_or_discuss_topic")
+            allowed.append("web_search")  # LW-7 followup_query + inward fallback
         if dominant == "identity_coherence":
             allowed.append("recall_memories")
         if dominant == "cognitive_load" and not inward_active:

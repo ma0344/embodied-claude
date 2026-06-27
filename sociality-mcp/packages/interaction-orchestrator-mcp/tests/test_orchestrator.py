@@ -570,7 +570,7 @@ class TestPlan:
         )
         assert plan.primary_move == "act_autonomously"
         assert "recall_memories" in plan.initiative.allowed_actions
-        assert "web_search" not in plan.initiative.allowed_actions
+        assert "web_search" in plan.initiative.allowed_actions
 
     def test_plan_must_avoid_includes_contract_avoid(self, stores):
         ctx = _compose(stores, user_text="please help")

@@ -36,6 +36,11 @@ from presence_ui.gateway.gw_silent import (
     parse_pause_response,
     run_silent_internal_turn,
 )
+from presence_ui.gateway.lw7 import (
+    clear_pending_followup,
+    pending_followup_query,
+    should_run_lw7_web_search,
+)
 from presence_ui.gateway.memory_http import http_recall, http_recall_divergent, http_remember
 from presence_ui.gateway.reading_prompts import (
     build_close_book_reflection,
@@ -579,10 +584,13 @@ async def web_search_direct(
     person_id: str,
     ctx: InteractionContext,
     plan: ResponsePlan,
+    query: str | None = None,
+    source: str = "browse_curiosity",
 ) -> DirectActionOutcome:
-    """Bounded DuckDuckGo instant answer for browse_curiosity."""
-    query = pick_browse_query(ctx)
-    answer, used_query = await ddg_instant_answer(query)
+    """Bounded DuckDuckGo instant answer for browse_curiosity or LW-7 followup."""
+    used_query = (query or "").strip()[:120] or pick_browse_query(ctx)
+    answer, resolved_query = await ddg_instant_answer(used_query)
+    used_query = resolved_query or used_query
     if not answer:
         return DirectActionOutcome(
             ok=False,
@@ -593,13 +601,14 @@ async def web_search_direct(
                 activity_event(
                     kind="search",
                     label="Web検索",
-                    detail=(used_query or query)[:120],
+                    detail=(used_query or query or "")[:120],
                     ok=False,
                 )
             ],
         )
 
-    memory_line = f"WebSearchで調べた: 「{used_query}」 — {answer[:400]}"
+    prefix = "LW-7 WebSearch" if source == "lw7" else "WebSearchで調べた"
+    memory_line = f"{prefix}: 「{used_query}」 — {answer[:400]}"
     remember_result = await asyncio.to_thread(
         http_remember,
         content=memory_line,
@@ -619,7 +628,7 @@ async def web_search_direct(
             importance=3,
             privacy_level="relationship",
             related_event_ids=[],
-            artifacts=[{"query": used_query, "remember_ok": remember_ok}],
+            artifacts=[{"query": used_query, "remember_ok": remember_ok, "source": source}],
         )
     )
     return DirectActionOutcome(
@@ -1539,15 +1548,20 @@ async def execute_autonomous_plan(
             plan=plan,
             text=speech_text,
         )
-    elif "web_search" in allowed or (
-        not inward and dominant == "browse_curiosity"
-    ):
-        outcome = await web_search_direct(
-            stores, person_id=person_id, ctx=ctx, plan=plan
-        )
     elif inward:
         reading = load_reading_state()
-        if reading.phase == "close" and (
+        if should_run_lw7_web_search(reading):
+            outcome = await web_search_direct(
+                stores,
+                person_id=person_id,
+                ctx=ctx,
+                plan=plan,
+                query=pending_followup_query(reading),
+                source="lw7",
+            )
+            if outcome.ok:
+                clear_pending_followup()
+        elif reading.phase == "close" and (
             "reflect_on_aozora_passage" in allowed
             or "read_aozora_passage" in allowed
             or "close_aozora_reading" in allowed
@@ -1580,10 +1594,22 @@ async def execute_autonomous_plan(
             outcome = recall_memories_direct(
                 stores, person_id=person_id, ctx=ctx, plan=plan
             )
-        else:
+        elif "web_search" in allowed:
             outcome = await web_search_direct(
                 stores, person_id=person_id, ctx=ctx, plan=plan
             )
+        else:
+            outcome = DirectActionOutcome(
+                ok=True,
+                action="act_autonomously",
+                summary="No executable allowed_action; skipped.",
+            )
+    elif "web_search" in allowed or (
+        not inward and dominant == "browse_curiosity"
+    ):
+        outcome = await web_search_direct(
+            stores, person_id=person_id, ctx=ctx, plan=plan
+        )
     elif "read_aozora_passage" in allowed:
         outcome = await read_aozora_passage_direct(
             stores, person_id=person_id, ctx=ctx, plan=plan

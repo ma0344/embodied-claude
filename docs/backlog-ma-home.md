@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ（ダッシュボード）
 
-**最終更新**: 2026-06-27（OL5 close 運用確認）  
+**最終更新**: 2026-06-27（OL5 close 修正 · LW-7 下準備）  
 **詳細の正（アーカイブ）**: [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md)  
 **完了一覧**: [backlog-archive-ma-home.md](./backlog-archive-ma-home.md)
 
@@ -38,15 +38,15 @@
 | **★** | **ALIVE / LW** | 生きてる感の第一シーン（青空読書） | 🔥 v1 GW-S1 運用 → **LW-7** |
 | **1** | **BIO** | Heartbeat ループ骨格（pulse・somatic・tick） | ✅ 基盤済 — interpret 一部閉（PAUSE） |
 | **2** | **GW** | 黙考ルート（shared interpret） | ✅ S1 · ✅ S2（`PRESENCE_GW_S2_ENABLED=1`）· 📋 Claude resume |
-| **3** | **OL5** | 予定消化で loop close | ✅ OL5-a/b 運用確認済 |
+| **3** | **OL5** | 予定消化で loop close | ✅ 運用確認 · ✅ 誤 close 修正 |
 | **—** | **K** | こより自身のコード | 💤 **GW + BIO ループが閉じてから** |
 
 ---
 
 ## 次の 3 手
 
-1. **GW-S2 様子見** — phatic（「また明日！」）が loop にならないか、W/W/H が `detail` に載るか。→ [tracks/gw-silent.md](./tracks/gw-silent.md)
-2. **LW-7** — PAUSE の `followup_query` → `web_search` 連鎖。→ [tracks/alive-lw-read.md](./tracks/alive-lw-read.md)
+1. **LW-7 本番 ON** — `PRESENCE_LW7_ENABLED=1` → PAUSE 後 tick で `followup_query` が DDG へ。→ [tracks/alive-lw-read.md](./tracks/alive-lw-read.md)
+2. **GW-S2 様子見** — phatic（「また明日！」）が loop にならないか、W/W/H が `detail` に載るか。→ [tracks/gw-silent.md](./tracks/gw-silent.md)
 3. **GW Claude resume** — チャット直後 KV 再利用の internal turn 経路。→ [tracks/gw-silent.md](./tracks/gw-silent.md)
 
 デプロイ: `cd presence-ui` → `uv pip install --reinstall "relationship-mcp @ file:///…/relationship-mcp"` → `.\scripts\restart-presence-ui.ps1`
@@ -57,7 +57,7 @@
 
 | トラック | 内容 | 状態 | 詳細 |
 |---------|------|------|------|
-| **ALIVE / LW** | 生きてる感・青空読書 | 🔥 v1 GW-S1 運用 → LW-7 | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md) |
+| **ALIVE / LW** | 生きてる感・青空読書 | 🔥 LW-7 下準備済 | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md) |
 | **BIO** | ループ骨格（pulse・somatic・経験→wake） | ✅ 基盤済 · PAUSE interpret 閉 | [architecture/heartbeat-loop.md](./architecture/heartbeat-loop.md) |
 | **GW** | 黙考ルート（**interpret** 層） | ✅ S1 · ✅ S2（opt-in）· 📋 resume | [tracks/gw-silent.md](./tracks/gw-silent.md) |
 | **OL5** | 予定消化で loop close | ✅ 運用確認済 | [tracks/ol5.md](./tracks/ol5.md) |

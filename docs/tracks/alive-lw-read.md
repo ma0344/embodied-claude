@@ -1,6 +1,6 @@
 # ALIVE / LW-READ — 生きてる感・青空読書
 
-**状態**: 🔥 LW-READ v1 GW-S1 運用中 → 📋 LW-7  
+**状態**: 🔥 LW-READ v1 GW-S1 運用中 → 🔧 LW-7 下準備済  
 **ダッシュボード**: [backlog-ma-home.md](../backlog-ma-home.md)  
 **関連**: [gw-silent.md](./gw-silent.md)、[architecture/gateway-direct-actions.md](../architecture/gateway-direct-actions.md)、[architecture/heartbeat-loop.md](../architecture/heartbeat-loop.md)
 
@@ -60,7 +60,7 @@ tick wake → phase=read → READ（一節・remember）
 | **LW-4** | 記憶 | experience 閉じ + `satisfy_desire` + pulse | 部分済 |
 | **LW-5** | 可視性 | UI「青空読んでる」/ live_inner_voice（`active_work` 表示） | 📋 |
 | **LW-6** | Web 散歩 | `browse_curiosity` — memory / open loop からクエリ → `web_search_direct` | 📋 |
-| **LW-7** | **連鎖** | **読書 → 興味 → Web** — PAUSE の `followup_query` を DDG へ | 📋 |
+| **LW-7** | **連鎖** | **読書 → 興味 → Web** — PAUSE の `followup_query` を DDG へ | 🔧 下準備済（`PRESENCE_LW7_ENABLED=1`） |
 | **LW-READ** | **読書モデル** | 一冊完走・READ/PAUSE 交互・GW-S1 咀嚼・CLOSE まとめ | **v0** ✅ · **v1** GW-S1 ✅ |
 
 **いまの層**
@@ -70,7 +70,7 @@ tick wake → phase=read → READ（一節・remember）
 | LW-2 | 青空が inward tick で動く — ✅ |
 | LW-READ v0 | 一冊完走・READ/PAUSE 交互・CLOSE — ✅ |
 | GW-S1 | ✅ 配線 — `gw_silent.py` + reflect tick（LM Studio） |
-| LW-7 | 📋 PAUSE の `followup_query` → Web |
+| LW-7 | 🔧 下準備済 — `lw7.py` + inward 優先ルート（既定 OFF） | 📋 本番 ON 後の運用確認 |
 
 **ギャップ（次）**: LW-7 Web 連鎖、LW-5 UI、朝 compose surface（ALIVE-4）、Claude `--resume` 経路。
 
@@ -133,11 +133,27 @@ PAUSE の `followup_query` / `interest_tags` を同一夜 or 次 tick の `web_s
 
 ## LW-7 実装候補（GW-S1 後）
 
-| 段階 | 方針 |
-|------|------|
-| v0 | 青空 `remember` 直後にルールで固有名詞・『』作品名をクエリ候補に → `web_search` |
-| v1 | GW-S1 JSON: `{ interest_tags, followup_query }` → `detail_json` or STM |
-| v2 | `browse_curiosity` keywords に「青空のあと調べた」；desire 連鎖で次 tick が自然に Web |
+| 段階 | 方針 | 状態 |
+|------|------|------|
+| v0 | 青空 `remember` 直後にルールで固有名詞・『』作品名をクエリ候補に → `web_search` | 📋 |
+| v1 | GW-S1 JSON: `{ interest_tags, followup_query }` → `pending_followup_query` → DDG | 🔧 **下準備済** |
+| v2 | `browse_curiosity` keywords に「青空のあと調べた」；desire 連鎖で次 tick が自然に Web | 📋 |
+
+**下準備（2026-06-27）**
+
+- `presence-ui/.../lw7.py` — `PRESENCE_LW7_ENABLED=1` で `pending_followup_query` を消費
+- inward tick は **read/reflect より前**に LW-7 を評価（`web_search` in allowed でも青空を優先）
+- `web_search_direct(query=..., source="lw7")` — remember 行に `LW-7 WebSearch:` プレフィックス
+- plan: inward 時 `web_search` を allowed に追加
+
+**有効化**
+
+```powershell
+$env:PRESENCE_LW7_ENABLED = "1"
+.\scripts\restart-presence-ui.ps1
+```
+
+PAUSE で `followup_query` が載った次 tick から DDG。失敗時は pending を残す（再試行可）。
 
 ---
 

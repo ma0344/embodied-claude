@@ -189,6 +189,27 @@ class TestRecord:
         )
         assert any("policy purpose (protect sleep)" in item for item in plan.must_include)
 
+    def test_bare_greeting_does_not_force_shift_regurgitation(self, stores):
+        stores["orchestrator"].record_interpretation_shift(
+            RecordInterpretationShiftInput(
+                person_id="ma",
+                topic="today schedule",
+                old_interpretation="Assumed default behavior before this turn",
+                new_interpretation="今日は入浴介助で15時位まで",
+                trigger="ma clarified",
+                confidence=0.9,
+                implications=[],
+            )
+        )
+        ctx = _compose(stores)
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text="おはようさん")
+        )
+        joined = " ".join(plan.must_include)
+        assert "bare greeting only" in joined
+        assert "do NOT recite schedule" in joined
+        assert "今日は入浴介助" not in joined
+
     def test_soul_sections_in_compact_block(self, stores, monkeypatch, tmp_path):
         import json as _json
 

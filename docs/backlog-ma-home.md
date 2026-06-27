@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ（ダッシュボード）
 
-**最終更新**: 2026-06-26（BIO/GW 優先・K 後回し）  
+**最終更新**: 2026-06-25（GW-S1 配線・LW-7 次）  
 **詳細の正（アーカイブ）**: [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md)  
 **完了一覧**: [backlog-archive-ma-home.md](./backlog-archive-ma-home.md)
 
@@ -12,7 +12,9 @@
 
 第一シーン: **LW-READ**（一冊完走・READ/PAUSE/CLOSE）→ **GW-S1** 黙考 → **LW-7** Web 連鎖。
 
-**骨格（合意 2026-06-26）**: LW・**BIO**・将来の K は同じループ — `notice → interpret → choose → act → remember → schedule`。**interpret = GW-SILENT**。インフラ（pulse・somatic・tick）は **BIO 済**；いまの穴は **interpret 層の未配線**。
+**骨格（合意 2026-06-26）**: LW・**BIO**・将来の K は同じループ — `notice → interpret → choose → act → remember → schedule`。**interpret = GW-SILENT**。インフラ（pulse・somatic・tick）は **BIO 済**；**GW-S1 は tick PAUSE に配線済**（2026-06-25）。
+
+**設計方針（合意 2026-06-26）**: 新機能・LLM 追加の前に [cognitive-layers.md](./architecture/cognitive-layers.md)（表層 / 前頭葉 / 実装前 3 問）。記憶は [mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md)。全文アーカイブの漏れチェック → [archive/archive-index.md](./archive/archive-index.md)。
 
 ---
 
@@ -33,19 +35,19 @@
 
 | 順 | トラック | 内容 | 状態 |
 |----|---------|------|------|
-| **★** | **ALIVE / LW** | 生きてる感の第一シーン（青空読書） | 🔥 v0 運用 → v1 GW-S1 |
-| **1** | **BIO** | Heartbeat ループ骨格（pulse・somatic・tick） | ✅ 基盤済 — **interpret 穴 = GW** |
-| **2** | **GW** | 黙考ルート（shared interpret） | 📋 S1 未配線 — **BIO/LW の次の主作業** |
-| **3** | **OL5** | 予定消化で loop close | 📋 GW-S1 依存 |
+| **★** | **ALIVE / LW** | 生きてる感の第一シーン（青空読書） | 🔥 v1 GW-S1 運用 → **LW-7** |
+| **1** | **BIO** | Heartbeat ループ骨格（pulse・somatic・tick） | ✅ 基盤済 — interpret 一部閉（PAUSE） |
+| **2** | **GW** | 黙考ルート（shared interpret） | ✅ S1 配線 · 📋 S2 / Claude resume |
+| **3** | **OL5** | 予定消化で loop close | 📋 GW-S2 依存 |
 | **—** | **K** | こより自身のコード | 💤 **GW + BIO ループが閉じてから** |
 
 ---
 
 ## 次の 3 手
 
-1. **LW-READ v0 様子見** — tick log で `read` / `reflect` が交互か。→ [tracks/alive-lw-read.md](./tracks/alive-lw-read.md)
-2. **v1 GW-S1 判断・配線** — BIO ループの **interpret** を PAUSE に載せる。→ [tracks/gw-silent.md](./tracks/gw-silent.md)
-3. **BIO ループ実戦確認** — pulse / somatic / tick が「次にいつ」を回しているか、GW 配線後に interpret→choose が閉じるか。→ [architecture/heartbeat-loop.md](./architecture/heartbeat-loop.md)
+1. **GW-S1 様子見** — tick log の reflect summary が **hook** になっているか。`last_hook` / `next_move` を state JSON で確認。→ [tracks/gw-silent.md](./tracks/gw-silent.md)
+2. **LW-7** — PAUSE の `followup_query` → `web_search` 連鎖。→ [tracks/alive-lw-read.md](./tracks/alive-lw-read.md)
+3. **GW-S2 / OL-GATE** — ingest 後 5W1H 抽出（別セッション分類器）。→ [tracks/gw-silent.md](./tracks/gw-silent.md) · [architecture/open-loops-reminders.md](./architecture/open-loops-reminders.md)
 
 反映後: `.\scripts\restart-presence-ui.ps1`
 
@@ -55,9 +57,9 @@
 
 | トラック | 内容 | 状態 | 詳細 |
 |---------|------|------|------|
-| **ALIVE / LW** | 生きてる感・青空読書 | 🔥 v0 運用中 → v1 GW-S1 | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md) |
-| **BIO** | ループ骨格（pulse・somatic・経験→wake） | ✅ 基盤済 · 📋 interpret 穴 | [architecture/heartbeat-loop.md](./architecture/heartbeat-loop.md) |
-| **GW** | 黙考ルート（**interpret** 層） | 📋 プロンプト済・S1 未配線 | [tracks/gw-silent.md](./tracks/gw-silent.md) |
+| **ALIVE / LW** | 生きてる感・青空読書 | 🔥 v1 GW-S1 運用 → LW-7 | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md) |
+| **BIO** | ループ骨格（pulse・somatic・経験→wake） | ✅ 基盤済 · PAUSE interpret 閉 | [architecture/heartbeat-loop.md](./architecture/heartbeat-loop.md) |
+| **GW** | 黙考ルート（**interpret** 層） | ✅ S1 配線 · 📋 S2 / resume | [tracks/gw-silent.md](./tracks/gw-silent.md) |
 | **OL5** | 予定消化で loop close | 📋 GW-S1 依存 | [tracks/ol5.md](./tracks/ol5.md) |
 
 ---
@@ -67,30 +69,32 @@
 | トラック | 内容 | 状態 | 参照 |
 |---------|------|------|------|
 | **A3** | Gateway 直実行（see / observe / tick / 青空） | ✅ | [architecture/gateway-direct-actions.md](./architecture/gateway-direct-actions.md) |
-| **BIO-8** | Somatic loop（目・声・memory） | ✅ a–d | アーカイブ § BIO-8 |
+| **BIO-8** | Somatic loop（目・声・memory） | ✅ a–d | [heartbeat-loop.md](./architecture/heartbeat-loop.md) · [vis-health.md](./tracks/vis-health.md) |
 | **IBF** | Intent→Bucket→Flow | ✅ | [architecture/intent-bucket-flow.md](./architecture/intent-bucket-flow.md) |
 | **OL** | Open loops / リマインド | ✅ 運用確認 · 📋 OL-GATE 未 | [architecture/open-loops-reminders.md](./architecture/open-loops-reminders.md) |
-| **A4** | Outbound（着信・tick・ntfy） | ✅ | アーカイブ § A4 |
-| **MEM** | 記憶層・Dreaming | ✅ 5a–5f-c | アーカイブ § MEM |
+| **A4** | Outbound（着信・tick・ntfy） | ✅ | [outbound-channels.md](./architecture/outbound-channels.md) |
+| **MEM** | 記憶層・Dreaming | ✅ 5a–5f-c · 📋 MEM-8 概念 | [mem-pipeline.md](./architecture/mem-pipeline.md) · [mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) |
 | **RP** | SOUL.core / stable append | ✅ Phase 0–1 | [ops/role-persistence-ma-home.md](./ops/role-persistence-ma-home.md) |
-| **C** | 部屋 UI Native + キオスク | ✅ C11 実戦 OK | アーカイブ § C |
-| **B** | Task 常駐・診断 | ✅ B2 除く | 下記 |
+| **C** | 部屋 UI Native + キオスク | ✅ C11 実戦 OK | [surface-vision.md](./tracks/surface-vision.md) · [platform-ma-home.md](./architecture/platform-ma-home.md) |
+| **B** | Task 常駐・診断 | ✅ B2 除く | [scripts-reference.md](./ops/scripts-reference.md) |
 
 ---
 
 ## 様子見・計画済（急がない）
 
+**注（アーカイブ合意）**: 記憶・gateway への **大きな追加は様子見**（A トラック）。縦スライス（LW/GW/OL-GATE）以外の MEM 拡張は [mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) の優先案を参照。
+
 | トラック | 内容 | 状態 |
 |---------|------|------|
-| **K** | こより自身のコード | 💤 GW + BIO ループ後 — [tracks/k-self-code.md](./tracks/k-self-code.md) |
-| **A** | 記憶・gateway 身体の大追加 | 💤 |
-| **OBS** | `/observe` gateway フェーズ化 | 📋 |
-| **CAM** | Tapo PTZ / ONVIF 細かい操作 | 💤 |
-| **EAR** | Surface マイク → social | 📋 |
-| **GAPI** | Google Calendar / Drive | 📋 |
-| **VIS** | VL corrupt 相関ログ | 💤 |
-| **V** | Surface ビジョン（V4 see_near 等） | 💤 V5 済 |
-| **WS** | 会話 Web 検索 | ✅ WS-1〜2c | [ops/ws-2-conversation-web-search.md](./ops/ws-2-conversation-web-search.md) |
+| **K** | こより自身のコード | 💤 | [tracks/k-self-code.md](./tracks/k-self-code.md) |
+| **A** | 記憶・gateway 大追加 | 💤 | [platform-ma-home.md](./architecture/platform-ma-home.md) |
+| **OBS** | `/observe` フェーズ化 | 📋 | [tracks/obs.md](./tracks/obs.md) |
+| **CAM** | Tapo PTZ | 💤 | [tracks/cam-tapo-ptz.md](./tracks/cam-tapo-ptz.md) |
+| **EAR** | Surface マイク | 📋 | [tracks/ear.md](./tracks/ear.md) |
+| **VIS** | VL health・間接視覚 | 💤 | [tracks/vis-health.md](./tracks/vis-health.md) |
+| **V** | Surface UI 残（V4 等） | 部分済 | [tracks/surface-vision.md](./tracks/surface-vision.md) |
+| **GAPI** | Google Calendar / Drive | 📋 | [tracks/gapi.md](./tracks/gapi.md) |
+| **WS** | 会話 Web 検索 | ✅ WS-1〜2c · 📋 WS-5 | [ws-2](./ops/ws-2-conversation-web-search.md) · [ws-5](./ops/ws-5-spontaneous-search.md) |
 
 トピック索引: [backlog-koyori.md](./backlog-koyori.md)
 
@@ -129,14 +133,15 @@
 | 層 | 状態 |
 |----|------|
 | 記憶 | HTTP `:18900` 常駐。compose / gateway remember OK |
-| Gateway `:8090` | compose/plan + 身体直実行 + LW-READ v0 |
-| **BIO** | pulse + somatic + tick — **interpret は GW 待ち** |
+| Gateway `:8090` | compose/plan + 身体直実行 + LW-READ v1（GW-S1 PAUSE） |
+| **BIO** | pulse + somatic + tick — PAUSE で interpret 一部稼働 |
 | UI | Native 本線 + キオスク（`?kiosk=1`） |
 | TTS | Aivis るな + `voice_local` |
 | Outbound | 着信・15m tick・ntfy |
 
 設備マニュアル: [CLAUDE.md](../CLAUDE.md)  
-なぜ・何を目指すか: [VISION.md](./VISION.md)
+設計・索引: [cognitive-layers.md](./architecture/cognitive-layers.md) · [archive-index.md](./archive/archive-index.md)  
+なぜ: [VISION.md](./VISION.md)
 
 ---
 

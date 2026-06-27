@@ -1,91 +1,74 @@
 # koyori バックログ — トピック索引
 
 **ダッシュボード**: [backlog-ma-home.md](./backlog-ma-home.md)  
-**読み方**: [README.md](./README.md)
+**読み方**: [README.md](./README.md) · [archive-index.md](./archive/archive-index.md)
 
 ---
 
-## ma-home トラック（詳細）
+## ma-home トラック
 
 | トピック | 状態 | 読む場所 |
 |---------|------|----------|
-| **ALIVE / LW** 青空読書 | 🔥 v0 運用中 | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md) |
-| **GW-SILENT** 黙考 | 📋 S1 未配線 | [tracks/gw-silent.md](./tracks/gw-silent.md) |
-| **OL5** 予定消化 | 📋 | [tracks/ol5.md](./tracks/ol5.md) |
-| **OBS** `/observe` | 📋 | [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md) § OBS |
-| **CAM** Tapo PTZ | 💤 | 同上 § CAM |
-| **EAR** 環境音 | 📋 | 同上 § EAR |
-| **MEM** 記憶層 | ✅ 運用 | 同上 § MEM |
-| **GAPI** Calendar/Drive | 📋 | 同上 § GAPI |
-| **BIO-8** 神経系 | ✅ | 同上 § BIO-8 |
-| **VIS** VL 安定性 | 💤 | 同上 § VIS |
+| **設計方針** | ✅ | [architecture/cognitive-layers.md](./architecture/cognitive-layers.md) |
+| **ALIVE / LW** | 🔥 | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md) |
+| **GW-SILENT** | 📋 | [tracks/gw-silent.md](./tracks/gw-silent.md) |
+| **OL5** | 📋 | [tracks/ol5.md](./tracks/ol5.md) |
+| **MEM-8** | 概念済 | [architecture/mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) |
+| **MEM パイプライン** | 運用+未 | [architecture/mem-pipeline.md](./architecture/mem-pipeline.md) |
+| **OBS** | 📋 | [tracks/obs.md](./tracks/obs.md) |
+| **CAM** | 💤 | [tracks/cam-tapo-ptz.md](./tracks/cam-tapo-ptz.md) |
+| **EAR** | 📋 | [tracks/ear.md](./tracks/ear.md) |
+| **VIS** | 💤 | [tracks/vis-health.md](./tracks/vis-health.md) |
+| **GAPI** | 📋 | [tracks/gapi.md](./tracks/gapi.md) |
+| **V / Surface UI 残** | 部分済 | [tracks/surface-vision.md](./tracks/surface-vision.md) |
+| **BIO-8** | ✅ | [heartbeat-loop.md](./architecture/heartbeat-loop.md) § Somatic |
+| **Outbound** | ✅ | [architecture/outbound-channels.md](./architecture/outbound-channels.md) |
+| **プラットフォーム** | ✅ | [architecture/platform-ma-home.md](./architecture/platform-ma-home.md) |
 
 ## RP — 人格の基底化
 
 | Phase | 内容 | 状態 |
 |-------|------|------|
-| 0 | `presets/koyori-SOUL.core.md` → stable append | **済** |
-| 1 | LM Studio 固定 system | **済** |
+| 0–1 | SOUL.core + LM Studio system | **済** |
 | 2 | persona LoRA + JSONL export | **2a 済** |
-| 3 | arc → SOUL パッチ（MEM-6） | 未 |
+| 3 | arc → SOUL（MEM-6） | 未 |
 
-手順 → [ops/role-persistence-ma-home.md](./ops/role-persistence-ma-home.md)
+→ [ops/role-persistence-ma-home.md](./ops/role-persistence-ma-home.md) · VIS 間接視覚は [vis-health.md](./tracks/vis-health.md)
 
-## WS — 会話中 WebSearch
+## WS — Web
 
-仕様 → [ops/ws-2-conversation-web-search.md](./ops/ws-2-conversation-web-search.md)（WS-1〜2c **済**）
+| ID | 読む場所 |
+|----|----------|
+| WS-1〜2c | [ops/ws-2-conversation-web-search.md](./ops/ws-2-conversation-web-search.md) |
+| WS-5 自発検索 | [ops/ws-5-spontaneous-search.md](./ops/ws-5-spontaneous-search.md) |
+
+## 運用スクリプト
+
+→ [ops/scripts-reference.md](./ops/scripts-reference.md)
 
 ---
 
 ## 本番: Keychron K4 MAX Bluetooth
 
-手順: [ops/koyori-input-sharing.md](./ops/koyori-input-sharing.md)  
-`koyori-pair-keychron.sh` / `koyori-connect-keychron.sh`
+→ [ops/koyori-input-sharing.md](./ops/koyori-input-sharing.md)
 
-## キオスク URL（フェーズ3）
+## キオスク URL
 
-既定は **presence-ui `:8090`**（8080 直結ではない）。
+既定 **presence-ui `:8090`**（8080 直結ではない）。
 
 ```bash
 cd ~/src/embodied-claude/scripts/koyori-kiosk
 sudo ./install-koyori-kiosk.sh
 ```
 
-`/etc/default/koyori-kiosk` の `KOYORI_WEBUI_URL`:
+`http://ma-home.local:8090/?kiosk=1`
 
-`http://ma-home.local:8090/`（`/projects/...` は 8080 用）
+## Input Leap — 済（V5）
 
-キオスク起動時は `?kiosk=1` 自動付与。手動: `http://ma-home.local:8090/?kiosk=1`
+→ [ops/koyori-input-sharing.md](./ops/koyori-input-sharing.md) · [ops/koyori-kiosk-ime.md](./ops/koyori-kiosk-ime.md)
 
-## ハードウェア音量キー（C11f+）
-
-| 層 | 内容 |
-|----|------|
-| acpid | `button/volumeup|down` → `/etc/acpi/surface-volume.sh` |
-| 音響 | `wpctl` / `pactl`（PipeWire） |
-| オーバーレイ | `koyori-audio-server` `:18791` |
-
-```bash
-curl -sS http://127.0.0.1:18791/health
-sudo acpi_listen
-```
-
-## Input Leap — 済（V5, 2026-06-17）
-
-| 側 | 起動 |
-|----|------|
-| **ma-home** | `input-leaps.exe -c default.sgc --disable-client-cert-checking --disable-crypto` |
-| **koyori** | `KOYORI_INPUT_LEAP_SERVER` + watch |
-
-手順・トラブル: [ops/koyori-input-sharing.md](./ops/koyori-input-sharing.md)  
-日本語 IME: [ops/koyori-kiosk-ime.md](./ops/koyori-kiosk-ime.md)
-
-診断: `koyori-diagnose-input-leap` / ma-home: `scripts/check-koyori-stack.ps1`
+診断: `check-koyori-stack.ps1`（ma-home）
 
 ## タッチキーボード（onboard）— 保留
 
-```bash
-KOYORI_ONBOARD=1
-KOYORI_OSK_BACKEND=onboard
-sudo apt install -y onboard at-spi2-core
-```
+`KOYORI_ONBOARD=1` / `apt install onboard`

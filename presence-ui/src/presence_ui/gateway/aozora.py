@@ -162,6 +162,7 @@ class ReadingState:
     sections_this_session: int = 0
     pending_followup_query: str = ""
     last_hook: str = ""
+    last_reflected_passage_index: int = -1
     # Legacy fields kept for migration reads only
     work_index: int = 0
     passage_indices: dict[str, int] = field(default_factory=dict)
@@ -176,6 +177,7 @@ class ReadingState:
             "sections_this_session": self.sections_this_session,
             "pending_followup_query": self.pending_followup_query,
             "last_hook": self.last_hook,
+            "last_reflected_passage_index": self.last_reflected_passage_index,
         }
 
     @classmethod
@@ -201,6 +203,9 @@ class ReadingState:
             sections_this_session=int(data.get("sections_this_session") or 0),
             pending_followup_query=str(data.get("pending_followup_query") or ""),
             last_hook=str(data.get("last_hook") or ""),
+            last_reflected_passage_index=int(
+                data.get("last_reflected_passage_index", -1)
+            ),
             work_index=int(data.get("work_index") or 0),
             passage_indices={str(k): int(v) for k, v in passage_indices.items()},
         )
@@ -245,6 +250,30 @@ def save_reading_state(state: ReadingState, path: Path | None = None) -> None:
 
 def reading_phase(path: Path | None = None) -> ReadingPhase:
     return load_reading_state(path).phase
+
+
+def last_passage_index(state: ReadingState) -> int:
+    last = state.last_passage or {}
+    try:
+        return int(last.get("passage_index", -1))
+    except (TypeError, ValueError):
+        return -1
+
+
+def passage_needs_reflect(state: ReadingState) -> bool:
+    """True when PAUSE is due for the current last_passage."""
+    if state.phase != "pause":
+        return False
+    idx = last_passage_index(state)
+    return idx >= 0 and idx != state.last_reflected_passage_index
+
+
+def passage_reflect_stuck(state: ReadingState) -> bool:
+    """PAUSE but this passage was already reflected — advance without re-chewing."""
+    if state.phase != "pause":
+        return False
+    idx = last_passage_index(state)
+    return idx >= 0 and idx == state.last_reflected_passage_index
 
 
 def _migrate_legacy_state(state: ReadingState, data: dict[str, Any]) -> None:
@@ -317,6 +346,7 @@ def complete_reading_pause(
     next_move: str = "advance",
     hook: str = "",
     followup_query: str = "",
+    reflected_passage_index: int | None = None,
     state_path: Path | None = None,
 ) -> ReadingState:
     """Apply PAUSE outcome: advance index, reread, or close book."""
@@ -346,6 +376,9 @@ def complete_reading_pause(
         else:
             state.passage_index = next_index
             state.phase = "read"
+
+    if reflected_passage_index is not None and reflected_passage_index >= 0:
+        state.last_reflected_passage_index = reflected_passage_index
 
     save_reading_state(state, path)
     return state

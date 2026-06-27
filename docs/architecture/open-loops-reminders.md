@@ -1,7 +1,7 @@
 # Open Loops / リマインド（OL1 + OL2）
 
 **実装**: 2026-06-16  
-**関連**: [gateway-direct-actions.md](./gateway-direct-actions.md)、[backlog-ma-home.md](./backlog-ma-home.md)
+**関連**: [cognitive-layers.md](./cognitive-layers.md)、[gateway-direct-actions.md](./gateway-direct-actions.md)、[backlog-ma-home.md](../backlog-ma-home.md)
 
 ---
 
@@ -111,7 +111,7 @@ LLM 出力（抜粋）:
 }
 ```
 
-Gateway: `create_open_loop = is_follow_up_task && is_future_commitment`（`resolved_date` は OL1 既存ロジック）。
+Gateway: `create_open_loop = utterance_kind == future_commitment && object && action && is_future_commitment`。**v3 スモーク**で 3 スロット一律では **完了報告（角煮作った）が弾かれる** → `utterance_kind` 必須。→ [gw-silent.md § v3](../tracks/gw-silent.md#検討--utterance_kind-三分類v3-スモークで推奨度)
 
 ルール v1 で足りる例はルールのまま。**境界・曖昧**だけ GW（IBF-7 と同型ハイブリッド）。
 

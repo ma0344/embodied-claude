@@ -25,6 +25,21 @@ def _parse_local_ts(ts: str, timezone: str) -> datetime | None:
         return None
 
 
+def _local_date_iso(local_time: str, timezone: str) -> str | None:
+    parsed = _parse_local_ts(local_time, timezone)
+    return parsed.date().isoformat() if parsed else None
+
+
+def _morning_temporal_fence(*, source_day: str, today: str, kind: str) -> str:
+    """Label overnight blocks so the model does not treat yesterday as today."""
+    if not source_day or not today or source_day == today:
+        return ""
+    return (
+        f"[morning_context — {kind} は {source_day} の記録。"
+        f"今日は {today}。昨日の予定・会話を今日の予定として言わない]"
+    )
+
+
 def build_dream_digest_block(*, local_time: str, timezone: str) -> str:
     """Surface overnight dream summary during morning compose (MEM-4)."""
     if not is_morning_digest_window(local_time=local_time, timezone=timezone):
@@ -40,7 +55,16 @@ def build_dream_digest_block(*, local_time: str, timezone: str) -> str:
         return ""
     if (now - dreamed).total_seconds() > 36 * 3600:
         return ""
-    return record.summary.strip()
+    body = record.summary.strip()
+    today = _local_date_iso(local_time, timezone) or ""
+    fence = _morning_temporal_fence(
+        source_day=record.local_day,
+        today=today,
+        kind="dream_digest",
+    )
+    if fence:
+        return f"{fence}\n{body}"
+    return body
 
 
 def build_overnight_inner_voice_block(*, local_time: str, timezone: str) -> str:
@@ -58,7 +82,16 @@ def build_overnight_inner_voice_block(*, local_time: str, timezone: str) -> str:
         return ""
     if (now - dreamed).total_seconds() > 36 * 3600:
         return ""
-    return record.inner_voice_summary.strip()
+    body = (record.inner_voice_summary or "").strip()
+    today = _local_date_iso(local_time, timezone) or ""
+    fence = _morning_temporal_fence(
+        source_day=record.local_day,
+        today=today,
+        kind="overnight_inner_voice",
+    )
+    if fence:
+        return f"{fence}\n{body}"
+    return body
 
 
 def build_live_stm_block(

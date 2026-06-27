@@ -132,6 +132,56 @@ def build_gw_s1_pause_task(
 """
 
 
+def build_pause_reflection_from_gw_s1(
+    *,
+    title: str,
+    author: str,
+    passage: str,
+    passage_index: int,
+    total_passages: int,
+    sections_this_session: int,
+    hook: str,
+    felt: str,
+    next_move: str,
+    interest_tags: list[str] | None = None,
+    followup_query: str = "",
+) -> str:
+    """Private note body after GW-S1 PAUSE (LW-READ v1)."""
+    position = f"{passage_index + 1} / ~{total_passages}"
+    excerpt = passage[:400].strip()
+    if len(passage) > 400:
+        excerpt += "…"
+
+    author_bit = f" — {author}" if author else ""
+    move_labels = {
+        "advance": "次の一節へ進む",
+        "reread_same": "同じ一節をもう一度",
+        "close_book": "この本を閉じる",
+    }
+    move_label = move_labels.get(next_move, move_labels["advance"])
+
+    lines = [
+        "（青空を読んだあと — 咀嚼）",
+        f"『{title}』{author_bit}（しおり {position}、今夜 {sections_this_session} 節目）",
+        "",
+        "【いま目の前の一節】",
+        excerpt,
+        "",
+        "【引っかかったところ】",
+        hook.strip(),
+        "",
+        "【felt】",
+        felt.strip(),
+    ]
+    tags = [t for t in (interest_tags or []) if t.strip()]
+    if tags:
+        lines.extend(["", "【interest_tags】", " / ".join(tags[:8])])
+    if followup_query.strip():
+        lines.extend(["", "【調べたいこと】", followup_query.strip()[:240]])
+    lines.extend(["", "【次にどうするか】", f"{next_move} — {move_label}"])
+    return "\n".join(lines)
+
+
 def build_close_book_reflection(
     *,
     title: str,

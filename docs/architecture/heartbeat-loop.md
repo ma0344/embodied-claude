@@ -2,7 +2,7 @@
 
 **きっかけ**: MCP 削減・gateway 直実行の議論。MCP は手段に過ぎず、本質は **経験が次の行動と次の起きる時刻に閉じるか**。固定 15 分 cron だけでは「こよりが次にいつ起きるか決める」感が弱い。
 
-**関連**: [gateway-direct-actions.md](./gateway-direct-actions.md)、[intent-bucket-flow.md](./intent-bucket-flow.md)、[VISION.md](./VISION.md)
+**関連**: [cognitive-layers.md](./cognitive-layers.md)、[gateway-direct-actions.md](./gateway-direct-actions.md)、[intent-bucket-flow.md](./intent-bucket-flow.md)、[VISION.md](./VISION.md)
 
 ---
 
@@ -11,7 +11,7 @@
 | 論点 | 決定 |
 |------|------|
 | MCP は必須か | **いいえ**。ツール JSON を LLM に見せる配線の一つだっただけ |
-| 判断者 | **Gateway / compose / plan / ルール** がいつ・何を。LLM は **どう言うか・意味づけ** |
+| 判断者 | **Gateway / compose / plan / ルール** がいつ・何を。LLM は **どう言うか・意味づけ**（層の地図 → [cognitive-layers.md](./cognitive-layers.md)） |
 | Tick の時刻 | **こより（コード）が `next_wake_at` を決める**。OS 15 分 Task はセーフティネット |
 | 記憶の深い処理 | `recall_divergent` / `consolidate` は **HTTP + gateway**。LLM にツール選択させない |
 | ロボット化の回避 | 反射は gateway、**surprise と育ち**は注入された記憶 + experience + interpretation_shift |

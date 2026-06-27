@@ -51,6 +51,8 @@ def test_dream_digest_block_only_in_morning(tmp_path, monkeypatch):
         timezone="Asia/Tokyo",
     )
     assert "天気" in morning
+    assert "2026-06-17" in morning
+    assert "今日は 2026-06-18" in morning
     assert afternoon == ""
 
 
@@ -89,4 +91,6 @@ def test_overnight_inner_voice_block_only_in_morning(tmp_path, monkeypatch):
         timezone="Asia/Tokyo",
     )
     assert "昨夜は穏やか" in morning
+    assert "2026-06-17" in morning
+    assert "今日は 2026-06-18" in morning
     assert afternoon == ""

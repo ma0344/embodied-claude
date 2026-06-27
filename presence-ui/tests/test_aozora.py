@@ -13,10 +13,14 @@ from presence_ui.gateway import direct_actions
 from presence_ui.gateway.aozora import (
     AozoraPassage,
     AozoraWork,
+    ReadingState,
     complete_reading_pause,
     join_passages_from,
+    last_passage_index,
     load_reading_state,
     load_works,
+    passage_needs_reflect,
+    passage_reflect_stuck,
     pick_passage,
     reading_phase,
     split_main_text_passages,
@@ -56,6 +60,25 @@ def test_join_passages_from_bundles_short_paragraphs() -> None:
     assert next_idx == 0
 
 
+def test_passage_reflect_helpers() -> None:
+    state = ReadingState(
+        phase="pause",
+        last_passage={"passage_index": 5, "text": "一節"},
+        last_reflected_passage_index=-1,
+    )
+    assert passage_needs_reflect(state) is True
+    assert passage_reflect_stuck(state) is False
+
+    state.last_reflected_passage_index = 5
+    assert passage_needs_reflect(state) is False
+    assert passage_reflect_stuck(state) is True
+
+    state.phase = "read"
+    assert passage_needs_reflect(state) is False
+    assert passage_reflect_stuck(state) is False
+    assert last_passage_index(state) == 5
+
+
 def test_pick_passage_single_book_then_pause(tmp_path: Path) -> None:
     work = AozoraWork(
         author_id="000879",
@@ -76,7 +99,10 @@ def test_pick_passage_single_book_then_pause(tmp_path: Path) -> None:
         first = pick_passage([work], state_path=state_path)
         assert reading_phase(state_path) == "pause"
         second = pick_passage([work], state_path=state_path)
-        complete_reading_pause(state_path=state_path)
+        complete_reading_pause(
+            state_path=state_path,
+            reflected_passage_index=0,
+        )
         third = pick_passage([work], state_path=state_path)
 
     assert first is not None
@@ -170,12 +196,12 @@ async def test_read_aozora_passage_direct_remembers_and_reflects() -> None:
 
     with (
         patch(
-            "presence_ui.gateway.direct_actions.pick_passage",
-            return_value=picked,
+            "presence_ui.gateway.direct_actions.load_reading_state",
+            return_value=ReadingState(phase="read"),
         ),
         patch(
-            "presence_ui.gateway.direct_actions.reading_phase",
-            return_value="read",
+            "presence_ui.gateway.direct_actions.pick_passage",
+            return_value=picked,
         ),
         patch(
             "presence_ui.gateway.direct_actions.http_remember",
@@ -185,6 +211,10 @@ async def test_read_aozora_passage_direct_remembers_and_reflects() -> None:
             "presence_ui.gateway.direct_actions.satisfy_desire_direct",
             return_value=(True, "literary_wander"),
         ) as satisfy_mock,
+        patch(
+            "presence_ui.gateway.direct_actions.inward_autonomous_window",
+            return_value=True,
+        ),
     ):
         outcome = await direct_actions.execute_autonomous_plan(
             stores,

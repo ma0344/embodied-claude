@@ -1,12 +1,20 @@
 # ma-home バックログ — 完了アーカイブ
 
-**最終更新**: 2026-06-26  
+**最終更新**: 2026-06-25  
 **ダッシュボード**: [backlog-ma-home.md](./backlog-ma-home.md)  
-**全文アーカイブ（2026-06-26 時点）**: [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md)
+**全文アーカイブ（2026-06-26 時点）**: [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md)  
+**索引・漏れチェック**: [archive/archive-index.md](./archive/archive-index.md)
 
 月ごとに完了した項目をここへ移す。詳細仕様は全文アーカイブを参照。
 
 ---
+
+## 2026-06-25
+
+- **GW-S1** — LW-READ PAUSE 黙考配線（`gw_silent.py`、hook/felt/next_move、v0 fallback）
+- **LW-READ FSM** — 二重 reflect 防止、`last_reflected_passage_index`、stuck heal
+- **朝 compose** — dream_digest 日付フェンス、bare greeting で shift 再掲抑止
+- **docs** — ma-home バックログ slim + tracks/ 索引
 
 ## 2026-06-26
 

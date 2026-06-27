@@ -8,6 +8,7 @@ import pytest
 from interaction_orchestrator_mcp.schemas import InteractionContext, ResponseContract, ResponsePlan
 
 from presence_ui.gateway import direct_actions
+from presence_ui.gateway.aozora import ReadingState
 
 
 def _quiet_ctx(*, dominant: str) -> InteractionContext:
@@ -100,6 +101,10 @@ async def test_evening_browse_dominant_reads_aozora_not_web() -> None:
 
     with (
         patch(
+            "presence_ui.gateway.direct_actions.load_reading_state",
+            return_value=ReadingState(phase="read"),
+        ),
+        patch(
             "presence_ui.gateway.direct_actions.read_aozora_passage_direct",
             new=AsyncMock(
                 return_value=direct_actions.DirectActionOutcome(
@@ -132,17 +137,23 @@ async def test_quiet_literary_wander_reads_aozora() -> None:
     ctx = _quiet_ctx(dominant="literary_wander")
     plan = _plan(allowed=["read_aozora_passage", "write_private_reflection"])
 
-    with patch(
-        "presence_ui.gateway.direct_actions.read_aozora_passage_direct",
-        new=AsyncMock(
-            return_value=direct_actions.DirectActionOutcome(
-                ok=True,
-                action="read_aozora_passage",
-                summary="一節",
-                desire_satisfied="literary_wander",
-            )
+    with (
+        patch(
+            "presence_ui.gateway.direct_actions.load_reading_state",
+            return_value=ReadingState(phase="read"),
         ),
-    ) as read_mock:
+        patch(
+            "presence_ui.gateway.direct_actions.read_aozora_passage_direct",
+            new=AsyncMock(
+                return_value=direct_actions.DirectActionOutcome(
+                    ok=True,
+                    action="read_aozora_passage",
+                    summary="一節",
+                    desire_satisfied="literary_wander",
+                )
+            ),
+        ) as read_mock,
+    ):
         outcome = await direct_actions.execute_autonomous_plan(
             stores,
             person_id="ma",
@@ -164,8 +175,16 @@ async def test_pause_phase_routes_to_reflect_not_read() -> None:
 
     with (
         patch(
-            "presence_ui.gateway.direct_actions.reading_phase",
-            return_value="pause",
+            "presence_ui.gateway.direct_actions.load_reading_state",
+            return_value=ReadingState(
+                phase="pause",
+                last_passage={
+                    "passage_index": 2,
+                    "text": "一節",
+                    "title": "羅生門",
+                },
+                last_reflected_passage_index=-1,
+            ),
         ),
         patch(
             "presence_ui.gateway.direct_actions.reflect_on_aozora_passage_direct",

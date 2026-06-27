@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ（全文アーカイブ 2026-06-26）
 
-> **整理済み（2026-06-26）**: いま読むべきは [backlog-ma-home.md](../backlog-ma-home.md)（ダッシュボード）と [tracks/](../tracks/)。本ファイルは整理前の全文保存用。リンク先の一部は `architecture/` / `ops/` / `archive/` に移動済み。
+> **整理済み（2026-06-26）**: いま読むべきは [backlog-ma-home.md](../backlog-ma-home.md)（ダッシュボード）、[archive-index.md](./archive-index.md)（本ファイルの索引・漏れチェック）、[tracks/](../tracks/)、[architecture/cognitive-layers.md](../architecture/cognitive-layers.md)（設計方針の正）。本ファイルは整理前の全文保存用。
   
 **方針**: こより本体（記憶・gateway 身体）は **様子見**。部屋 UI は **Native 会話エンジン + `/` の殻** を育てる（8080 プロキシ UI は投資しない）。
 
@@ -50,7 +50,7 @@
 | **C12** | intent router | 曖昧な「見て」分類 | **済** — `hybrid_intent.py` |
 | **BIO** | **HeartbeatLoop** | 経験→行動→次の wake | **済**（BIO-0〜7）→ [heartbeat-loop.md](./heartbeat-loop.md) |
 | **BIO-8** | Somatic loop | 目・声・memory の違和感 → plan | **a–c 済** → [BIO-8](#bio-8--somatic-loop神経系体調の自覚) |
-| **MEM** | **記憶層・Dreaming** | STM/LTM・encode/retrieve 非対称（MEM-8） | **5a–5f-c 済** → [MEM](#mem--記憶層セッション跨ぎ--dreaming) |
+| **MEM** | **記憶層・Dreaming** | STM/LTM・encode/retrieve 非対称（**MEM-8 概念済・8a/8c/8d 未**） | **5a–5f-c 済**、8e/8f v0 済 → [MEM](#mem--記憶層セッション跨ぎ--dreaming) · [cognitive-layers.md](../architecture/cognitive-layers.md) |
 | **RP** | **人格基底化** | SOUL.core / stable append / LoRA | **Phase 0–1 済** → [RP](#rp--人格基底化soul--deep) |
 | **K** | **こより自身のコード** | 自分用の改修（K2 経路が先） | **未** → [K1](#k--こより自身のコード) |
 | **LW** | **自律の文学散歩** | LW-2 + **LW-READ v0 済** → v1 GW-S1 → LW-7 | **進行中** → [LW](#lw--自律の文学散歩青空文庫--web-散歩合意-2026-06-19) |

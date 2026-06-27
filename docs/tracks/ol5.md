@@ -1,6 +1,6 @@
 # OL5 — 予定消化で open loop 終了
 
-**状態**: 📋 計画済（GW-S1 依存）  
+**状態**: 📋 計画済（GW-S2 / OL-GATE 依存）  
 **ダッシュボード**: [backlog-ma-home.md](../backlog-ma-home.md)  
 **関連**: [architecture/open-loops-reminders.md](../architecture/open-loops-reminders.md)、[gw-silent.md](./gw-silent.md)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from relationship_mcp.inference import is_archive_remember_utterance
@@ -27,6 +28,20 @@ from .schemas import (
 _QUIET_INWARD_DESIRES = frozenset(
     {"cognitive_load", "identity_coherence", "literary_wander"}
 )
+
+_BARE_GREETING_RE = re.compile(
+    r"^(?:"
+    r"おはよう(?:さん|う|ございます)?|"
+    r"こんにちは|こんばんは|"
+    r"ただいま|おやすみ|"
+    r"hi|hello|hey|morning|good\s+morning"
+    r")[!！?？。.…~\s]*$",
+    re.I,
+)
+
+
+def _is_bare_greeting(user_text: str) -> bool:
+    return bool(_BARE_GREETING_RE.match((user_text or "").strip()))
 
 
 def inward_evening_from_context(ctx: InteractionContext) -> bool:
@@ -406,12 +421,23 @@ def _pick_must_lists(
         )
     if ctx.agent_state.recent_interpretation_shifts and primary_move != "stay_silent":
         latest = ctx.agent_state.recent_interpretation_shifts[0]
-        must_include.append(
-            "interpretation shift on "
-            f"'{latest.topic}': do NOT revert to "
-            f"「{latest.old_interpretation}」 — hold "
-            f"「{latest.new_interpretation}」"
-        )
+        if _is_bare_greeting(user_text):
+            must_include.append(
+                "bare greeting only — reply briefly (おはよう); do NOT recite schedule "
+                "from dream_digest, overnight_inner_voice, or yesterday's episodes; "
+                "do NOT volunteer today's plan unless まー asks; hold interpretation "
+                "shift in background without regurgitating"
+            )
+            must_avoid.append(
+                "dumping 入浴介助/角煮/予定 from overnight context on a bare おはよう"
+            )
+        else:
+            must_include.append(
+                "interpretation shift on "
+                f"'{latest.topic}': do NOT revert to "
+                f"「{latest.old_interpretation}」 — hold "
+                f"「{latest.new_interpretation}」"
+            )
     elif ctx.agent_state.interpretation_shifts >= 1 and primary_move != "stay_silent":
         must_include.append(
             "respect the most recent interpretation shift (do not regress to old interpretation)"

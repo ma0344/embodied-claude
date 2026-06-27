@@ -25,13 +25,22 @@ from presence_ui.gateway.aozora import (
     aozora_passage_max_chars,
     complete_reading_pause,
     finish_close_book,
+    last_passage_index,
     load_reading_state,
+    passage_needs_reflect,
+    passage_reflect_stuck,
     pick_passage,
-    reading_phase,
+)
+from presence_ui.gateway.gw_silent import (
+    gw_s1_enabled,
+    parse_pause_response,
+    run_silent_internal_turn,
 )
 from presence_ui.gateway.memory_http import http_recall, http_recall_divergent, http_remember
 from presence_ui.gateway.reading_prompts import (
     build_close_book_reflection,
+    build_gw_s1_pause_task,
+    build_pause_reflection_from_gw_s1,
     build_pause_reflection_v0,
 )
 from presence_ui.gateway.room_events import activity_event, progress_event
@@ -117,11 +126,6 @@ def _reflection_context_hints(ctx: InteractionContext) -> list[str]:
             topic = (loop.topic or loop.loop_id or "").strip()
         if topic:
             hints.append(f"続きの話: {topic[:100]}")
-    if agent and agent.recent_interpretation_shifts:
-        shift = agent.recent_interpretation_shifts[0]
-        hints.append(
-            f"解釈: {shift.old_interpretation[:60]} → {shift.new_interpretation[:60]}"
-        )
     elif agent and agent.recent_experiences:
         exp = agent.recent_experiences[0]
         summary = (exp.summary or "").strip()
@@ -204,13 +208,27 @@ async def read_aozora_passage_direct(
     plan: ResponsePlan,
 ) -> DirectActionOutcome:
     """READ phase: one Aozora chunk → remember; reflection is PAUSE (LW-READ)."""
-    if reading_phase() == "pause":
-        return DirectActionOutcome(
-            ok=False,
-            action="read_aozora_passage",
-            summary="Reading phase is pause — chew before next passage.",
-            detail="wrong_phase",
-        )
+    state = load_reading_state()
+    if state.phase == "pause":
+        if passage_reflect_stuck(state):
+            complete_reading_pause(
+                next_move="advance",
+                reflected_passage_index=last_passage_index(state),
+            )
+        elif passage_needs_reflect(state):
+            return DirectActionOutcome(
+                ok=False,
+                action="read_aozora_passage",
+                summary="Reading phase is pause — chew before next passage.",
+                detail="wrong_phase",
+            )
+        else:
+            return DirectActionOutcome(
+                ok=False,
+                action="read_aozora_passage",
+                summary="Reading pause with no passage to chew.",
+                detail="empty_pause",
+            )
 
     picked = await asyncio.to_thread(pick_passage)
     if picked is None:
@@ -354,6 +372,16 @@ def close_aozora_reading_direct(
     )
 
 
+def _pause_tick_summary(*, title: str, passage: str, hook: str = "") -> str:
+    source = hook.strip() or passage.strip()
+    excerpt = source.replace("\n", " ")[:48]
+    if len(source) > 48:
+        excerpt += "…"
+    if excerpt:
+        return f"青空『{title}』— {excerpt}"
+    return f"青空『{title}』— 一節を噛んだ"
+
+
 def reflect_on_aozora_passage_direct(
     stores: PresenceStores,
     *,
@@ -361,7 +389,7 @@ def reflect_on_aozora_passage_direct(
     ctx: InteractionContext,
     plan: ResponsePlan,
 ) -> DirectActionOutcome:
-    """PAUSE phase: chew the last passage (v0 template; v1 = GW-S1)."""
+    """PAUSE phase: chew the last passage (v1 = GW-S1; v0 template fallback)."""
     state = load_reading_state()
     if state.phase == "close":
         return close_aozora_reading_direct(
@@ -379,6 +407,7 @@ def reflect_on_aozora_passage_direct(
     title = str(last.get("title") or "（作品）")
     author = str(last.get("author") or "")
     passage = str(last.get("text") or "")
+    passage_idx = int(last.get("passage_index") or 0)
     if not passage.strip():
         complete_reading_pause(next_move="advance")
         return DirectActionOutcome(
@@ -388,14 +417,81 @@ def reflect_on_aozora_passage_direct(
             detail="empty_last_passage",
         )
 
-    body = build_pause_reflection_v0(
-        title=title,
-        author=author,
-        passage=passage,
-        passage_index=int(last.get("passage_index") or 0),
-        total_passages=int(last.get("total_passages") or 1),
-        sections_this_session=state.sections_this_session,
-    )
+    if passage_reflect_stuck(state):
+        after = complete_reading_pause(
+            next_move="advance",
+            reflected_passage_index=passage_idx,
+        )
+        summary = _pause_tick_summary(title=title, passage=passage)
+        return DirectActionOutcome(
+            ok=True,
+            action="reflect_on_aozora_passage",
+            summary=summary,
+            detail="already_reflected_heal",
+            desire_satisfied="cognitive_load",
+            events=[
+                progress_event(phase="reflect", label="青空を噛んでる"),
+                activity_event(
+                    kind="reflect",
+                    label="青空の咀嚼",
+                    detail="phase heal → read",
+                    ok=True,
+                ),
+            ],
+        )
+
+    total_passages = int(last.get("total_passages") or 1)
+    prior_hooks = [state.last_hook] if state.last_hook.strip() else None
+    parsed = None
+    pause_detail = "v0"
+    next_move = "advance"
+    hook = ""
+    followup_query = ""
+    interest_tags: list[str] = []
+
+    if gw_s1_enabled():
+        task = build_gw_s1_pause_task(
+            title=title,
+            author=author,
+            passage=passage,
+            passage_index=passage_idx,
+            total_passages=total_passages,
+            sections_this_session=state.sections_this_session,
+            prior_hooks=prior_hooks,
+        )
+        raw = run_silent_internal_turn(task=task, session_id=ctx.session_id or None)
+        if raw:
+            parsed = parse_pause_response(raw)
+        pause_detail = "gw_s1" if parsed else "gw_s1_fallback_v0"
+
+    if parsed:
+        hook = parsed.hook
+        followup_query = parsed.followup_query
+        next_move = parsed.next_move
+        interest_tags = list(parsed.interest_tags)
+        body = build_pause_reflection_from_gw_s1(
+            title=title,
+            author=author,
+            passage=passage,
+            passage_index=passage_idx,
+            total_passages=total_passages,
+            sections_this_session=state.sections_this_session,
+            hook=hook,
+            felt=parsed.felt,
+            next_move=next_move,
+            interest_tags=interest_tags,
+            followup_query=followup_query,
+        )
+    else:
+        body = build_pause_reflection_v0(
+            title=title,
+            author=author,
+            passage=passage,
+            passage_index=passage_idx,
+            total_passages=total_passages,
+            sections_this_session=state.sections_this_session,
+        )
+
     outcome = write_private_reflection_direct(
         stores,
         person_id=person_id,
@@ -412,9 +508,25 @@ def reflect_on_aozora_passage_direct(
             events=outcome.events,
         )
 
-    # v0: always advance; v1 will pass GW-S1 next_move / hook / followup_query
-    after = complete_reading_pause(next_move="advance")
-    summary = f"青空『{title}』— 一節を噛んだ"
+    after = complete_reading_pause(
+        next_move=next_move,
+        hook=hook,
+        followup_query=followup_query,
+        reflected_passage_index=passage_idx,
+    )
+    summary = _pause_tick_summary(title=title, passage=passage, hook=hook)
+    artifacts: dict[str, Any] = {
+        "lw_read_phase": "pause",
+        "title": title,
+        "pause_engine": pause_detail,
+        "next_move": next_move,
+    }
+    if hook:
+        artifacts["hook"] = hook[:200]
+    if followup_query:
+        artifacts["followup_query"] = followup_query[:200]
+    if interest_tags:
+        artifacts["interest_tags"] = interest_tags[:8]
     stores.orchestrator.record_agent_experience(
         RecordAgentExperienceInput(
             ts=utc_now(),
@@ -426,7 +538,7 @@ def reflect_on_aozora_passage_direct(
             importance=3,
             privacy_level="private",
             related_event_ids=[],
-            artifacts=[{"lw_read_phase": "pause", "title": title}],
+            artifacts=[artifacts],
         )
     )
 
@@ -454,7 +566,7 @@ def reflect_on_aozora_passage_direct(
             activity_event(
                 kind="reflect",
                 label="青空の咀嚼",
-                detail=f"{title}: {body[:80]}",
+                detail=f"{title}: {(hook or body)[:80]}",
                 ok=True,
             ),
         ],
@@ -1433,20 +1545,45 @@ async def execute_autonomous_plan(
         outcome = await web_search_direct(
             stores, person_id=person_id, ctx=ctx, plan=plan
         )
-    elif inward and reading_phase() == "pause" and (
-        "reflect_on_aozora_passage" in allowed or "read_aozora_passage" in allowed
-    ):
-        outcome = reflect_on_aozora_passage_direct(
-            stores, person_id=person_id, ctx=ctx, plan=plan
-        )
-    elif inward and reading_phase() == "close" and (
-        "reflect_on_aozora_passage" in allowed
-        or "read_aozora_passage" in allowed
-        or "close_aozora_reading" in allowed
-    ):
-        outcome = close_aozora_reading_direct(
-            stores, person_id=person_id, ctx=ctx, plan=plan
-        )
+    elif inward:
+        reading = load_reading_state()
+        if reading.phase == "close" and (
+            "reflect_on_aozora_passage" in allowed
+            or "read_aozora_passage" in allowed
+            or "close_aozora_reading" in allowed
+        ):
+            outcome = close_aozora_reading_direct(
+                stores, person_id=person_id, ctx=ctx, plan=plan
+            )
+        elif (
+            passage_needs_reflect(reading) or passage_reflect_stuck(reading)
+        ) and (
+            "reflect_on_aozora_passage" in allowed
+            or "read_aozora_passage" in allowed
+        ):
+            outcome = reflect_on_aozora_passage_direct(
+                stores, person_id=person_id, ctx=ctx, plan=plan
+            )
+        elif reading.phase == "read" and "read_aozora_passage" in allowed:
+            outcome = await read_aozora_passage_direct(
+                stores, person_id=person_id, ctx=ctx, plan=plan
+            )
+        elif "think_or_discuss_topic" in allowed:
+            outcome = think_or_discuss_topic_direct(
+                stores, person_id=person_id, ctx=ctx, plan=plan
+            )
+        elif "write_private_reflection" in allowed:
+            outcome = write_private_reflection_direct(
+                stores, person_id=person_id, ctx=ctx, plan=plan
+            )
+        elif "recall_memories" in allowed:
+            outcome = recall_memories_direct(
+                stores, person_id=person_id, ctx=ctx, plan=plan
+            )
+        else:
+            outcome = await web_search_direct(
+                stores, person_id=person_id, ctx=ctx, plan=plan
+            )
     elif "read_aozora_passage" in allowed:
         outcome = await read_aozora_passage_direct(
             stores, person_id=person_id, ctx=ctx, plan=plan

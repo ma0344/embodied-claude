@@ -15,13 +15,13 @@ embodied-claude（ma-home / こより）の運用・設計ドキュメント。*
 | **黙考ルート（GW-S1）** | [tracks/gw-silent.md](./tracks/gw-silent.md) |
 | **Gateway / 自律 tick の設計** | [architecture/gateway-direct-actions.md](./architecture/gateway-direct-actions.md) |
 | **Heartbeat・pulse** | [architecture/heartbeat-loop.md](./architecture/heartbeat-loop.md) |
-| **キオスク・Surface 運用** | [ops/](./ops/) 配下（下表） |
+| **認知層・設計方針** | [architecture/cognitive-layers.md](./architecture/cognitive-layers.md) |
+| **MEM-8 / 記憶パイプライン** | [mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) · [mem-pipeline.md](./architecture/mem-pipeline.md) |
+| **運用スクリプト** | [ops/scripts-reference.md](./ops/scripts-reference.md) |
+| **キオスク・Surface 運用** | [ops/](./ops/) · [backlog-koyori.md](./backlog-koyori.md) |
 | **LM Studio / KV** | [ops/lmstudio-kv-cache.md](./ops/lmstudio-kv-cache.md) |
 | **セッション引き継ぎ** | [handoffs/](./handoffs/) |
 | **過去の完了項目** | [backlog-archive-ma-home.md](./backlog-archive-ma-home.md) |
-| **2026-06 以前の詳細仕様** | [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md) |
-
----
 
 ## フォルダ構成
 
@@ -33,13 +33,24 @@ docs/
 ├── backlog-archive-ma-home.md  完了一覧
 ├── backlog-koyori.md         トピック索引（こより端・記憶・カメラ等）
 │
-├── tracks/                   🔥 進行中トラックの仕様
+├── tracks/                   トラック仕様（進行中 + 計画済）
 │   ├── alive-lw-read.md
 │   ├── gw-silent.md
 │   ├── ol5.md
-│   └── k-self-code.md
+│   ├── k-self-code.md
+│   ├── vis-health.md
+│   ├── obs.md
+│   ├── cam-tapo-ptz.md
+│   ├── ear.md
+│   ├── gapi.md
+│   └── surface-vision.md
 │
-├── architecture/             本体の設計（Gateway・Heartbeat・OL）
+├── architecture/
+│   ├── cognitive-layers.md       設計方針の正
+│   ├── platform-ma-home.md       8080・A様子見
+│   ├── mem-8-encode-retrieve.md
+│   ├── mem-pipeline.md
+│   ├── outbound-channels.md
 │   ├── gateway-direct-actions.md
 │   ├── heartbeat-loop.md
 │   ├── intent-bucket-flow.md
@@ -58,25 +69,36 @@ docs/
 
 ---
 
-## tracks/ — 進行中
+## tracks/
 
 | ファイル | 内容 |
 |----------|------|
-| [alive-lw-read.md](./tracks/alive-lw-read.md) | 北極星・LW-READ v0/v1・運用チェック |
-| [gw-silent.md](./tracks/gw-silent.md) | 黙考ルート・GW-S1 配線判断 |
-| [ol5.md](./tracks/ol5.md) | 予定消化で loop close |
-| [k-self-code.md](./tracks/k-self-code.md) | こより自身のコード（将来） |
+| [alive-lw-read.md](./tracks/alive-lw-read.md) | 北極星・LW-READ |
+| [gw-silent.md](./tracks/gw-silent.md) | 黙考・OL-GATE |
+| [ol5.md](./tracks/ol5.md) | 予定消化 loop close |
+| [k-self-code.md](./tracks/k-self-code.md) | 自己コード（将来） |
+| [vis-health.md](./tracks/vis-health.md) | VL health・間接視覚 |
+| [obs.md](./tracks/obs.md) | `/observe` フェーズ化 |
+| [cam-tapo-ptz.md](./tracks/cam-tapo-ptz.md) | Tapo PTZ 調査 |
+| [ear.md](./tracks/ear.md) | Surface マイク・環境音 |
+| [gapi.md](./tracks/gapi.md) | Google Calendar/Drive |
+| [surface-vision.md](./tracks/surface-vision.md) | V1–V9 UI 残件 |
 
 ---
 
-## architecture/ — 本体設計
+## architecture/
 
 | ファイル | 内容 |
 |----------|------|
-| [gateway-direct-actions.md](./architecture/gateway-direct-actions.md) | see / observe / tick / 青空の直実行 |
-| [heartbeat-loop.md](./architecture/heartbeat-loop.md) | pulse・経験→次の wake |
-| [intent-bucket-flow.md](./architecture/intent-bucket-flow.md) | 会話の Intent→Bucket→Flow |
-| [open-loops-reminders.md](./architecture/open-loops-reminders.md) | OL1/OL2 リマインド運用 |
+| [cognitive-layers.md](./architecture/cognitive-layers.md) | **設計方針の正** |
+| [platform-ma-home.md](./architecture/platform-ma-home.md) | 本線・様子見 |
+| [mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) | encode/retrieve 非対称 |
+| [mem-pipeline.md](./architecture/mem-pipeline.md) | 4層・Dreaming・5e/5f/5k/7 |
+| [outbound-channels.md](./architecture/outbound-channels.md) | 能動届け A4 |
+| [gateway-direct-actions.md](./architecture/gateway-direct-actions.md) | gateway 直実行 |
+| [heartbeat-loop.md](./architecture/heartbeat-loop.md) | pulse・BIO |
+| [intent-bucket-flow.md](./architecture/intent-bucket-flow.md) | IBF |
+| [open-loops-reminders.md](./architecture/open-loops-reminders.md) | OL・OL-GATE |
 
 ---
 
@@ -93,7 +115,9 @@ docs/
 | [lmstudio-kv-cache.md](./ops/lmstudio-kv-cache.md) | KV cache・Concurrent Predictions |
 | [lmstudio-model-change.md](./ops/lmstudio-model-change.md) | モデル変更手順 |
 | [role-persistence-ma-home.md](./ops/role-persistence-ma-home.md) | SOUL.core / RP |
-| [ws-2-conversation-web-search.md](./ops/ws-2-conversation-web-search.md) | 会話 Web 検索 |
+| [ws-2-conversation-web-search.md](./ops/ws-2-conversation-web-search.md) | 会話 Web 検索 WS-1〜2c |
+| [ws-5-spontaneous-search.md](./ops/ws-5-spontaneous-search.md) | 自発検索 WS-5 |
+| [scripts-reference.md](./ops/scripts-reference.md) | 運用スクリプト早見 |
 | [ma-home-cursor-handoff.md](./ops/ma-home-cursor-handoff.md) | Cursor 引き継ぎ |
 | [presence-ui.local.env.example](./ops/presence-ui.local.env.example) | presence-ui 環境変数例 |
 
@@ -103,7 +127,8 @@ docs/
 
 | ファイル | 内容 |
 |----------|------|
-| [backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md) | 整理前の全バックログ |
+| [archive-index.md](./archive/archive-index.md) | 全文アーカイブ索引・漏れチェック |
+| [backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md) | 整理前の全バックログ（スナップショット） |
 | [c1-native-poc.md](./archive/c1-native-poc.md) | Native PoC 決定 |
 | [c2-twicc-decision.md](./archive/c2-twicc-decision.md) | twicc 見送り |
 | [mission-A_Investigation-Report.md](./archive/mission-A_Investigation-Report.md) | ミッション A 調査 |

@@ -13,7 +13,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.discovery import Resource
 
-from presence_ui.gapi.scopes import DEFAULT_PREP_SCOPES
+from presence_ui.gapi.scopes import DEFAULT_PREP_SCOPES, calendar_scopes
 
 
 class GoogleAuthError(RuntimeError):
@@ -133,8 +133,10 @@ def require_credentials(
 
 def get_calendar_service(
     *,
-    scopes: tuple[str, ...] = DEFAULT_PREP_SCOPES,
+    scopes: tuple[str, ...] | None = None,
     token_path: Path | None = None,
 ) -> Resource:
+    if scopes is None:
+        scopes = calendar_scopes()
     creds = require_credentials(scopes=scopes, token_path=token_path)
     return build("calendar", "v3", credentials=creds, cache_discovery=False)

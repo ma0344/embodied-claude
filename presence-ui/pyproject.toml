@@ -43,6 +43,7 @@ presence-ui = "presence_ui.main:run"
 room-nav = "presence_ui.cli.room_nav:main"
 google-oauth-consent = "presence_ui.gapi.cli:consent_main"
 gapi-calendar-smoke = "presence_ui.gapi.cli:list_smoke_main"
+gapi-calendar-write-smoke = "presence_ui.gapi.cli:write_smoke_main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/presence_ui"]

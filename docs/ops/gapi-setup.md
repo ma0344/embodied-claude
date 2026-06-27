@@ -67,6 +67,41 @@ GAPI_POLICY_PATH=C:/Users/ma/src/embodied-claude/gapi-policy.toml
 
 ---
 
+## 3b. GAPI-prep-2 — Calendar 書込 smoke
+
+**前提**
+
+1. `calendar.events` スコープで再 consent:
+   ```powershell
+   cd C:\Users\ma\src\embodied-claude\presence-ui
+   uv run google-oauth-consent --scope events
+   ```
+2. `gapi-policy.toml` の primary（または対象カレンダー）で:
+   ```toml
+   allow_create = true
+   allow_update = true
+   allow_delete = false   # v1 では delete API 非公開のまま
+   ```
+
+**create + patch smoke**（`[gapi-smoke]` プレフィックス付きテスト予定）:
+
+```powershell
+uv run gapi-calendar-write-smoke --dry-run
+uv run gapi-calendar-write-smoke
+```
+
+リポジトリ直下から:
+
+```powershell
+uv run python scripts\gapi_calendar_write_smoke.py --dry-run
+uv run python scripts\gapi_calendar_write_smoke.py
+```
+
+成功時: 明日 10:00–10:30 に作成 → +1h へ patch。event id / link を表示。  
+削除 API は v1 未実装 — `[gapi-smoke]` イベントは Calendar UI から手動削除可。
+
+---
+
 ## 4. OAuth クライアント（参照）
 
 **アプリケーションの種類**: デスクトップアプリ（ma-home Windows）

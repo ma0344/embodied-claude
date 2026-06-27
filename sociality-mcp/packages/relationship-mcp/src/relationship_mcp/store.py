@@ -1477,25 +1477,54 @@ class RelationshipStore:
         action_terms: list[str],
         completion_verbs: list[str],
     ) -> bool:
-        """Both an action term and a completion verb must appear in the utterance."""
+        """Both a loop-specific action term and a completion verb must appear in the utterance."""
         detail = self._parse_loop_detail(loop_detail_json)
-        stored_terms = [str(t) for t in (detail.get("action_terms") or []) if str(t).strip()]
+        loop_terms = self._ol5_loop_action_terms(detail=detail, loop_topic=loop_topic)
         stored_verbs = [str(v) for v in (detail.get("completion_verbs") or []) if str(v).strip()]
-        terms = list(dict.fromkeys([*(action_terms or []), *stored_terms]))
-        verbs = list(dict.fromkeys([*(completion_verbs or []), *stored_verbs]))
-        if not verbs:
-            return False
+        ingest_verbs = [str(v) for v in (completion_verbs or []) if str(v).strip()]
         text = utterance.strip()
         if not text:
             return False
-        verb_hit = any(verb and verb in text for verb in verbs)
-        if not verb_hit:
+        if not self._ol5_loop_term_hits(text=text, loop_topic=loop_topic, loop_terms=loop_terms):
             return False
+        return any(v in text for v in ingest_verbs) or any(v in text for v in stored_verbs)
+
+    @staticmethod
+    def _ol5_loop_action_terms(*, detail: dict, loop_topic: str) -> list[str]:
+        """Terms that identify this loop — never ingest terms from another task."""
+        terms: list[str] = []
+        for raw in detail.get("action_terms") or []:
+            token = str(raw).strip()
+            if token:
+                terms.append(token)
+        object_phrase = str(detail.get("object_phrase") or "").strip()
+        if object_phrase:
+            normalized = object_phrase.rstrip("をがにで")
+            if normalized and normalized not in terms:
+                terms.append(normalized)
         if terms:
-            return any(term and term in text for term in terms)
-        if loop_topic and loop_topic in text:
+            return list(dict.fromkeys(terms))
+        topic = loop_topic.strip()
+        if not topic:
+            return []
+        # Last resort: short tokens from topic (skip date/time fragments).
+        skip_prefixes = ("20",)
+        for part in topic.replace("、", " ").replace("，", " ").split():
+            token = part.strip()
+            if len(token) < 2 or token.startswith(skip_prefixes):
+                continue
+            if token not in terms:
+                terms.append(token)
+        return list(dict.fromkeys(terms))
+
+    @staticmethod
+    def _ol5_loop_term_hits(*, text: str, loop_topic: str, loop_terms: list[str]) -> bool:
+        if loop_terms:
+            return any(term and term in text for term in loop_terms)
+        topic = loop_topic.strip()
+        if topic and topic in text:
             return True
-        topic_tokens = [part for part in loop_topic.split() if len(part) >= 2]
+        topic_tokens = [part for part in topic.split() if len(part) >= 2]
         return bool(topic_tokens) and all(token in text for token in topic_tokens[:3])
 
     def _close_open_loop(

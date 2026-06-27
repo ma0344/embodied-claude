@@ -430,6 +430,51 @@ def test_apply_ol_gate_ol5_unions_stored_and_ingest_verbs(store):
     assert store.list_open_loops(person_id="ma") == []
 
 
+def test_apply_ol_gate_ol5_closes_only_matching_loop_when_multiple_open(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    for source_event_id, source_text, loop_topic, action_terms in (
+        (
+            "evt-niku",
+            "明日、肉じゃがを作る",
+            "2026年6月28日、肉じゃがを作る",
+            ["肉じゃが"],
+        ),
+        (
+            "evt-live",
+            "明日、ライブに行く",
+            "2026年6月27日、18:00にライブに行く",
+            ["ライブ"],
+        ),
+    ):
+        store.apply_ol_gate_decision(
+            person_id="ma",
+            ts="2026-06-25T10:00:00+09:00",
+            source_event_id=source_event_id,
+            source_text=source_text,
+            create_open_loop=True,
+            try_ol5_close=False,
+            loop_topic=loop_topic,
+            action_terms=action_terms,
+            completion_verbs=[],
+            detail={"kind": "ol_gate", "action_terms": action_terms},
+        )
+    closed = store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-27T05:04:14+00:00",
+        source_event_id="evt-done-live",
+        source_text="ちょっと早かったけど、ライブ、行ってきた",
+        create_open_loop=False,
+        try_ol5_close=True,
+        loop_topic="",
+        action_terms=["ライブ"],
+        completion_verbs=["行ってきた", "行った"],
+        detail={"kind": "ol_gate", "utterance_kind": "past_completion"},
+    )
+    assert closed == ["2026年6月27日、18:00にライブに行く"]
+    open_topics = [loop.topic for loop in store.list_open_loops(person_id="ma")]
+    assert open_topics == ["2026年6月28日、肉じゃがを作る"]
+
+
 def test_note_human_utterance_skips_rule_loops_when_disabled(store):
     store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
     store.note_human_utterance_for_loops(

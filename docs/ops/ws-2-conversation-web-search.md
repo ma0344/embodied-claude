@@ -1,7 +1,7 @@
 # WS-2 — 会話中 Web 検索・URL 閲覧（仕様）
 
 **合意**: 2026-06-23（まー — 松本市請求様式の会話を契機）  
-**関連**: [backlog-ma-home.md](./backlog-ma-home.md)（MEM-5j / WS-1〜4）、[gateway-direct-actions.md](./gateway-direct-actions.md)、[intent-bucket-flow.md](./intent-bucket-flow.md)
+**関連**: [backlog-ma-home.md](../backlog-ma-home.md)（MEM-5j / WS-1〜4）、[ws-5-spontaneous-search.md](./ws-5-spontaneous-search.md)（自発検索・北極星シナリオ）、[gateway-direct-actions.md](../architecture/gateway-direct-actions.md)、[intent-bucket-flow.md](../architecture/intent-bucket-flow.md)
 
 ---
 

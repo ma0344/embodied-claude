@@ -25,6 +25,9 @@ dependencies = [
     "usb-webcam-mcp",
     "tts-mcp",
     "tzdata>=2024.1; sys_platform == 'win32'",
+    "google-api-python-client>=2.100.0",
+    "google-auth-oauthlib>=1.2.0",
+    "google-auth-httplib2>=0.2.0",
 ]
 
 [project.optional-dependencies]
@@ -38,6 +41,8 @@ dev = [
 [project.scripts]
 presence-ui = "presence_ui.main:run"
 room-nav = "presence_ui.cli.room_nav:main"
+google-oauth-consent = "presence_ui.gapi.cli:consent_main"
+gapi-calendar-smoke = "presence_ui.gapi.cli:list_smoke_main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/presence_ui"]

@@ -17,16 +17,63 @@
 
 ---
 
-## 2. OAuth クライアント
+## 2. OAuth クライアント（API キーではない）
 
-**アプリケーションの種類**: デスクトップアプリ（ma-home Windows）
+**まーの Calendar / Drive にアクセスするには OAuth 2.0 デスクトップクライアント JSON が必要。**  
+API キーだけでは **個人カレンダーの読取・書込はできない**（公開データ向け）。
 
-1. **認証情報 → OAuth 2.0 クライアント ID** を作成
-2. クライアント ID / シークレットを **git 外** に保存
+| 持ち物 | 使う？ |
+|--------|--------|
+| **OAuth 2.0 クライアント ID JSON**（Desktop） | ✅ **これ** |
+| API キー | ❌ GAPI では不使用 |
+
+1. Cloud Console → **認証情報 → OAuth 2.0 クライアント ID** → **デスクトップアプリ**
+2. JSON をダウンロード → 例: `scripts/google-oauth-client.json`（gitignore 済）
+3. または `GOOGLE_OAUTH_CREDENTIALS_PATH` でパス指定
+
+Web アプリ型 JSON（`"web": { ... }`）は **不可** — Desktop 型（`"installed"`）に作り直す。
 
 ---
 
-## 3. スコープ（段階）
+## 3. GAPI-prep-1 — 初回 consent + list smoke
+
+```powershell
+# OAuth JSON を配置（例）
+# copy Download\client_secret_....json scripts\google-oauth-client.json
+
+cd C:\Users\ma\src\embodied-claude\presence-ui
+uv sync
+uv run google-oauth-consent
+uv run gapi-calendar-smoke
+uv run gapi-calendar-smoke --prefetch
+```
+
+リポジトリ直下から:
+
+```powershell
+uv run python scripts\google_oauth_consent.py
+uv run python scripts\gapi_calendar_list_smoke.py --prefetch
+```
+
+**環境変数（任意）**
+
+```env
+GOOGLE_OAUTH_CREDENTIALS_PATH=C:/Users/ma/.claude/google/google-oauth-client.json
+GOOGLE_OAUTH_TOKEN_PATH=C:/Users/ma/.claude/google/oauth-token.json
+GAPI_POLICY_PATH=C:/Users/ma/src/embodied-claude/gapi-policy.toml
+```
+
+`gapi-policy.toml` はリポジトリ直下 walk-up で自動検出（gitignore 済み）。
+
+---
+
+## 4. OAuth クライアント（参照）
+
+**アプリケーションの種類**: デスクトップアプリ（ma-home Windows）
+
+---
+
+## 5. スコープ（段階）
 
 | Phase | スコープ | 用途 |
 |-------|----------|------|
@@ -46,7 +93,7 @@
 
 ---
 
-## 4. 環境変数（presence-ui / ma-home）
+## 6. 環境変数（presence-ui / ma-home）
 
 ```env
 # Git にコミットしない — ~/.claude/ または presence-ui/.env
@@ -70,17 +117,13 @@ PRESENCE_GAPI_CALENDAR_WRITE=0
 
 ---
 
-## 5. 初回 consent（手順イメージ）
+## 7. 初回 consent（実装済 — GAPI-prep-1）
 
-実装前の合意:
-
-1. `uv run python scripts/google_oauth_consent.py`（**未実装** — GAPI-1 で追加予定）
-2. ブラウザでまーがログイン → refresh token を `GOOGLE_OAUTH_TOKEN_PATH` に保存
-3. `check-koyori-stack.ps1` または `koyori/status` で `google_calendar: connected`
+`uv run google-oauth-consent` — 上記 §3 参照。
 
 ---
 
-## 6. 共有カレンダー
+## 8. 共有カレンダー
 
 1. Google Calendar UI で対象カレンダーの **設定 → カレンダーの統合** から **カレンダー ID** をコピー
 2. `gapi-policy.example.toml` の `[[google.calendars]]` に追加、`enabled = true`
@@ -89,7 +132,7 @@ primary は `id = "primary"` のまま。
 
 ---
 
-## 7. Drive フォルダ（Phase 1b）
+## 9. Drive フォルダ（Phase 2a）
 
 1. Drive でこより用フォルダを作成（または既存共有フォルダ）
 2. フォルダ URL から `folder_id` を取得
@@ -99,7 +142,7 @@ primary は `id = "primary"` のまま。
 
 ---
 
-## 8. 運用
+## 10. 運用
 
 | 事象 | 対応 |
 |------|------|
@@ -109,7 +152,7 @@ primary は `id = "primary"` のまま。
 
 ---
 
-## 9. チェックリスト（実装前）
+## 11. チェックリスト
 
 - [ ] Cloud プロジェクト + Calendar API 有効
 - [ ] OAuth デスクトップクライアント作成

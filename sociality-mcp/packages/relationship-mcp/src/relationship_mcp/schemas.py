@@ -25,6 +25,7 @@ class OpenLoopRecord(BaseModel):
     status: str
     needs_date_confirmation: bool = False
     ambiguous_phrases: list[str] = Field(default_factory=list)
+    detail: dict[str, Any] = Field(default_factory=dict)
 
 
 class DismissOutcome(BaseModel):

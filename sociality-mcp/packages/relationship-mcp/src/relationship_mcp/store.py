@@ -7,6 +7,7 @@ import re
 import uuid
 from datetime import timedelta
 from pathlib import Path
+from typing import Any
 
 from social_core import (
     EventStore,
@@ -226,6 +227,7 @@ class RelationshipStore:
         text: str,
         ts: str,
         source_event_id: str,
+        rule_open_loops: bool = True,
     ) -> DismissOutcome:
         """Update or close/cancel relationship threads from a human room utterance."""
 
@@ -251,13 +253,14 @@ class RelationshipStore:
         )
         if is_dismiss_utterance(text) or is_recall_utterance(text):
             return outcome
-        self._update_open_loops(
-            person_id=person_id,
-            text=text,
-            source_event_id=source_event_id,
-            ts=ts,
-            direction="human_to_ai",
-        )
+        if rule_open_loops:
+            self._update_open_loops(
+                person_id=person_id,
+                text=text,
+                source_event_id=source_event_id,
+                ts=ts,
+                direction="human_to_ai",
+            )
         self.close_stale_open_loops(person_id=person_id, as_of=ts)
         self._maybe_patch_reminder_speak_line(
             person_id=person_id,
@@ -270,6 +273,138 @@ class RelationshipStore:
             ts=ts,
         )
         return outcome
+
+    def apply_ol_gate_decision(
+        self,
+        *,
+        person_id: str,
+        ts: str,
+        source_event_id: str,
+        source_text: str,
+        create_open_loop: bool,
+        try_ol5_close: bool,
+        loop_topic: str,
+        action_terms: list[str] | None = None,
+        completion_verbs: list[str] | None = None,
+        detail: dict[str, object] | None = None,
+        timezone: str = DEFAULT_TIMEZONE,
+    ) -> list[str]:
+        """Apply GW-S2 / OL-GATE gateway merge — create loop or OL5-style close."""
+        self._ensure_person(person_id)
+        closed_topics: list[str] = []
+        terms = [t for t in (action_terms or []) if t]
+        verbs = [v for v in (completion_verbs or []) if v]
+
+        if try_ol5_close and (terms or verbs):
+            rows = self.db.fetchall(
+                """
+                SELECT loop_id, topic, detail_json
+                FROM open_loops
+                WHERE person_id = ? AND status = 'open'
+                ORDER BY updated_at DESC
+                LIMIT 30
+                """,
+                (person_id,),
+            )
+            for row in rows:
+                if not self._loop_matches_ol5_completion(
+                    loop_topic=str(row["topic"]),
+                    loop_detail_json=str(row["detail_json"] or ""),
+                    utterance=source_text,
+                    action_terms=terms,
+                    completion_verbs=verbs,
+                ):
+                    continue
+                self._close_open_loop(
+                    loop_id=str(row["loop_id"]),
+                    person_id=person_id,
+                    topic=str(row["topic"]),
+                    ts=ts,
+                    source_event_id=source_event_id,
+                    source_text=source_text,
+                    close_kind="ol5_completion",
+                )
+                closed_topics.append(str(row["topic"]))
+
+        if not create_open_loop or not loop_topic.strip():
+            return closed_topics
+
+        topic = loop_topic.strip()
+        detail_payload: dict[str, object] = {"kind": "future_task_or_question", **(detail or {})}
+        detail_payload["ol_gate"] = True
+        if terms:
+            detail_payload["action_terms"] = terms[:5]
+        if detail_payload.get("resolved_date"):
+            pass
+        elif detail and detail.get("needs_date_confirmation"):
+            detail_payload["needs_date_confirmation"] = True
+            ambiguous = detail.get("ambiguous_phrases")
+            if isinstance(ambiguous, list):
+                detail_payload["ambiguous_phrases"] = ambiguous
+
+        today = as_of_date(as_of_ts=ts, tz_name=timezone)
+        stale_day = is_stale(topic=topic, updated_at=ts, tz_name=timezone, as_of=today)
+        existing = self.db.fetchone(
+            """
+            SELECT loop_id FROM open_loops
+            WHERE person_id = ? AND topic = ? AND status = 'open'
+            """,
+            (person_id, topic),
+        )
+        if stale_day is not None:
+            if existing is not None:
+                stale_detail = {
+                    "kind": "stale",
+                    "reason": "relative_date_passed",
+                    "resolved_date": stale_day.isoformat(),
+                    "source_topic": topic[:200],
+                }
+                with self.db.transaction() as connection:
+                    connection.execute(
+                        """
+                        UPDATE open_loops
+                        SET status = 'closed', updated_at = ?, source_event_id = ?,
+                            detail_json = ?
+                        WHERE loop_id = ?
+                        """,
+                        (
+                            ts,
+                            source_event_id,
+                            json.dumps(stale_detail, ensure_ascii=False),
+                            existing["loop_id"],
+                        ),
+                    )
+            return closed_topics
+
+        encoded = json.dumps(detail_payload, ensure_ascii=False)
+        with self.db.transaction() as connection:
+            if existing is not None:
+                connection.execute(
+                    """
+                    UPDATE open_loops
+                    SET updated_at = ?, source_event_id = ?, detail_json = ?
+                    WHERE loop_id = ?
+                    """,
+                    (ts, source_event_id, encoded, existing["loop_id"]),
+                )
+            else:
+                connection.execute(
+                    """
+                    INSERT INTO open_loops(
+                        loop_id, person_id, topic, status, source_event_id, updated_at, detail_json
+                    )
+                    VALUES (?, ?, ?, 'open', ?, ?, ?)
+                    """,
+                    (
+                        f"loop_{uuid.uuid4().hex[:10]}",
+                        person_id,
+                        topic,
+                        source_event_id,
+                        ts,
+                        encoded,
+                    ),
+                )
+        return closed_topics
 
     def dismiss_from_utterance(
         self,
@@ -625,9 +760,40 @@ class RelationshipStore:
                     status=row["status"],
                     needs_date_confirmation=bool(detail.get("needs_date_confirmation")),
                     ambiguous_phrases=list(detail.get("ambiguous_phrases") or []),
+                    detail=self._loop_detail_for_list(detail),
                 )
             )
         return records
+
+    _LOOP_DETAIL_LIST_KEYS = (
+        "kind",
+        "ol_gate",
+        "utterance_kind",
+        "temporal_phrase",
+        "inferred_temporal_phrase",
+        "temporal_source",
+        "object_phrase",
+        "action_phrase",
+        "action_terms",
+        "completion_verbs",
+        "resolved_date",
+        "needs_date_confirmation",
+        "ambiguous_phrases",
+        "original_topic",
+        "is_future_commitment",
+        "create_open_loop",
+    )
+
+    @classmethod
+    def _loop_detail_for_list(cls, detail: dict) -> dict[str, Any]:
+        """Debug-facing subset of detail_json (W/W/H slots + OL5 hints)."""
+        if not detail:
+            return {}
+        return {
+            key: detail[key]
+            for key in cls._LOOP_DETAIL_LIST_KEYS
+            if key in detail and detail[key] not in (None, "", [], {})
+        }
 
     @staticmethod
     def _parse_loop_detail(detail_json: str) -> dict:
@@ -1295,6 +1461,36 @@ class RelationshipStore:
                     commitment_id,
                 ),
             )
+
+    def _loop_matches_ol5_completion(
+        self,
+        *,
+        loop_topic: str,
+        loop_detail_json: str,
+        utterance: str,
+        action_terms: list[str],
+        completion_verbs: list[str],
+    ) -> bool:
+        """Both an action term and a completion verb must appear in the utterance."""
+        detail = self._parse_loop_detail(loop_detail_json)
+        stored_terms = [str(t) for t in (detail.get("action_terms") or []) if str(t).strip()]
+        stored_verbs = [str(v) for v in (detail.get("completion_verbs") or []) if str(v).strip()]
+        terms = action_terms or stored_terms
+        verbs = completion_verbs or stored_verbs
+        if not verbs:
+            return False
+        text = utterance.strip()
+        if not text:
+            return False
+        verb_hit = any(verb and verb in text for verb in verbs)
+        if not verb_hit:
+            return False
+        if terms:
+            return any(term and term in text for term in terms)
+        if loop_topic and loop_topic in text:
+            return True
+        topic_tokens = [part for part in loop_topic.split() if len(part) >= 2]
+        return bool(topic_tokens) and all(token in text for token in topic_tokens[:3])
 
     def _close_open_loop(
         self,

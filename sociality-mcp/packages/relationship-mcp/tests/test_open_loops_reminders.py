@@ -316,3 +316,97 @@ def test_list_open_loops_reanchors_legacy_topic(store):
     assert row["topic"].startswith("2026年6月19日")
     detail = json.loads(row["detail_json"])
     assert detail.get("original_topic") == "明日の天気ってどう"
+
+
+def test_list_open_loops_includes_ol_gate_detail(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-25T10:00:00+09:00",
+        source_event_id="evt-detail",
+        source_text="明日、肉じゃがを作る",
+        create_open_loop=True,
+        try_ol5_close=False,
+        loop_topic="2026年6月26日、肉じゃがを作る",
+        action_terms=["肉じゃが"],
+        completion_verbs=[],
+        detail={
+            "kind": "ol_gate",
+            "utterance_kind": "future_commitment",
+            "temporal_phrase": "明日",
+            "object_phrase": "肉じゃがを",
+            "action_phrase": "作る",
+            "resolved_date": "2026-06-26",
+        },
+    )
+    loops = store.list_open_loops(person_id="ma")
+    assert len(loops) == 1
+    assert loops[0].detail.get("object_phrase") == "肉じゃがを"
+    assert loops[0].detail.get("action_phrase") == "作る"
+    assert loops[0].detail.get("temporal_phrase") == "明日"
+    assert loops[0].detail.get("action_terms") == ["肉じゃが"]
+
+
+def test_apply_ol_gate_creates_future_loop(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-25T10:00:00+09:00",
+        source_event_id="evt-ol",
+        source_text="明日、角煮を作る",
+        create_open_loop=True,
+        try_ol5_close=False,
+        loop_topic="2026年6月26日、角煮を作る",
+        action_terms=["角煮"],
+        completion_verbs=[],
+        detail={
+            "kind": "ol_gate",
+            "utterance_kind": "future_commitment",
+            "resolved_date": "2026-06-26",
+        },
+    )
+    loops = store.list_open_loops(person_id="ma")
+    assert len(loops) == 1
+    assert "角煮" in loops[0].topic
+
+
+def test_apply_ol_gate_ol5_closes_matching_loop(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-25T10:00:00+09:00",
+        source_event_id="evt-create",
+        source_text="明日、角煮を作る",
+        create_open_loop=True,
+        try_ol5_close=False,
+        loop_topic="2026年6月26日、角煮を作る",
+        action_terms=["角煮"],
+        completion_verbs=[],
+        detail={"kind": "ol_gate", "resolved_date": "2026-06-26", "action_terms": ["角煮"]},
+    )
+    closed = store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-26T18:00:00+09:00",
+        source_event_id="evt-done",
+        source_text="角煮、作った",
+        create_open_loop=False,
+        try_ol5_close=True,
+        loop_topic="",
+        action_terms=["角煮"],
+        completion_verbs=["作った"],
+        detail={"kind": "ol_gate", "utterance_kind": "past_completion"},
+    )
+    assert closed
+    assert store.list_open_loops(person_id="ma") == []
+
+
+def test_note_human_utterance_skips_rule_loops_when_disabled(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.note_human_utterance_for_loops(
+        person_id="ma",
+        text="また明日！",
+        ts="2026-06-25T10:00:00+09:00",
+        source_event_id="evt-phatic",
+        rule_open_loops=False,
+    )
+    assert store.list_open_loops(person_id="ma") == []

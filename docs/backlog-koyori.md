@@ -19,7 +19,7 @@
 | **CAM** | 💤 | [tracks/cam-tapo-ptz.md](./tracks/cam-tapo-ptz.md) |
 | **EAR** | 📋 | [tracks/ear.md](./tracks/ear.md) |
 | **VIS** | 💤 | [tracks/vis-health.md](./tracks/vis-health.md) |
-| **GAPI** | 📋 | [tracks/gapi.md](./tracks/gapi.md) |
+| **GAPI** | 📋 下準備 | [tracks/gapi.md](./tracks/gapi.md) · [ops/gapi-setup.md](./ops/gapi-setup.md) |
 | **V / Surface UI 残** | 部分済 | [tracks/surface-vision.md](./tracks/surface-vision.md) |
 | **BIO-8** | ✅ | [heartbeat-loop.md](./architecture/heartbeat-loop.md) § Somatic |
 | **Outbound** | ✅ | [architecture/outbound-channels.md](./architecture/outbound-channels.md) |

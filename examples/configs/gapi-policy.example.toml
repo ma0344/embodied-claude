@@ -1,0 +1,60 @@
+# GAPI — Calendar / Drive ポリシー例
+
+# socialPolicy.toml に [google] セクションとしてマージするか、
+# GAPI_POLICY_PATH で専用ファイル指定（実装時に決定）。
+
+[google]
+enabled = true
+# 今日/明日 — 件数ではなく日付窓（tracks/gapi.md）
+prefetch_day_range = ["today", "tomorrow"]
+max_prefetch_chars = 4000
+oauth_account_label = "ma-personal"
+
+# --- Calendar ---
+
+[[google.calendars]]
+id = "primary"
+label = "まー メイン"
+enabled = true
+read_events = true
+# Phase 1.5（GAPI-7）で true — OAuth calendar.events スコープ + 再 consent
+allow_create = false
+allow_update = false
+allow_delete = false
+
+# 共有カレンダー — calendarId@group.calendar.google.com 等
+# [[google.calendars]]
+# id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx@group.calendar.google.com"
+# label = "チーム共有"
+# enabled = true
+# read_events = true
+# allow_create = true
+# allow_update = true
+# allow_delete = false
+
+# --- Drive ---
+
+[[google.drive_roots]]
+folder_id = "REPLACE_WITH_DRIVE_FOLDER_ID"
+label = "koyori-shared"
+enabled = true
+read = true
+# Phase 2b（GAPI-6）で true に
+allow_create = false
+max_files_per_search = 10
+allowed_mime = [
+  "text/plain",
+  "text/markdown",
+  "application/vnd.google-apps.document",
+  "application/pdf",
+]
+
+# --- 書込共通（gateway direct）---
+
+[google.write]
+# 読取 E2E 後に段階的に true + スコープ追加
+calendar_enabled = false
+drive_enabled = false
+require_evaluate_action = true
+# 表層が「入れたで」と言う前に API 成功必須（捏造禁止）
+require_api_success_before_speak = true

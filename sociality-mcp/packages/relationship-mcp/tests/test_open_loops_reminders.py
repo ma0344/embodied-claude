@@ -400,6 +400,36 @@ def test_apply_ol_gate_ol5_closes_matching_loop(store):
     assert store.list_open_loops(person_id="ma") == []
 
 
+def test_apply_ol_gate_ol5_unions_stored_and_ingest_verbs(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-25T10:00:00+09:00",
+        source_event_id="evt-create",
+        source_text="明日、角煮を作る",
+        create_open_loop=True,
+        try_ol5_close=False,
+        loop_topic="2026年6月26日、角煮を作る",
+        action_terms=["角煮"],
+        completion_verbs=["作った", "できた"],
+        detail={"kind": "ol_gate", "resolved_date": "2026-06-26"},
+    )
+    closed = store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-26T18:00:00+09:00",
+        source_event_id="evt-done",
+        source_text="角煮、完成した",
+        create_open_loop=False,
+        try_ol5_close=True,
+        loop_topic="",
+        action_terms=["角煮"],
+        completion_verbs=["完成した"],
+        detail={"kind": "ol_gate", "utterance_kind": "past_completion"},
+    )
+    assert closed
+    assert store.list_open_loops(person_id="ma") == []
+
+
 def test_note_human_utterance_skips_rule_loops_when_disabled(store):
     store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
     store.note_human_utterance_for_loops(

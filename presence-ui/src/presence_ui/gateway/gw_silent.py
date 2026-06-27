@@ -64,31 +64,26 @@ def parse_pause_response(text: str) -> PauseReflectionParsed | None:
     )
 
 
-def run_silent_internal_turn(
+def run_classifier_turn(
     *,
-    task: str,
-    session_id: str | None = None,
-    max_tokens: int = 480,
-    temperature: float = 0.55,
+    system: str,
+    user: str,
+    max_tokens: int = 420,
+    temperature: float = 0.35,
     timeout: float | None = None,
+    log_label: str = "GW classifier",
 ) -> str | None:
-    """Run one gateway internal turn via LM Studio (forward=False semantics).
-
-    ``session_id`` is reserved for future Claude ``--resume`` wiring; v1 uses a
-    stateless LM Studio completion with stable system append (autonomous tick).
-    """
-    del session_id
+    """Stateless LM Studio completion (OL-GATE — no SOUL / no session history)."""
     if not lm_studio_available(timeout=2.0):
-        logger.warning("GW-S1: LM Studio unavailable")
+        logger.warning("%s: LM Studio unavailable", log_label)
         return None
     if timeout is None:
-        timeout = float(os.environ.get("PRESENCE_GW_S1_TIMEOUT", "90"))
+        timeout = float(os.environ.get("PRESENCE_GW_S2_TIMEOUT", "45"))
 
     base, model, token = _lm_studio_settings()
-    stable = build_gateway_stable_append()
     messages = [
-        {"role": "system", "content": f"{stable}\n\n{_INTERNAL_RULES}"},
-        {"role": "user", "content": task.strip()},
+        {"role": "system", "content": system.strip()},
+        {"role": "user", "content": user.strip()},
     ]
     payload = {
         "model": model,
@@ -111,5 +106,36 @@ def run_silent_internal_turn(
             response.raise_for_status()
             return _parse_openai_chat_content(response.json())
     except Exception as exc:
-        logger.warning("GW-S1 silent turn failed: %s", exc)
+        logger.warning("%s failed: %s", log_label, exc)
         return None
+
+
+def run_silent_internal_turn(
+    *,
+    task: str,
+    session_id: str | None = None,
+    max_tokens: int = 480,
+    temperature: float = 0.55,
+    timeout: float | None = None,
+) -> str | None:
+    """Run one gateway internal turn via LM Studio (forward=False semantics).
+
+    ``session_id`` is reserved for future Claude ``--resume`` wiring; v1 uses a
+    stateless LM Studio completion with stable system append (autonomous tick).
+    """
+    del session_id
+    if not lm_studio_available(timeout=2.0):
+        logger.warning("GW-S1: LM Studio unavailable")
+        return None
+    if timeout is None:
+        timeout = float(os.environ.get("PRESENCE_GW_S1_TIMEOUT", "90"))
+
+    stable = build_gateway_stable_append()
+    return run_classifier_turn(
+        system=f"{stable}\n\n{_INTERNAL_RULES}",
+        user=task.strip(),
+        max_tokens=max_tokens,
+        temperature=temperature,
+        timeout=timeout,
+        log_label="GW-S1",
+    )

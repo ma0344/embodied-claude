@@ -334,6 +334,12 @@ class RelationshipStore:
         detail_payload["ol_gate"] = True
         if terms:
             detail_payload["action_terms"] = terms[:5]
+        if verbs:
+            detail_payload["completion_verbs"] = verbs[:5]
+        elif detail:
+            seeded = detail.get("completion_verbs")
+            if isinstance(seeded, list) and seeded:
+                detail_payload["completion_verbs"] = seeded[:5]
         if detail_payload.get("resolved_date"):
             pass
         elif detail and detail.get("needs_date_confirmation"):
@@ -1475,8 +1481,8 @@ class RelationshipStore:
         detail = self._parse_loop_detail(loop_detail_json)
         stored_terms = [str(t) for t in (detail.get("action_terms") or []) if str(t).strip()]
         stored_verbs = [str(v) for v in (detail.get("completion_verbs") or []) if str(v).strip()]
-        terms = action_terms or stored_terms
-        verbs = completion_verbs or stored_verbs
+        terms = list(dict.fromkeys([*(action_terms or []), *stored_terms]))
+        verbs = list(dict.fromkeys([*(completion_verbs or []), *stored_verbs]))
         if not verbs:
             return False
         text = utterance.strip()

@@ -5,9 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from social_core import utc_now
-
 from relationship_mcp.schemas import DismissOutcome
+from social_core import utc_now
 
 from presence_ui.deps import get_stores
 from presence_ui.services.room_events import ROOM_WRITE_SOURCE
@@ -75,15 +74,31 @@ async def _ingest_human_core_async(
     event_id = str(result.get("event_id") or "")
     outcome = DismissOutcome()
     try:
+        from presence_ui.gateway.ol_gate import gw_s2_enabled
+
         outcome = stores.relationship.note_human_utterance_for_loops(
             person_id=person_id,
             text=text,
             ts=when,
             source_event_id=event_id,
+            rule_open_loops=not gw_s2_enabled(),
         )
     except Exception:
         logger.exception("note_human_utterance_for_loops failed")
     if run_llm:
+        try:
+            from presence_ui.gateway.ol_gate import gw_s2_enabled, try_ol_gate_after_ingest
+
+            if gw_s2_enabled():
+                await try_ol_gate_after_ingest(
+                    stores,
+                    person_id=person_id,
+                    text=text,
+                    ts=when,
+                    source_event_id=event_id,
+                )
+        except Exception:
+            logger.exception("GW-S2 OL-GATE failed")
         try:
             from presence_ui.gateway.reminder_spec import try_create_llm_reminder_commitment
 

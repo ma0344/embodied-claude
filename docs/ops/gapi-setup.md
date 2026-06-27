@@ -1,7 +1,7 @@
 # GAPI — OAuth セットアップ（ma-home）
 
 **対象**: GAPI-1 · OAuth（まー個人）  
-**トラック**: [tracks/gapi.md](../tracks/gapi.md)  
+**トラック**: [tracks/gapi.md](../tracks/gapi.md)（**prep-1/2 ✅ · prep-3 実線待ち**）  
 **ポリシー例**: [examples/configs/gapi-policy.example.toml](../../examples/configs/gapi-policy.example.toml)
 
 ---
@@ -148,17 +148,27 @@ PRESENCE_GAPI_CALENDAR_PREFETCH=1
 PRESENCE_GAPI_CALENDAR_WRITE=0
 ```
 
-`PRESENCE_GAPI_ENABLED=1` は GAPI-2 配線後。
+`PRESENCE_GAPI_ENABLED=1` は **prep-3**（router 実線）後。それまでは CLI smoke のみ。
 
 ---
 
-## 7. 初回 consent（実装済 — GAPI-prep-1）
+## 7. 下準備フェーズ（進捗）
+
+| Prep | CLI | ma-home | router |
+|------|-----|---------|--------|
+| **prep-1** | `gapi-calendar-smoke` / `--prefetch` | ✅ | — |
+| **prep-2** | `gapi-calendar-write-smoke` | ✅ | — |
+| **prep-3** | — | — | 📋 router 実線 · [配線要検討](../tracks/gapi.md#配線--要検討2026-06-27) 後 |
+
+---
+
+## 8. 初回 consent（prep-1）
 
 `uv run google-oauth-consent` — 上記 §3 参照。
 
 ---
 
-## 8. 共有カレンダー
+## 9. 共有カレンダー
 
 1. Google Calendar UI で対象カレンダーの **設定 → カレンダーの統合** から **カレンダー ID** をコピー
 2. `gapi-policy.example.toml` の `[[google.calendars]]` に追加、`enabled = true`
@@ -167,7 +177,7 @@ primary は `id = "primary"` のまま。
 
 ---
 
-## 9. Drive フォルダ（Phase 2a）
+## 10. Drive フォルダ（Phase 2a）
 
 1. Drive でこより用フォルダを作成（または既存共有フォルダ）
 2. フォルダ URL から `folder_id` を取得
@@ -177,7 +187,7 @@ primary は `id = "primary"` のまま。
 
 ---
 
-## 10. 運用
+## 11. 運用
 
 | 事象 | 対応 |
 |------|------|
@@ -187,13 +197,22 @@ primary は `id = "primary"` のまま。
 
 ---
 
-## 11. チェックリスト
+## 12. チェックリスト
 
-- [ ] Cloud プロジェクト + Calendar API 有効
-- [ ] OAuth デスクトップクライアント作成
-- [ ] primary + 共有カレンダー ID 一覧
-- [ ] Drive フォルダ ID（1b 用）
-- [ ] `gapi-policy.example.toml` を ma-home 用にコピー・編集
-- [ ] GAPI-2 E2E: 「今日の予定は？」
-- [ ] GAPI-7 E2E: 「来週火曜15時に〇〇、カレンダー入れといて」
+**インフラ（ma-home）**
+
+- [x] Cloud プロジェクト + Calendar API 有効
+- [x] OAuth デスクトップクライアント作成
+- [x] Test user 追加（Testing モード時）
+- [x] `gapi-policy.toml` を ma-home 用にコピー・編集
+- [x] prep-1: list smoke / `--prefetch`
+- [x] prep-2: write smoke（create + patch · `[gapi-smoke]`）
+
+**未（意図的に後回し）**
+
+- [ ] primary + 共有カレンダー ID 一覧（共有は必要時）
+- [ ] Drive フォルダ ID（Phase 2a）
+- [ ] **prep-3**: router 実線（[配線要検討](../tracks/gapi.md#配線--要検討2026-06-27) を先に詰める）
+- [ ] GAPI-2 E2E: 会話「今日の予定は？」
+- [ ] GAPI-7 E2E: 会話「来週火曜15時に〇〇、カレンダー入れといて」
 - [ ] 共有カレンダーで `allow_create` が効くこと（書込先をポリシーで限定）

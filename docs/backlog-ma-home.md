@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ（ダッシュボード）
 
-**最終更新**: 2026-06-27（OL5 close 修正 · LW-7 下準備）  
+**最終更新**: 2026-06-27（GAPI prep-1/2 ma-home OK · router 実線は prep-3 待ち）  
 **詳細の正（アーカイブ）**: [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md)  
 **完了一覧**: [backlog-archive-ma-home.md](./backlog-archive-ma-home.md)
 
@@ -93,7 +93,7 @@
 | **EAR** | Surface マイク | 📋 | [tracks/ear.md](./tracks/ear.md) |
 | **VIS** | VL health・間接視覚 | 💤 | [tracks/vis-health.md](./tracks/vis-health.md) |
 | **V** | Surface UI 残（V4 等） | 部分済 | [tracks/surface-vision.md](./tracks/surface-vision.md) |
-| **GAPI** | Google Calendar / Drive | 📋 下準備中（[Calendar 先](../tracks/gapi.md)） | [tracks/gapi.md](./tracks/gapi.md) · [gapi-setup.md](./ops/gapi-setup.md) |
+| **GAPI** | Google Calendar / Drive | ✅ prep-1/2 CLI · 📋 配線要検討 → prep-3 | [tracks/gapi.md](./tracks/gapi.md) · [gapi-setup.md](./ops/gapi-setup.md) |
 | **WS** | 会話 Web 検索 | ✅ WS-1〜2c · 📋 WS-5（[北極星: 地震例](./ops/ws-5-spontaneous-search.md#北極星シナリオ--会話中の興味疑問2026-06-27)） | [ws-2](./ops/ws-2-conversation-web-search.md) · [ws-5](./ops/ws-5-spontaneous-search.md) |
 
 トピック索引: [backlog-koyori.md](./backlog-koyori.md)

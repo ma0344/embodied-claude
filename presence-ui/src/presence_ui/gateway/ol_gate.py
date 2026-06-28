@@ -28,7 +28,7 @@ from presence_ui.gateway.ol_gate_prompts import (
 logger = logging.getLogger(__name__)
 
 VALID_UTTERANCE_KINDS = frozenset(
-    {"future_commitment", "past_completion", "past_report", "other"}
+    {"future_commitment", "past_completion", "past_report", "greeting", "other"}
 )
 _PAST_TEMPORAL_MARKERS = ("昨日", "一昨日", "先週", "先月", "yesterday", "last week")
 _OBJECT_PARTICLE_RE = re.compile(r"[をがはにでと]$")
@@ -207,7 +207,7 @@ def merge_ol_gate_gateway(
         "ineligibility_reason": parsed.ineligibility_reason,
     }
 
-    if parsed.utterance_kind == "other":
+    if parsed.utterance_kind in ("other", "greeting"):
         return OlGateGatewayDecision(
             utterance=parsed.utterance,
             utterance_kind=parsed.utterance_kind,
@@ -343,6 +343,37 @@ async def try_ol_gate_after_ingest(
     """Run GW-S2 classifier after human ingest and apply gateway decision."""
     if not gw_s2_enabled() or not should_run_ol_gate(text):
         return None
+    tz = timezone or stores.policy_timezone
+
+    from presence_ui.gateway.temp_c_staged import (
+        apply_staged_decisions,
+        gw_s2_staged_enabled,
+        run_staged_classify,
+    )
+
+    if gw_s2_staged_enabled():
+        result = await asyncio.to_thread(run_staged_classify, utterance=text)
+        if result is None:
+            if gw_s2_fallback_rules():
+                stores.relationship.note_human_utterance_for_loops(
+                    person_id=person_id,
+                    text=text,
+                    ts=ts,
+                    source_event_id=source_event_id,
+                    rule_open_loops=True,
+                )
+            return None
+        decisions = apply_staged_decisions(
+            stores,
+            person_id=person_id,
+            text=text,
+            ts=ts,
+            source_event_id=source_event_id,
+            result=result,
+            timezone=tz,
+        )
+        return decisions[-1] if decisions else None
+
     parsed = await asyncio.to_thread(run_ol_gate_extract, utterance=text)
     if parsed is None:
         if gw_s2_fallback_rules():
@@ -354,7 +385,6 @@ async def try_ol_gate_after_ingest(
                 rule_open_loops=True,
             )
         return None
-    tz = timezone or stores.policy_timezone
     decision = merge_ol_gate_gateway(parsed, ts=ts, timezone=tz)
     stores.relationship.apply_ol_gate_decision(
         person_id=person_id,

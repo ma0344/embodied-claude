@@ -16,6 +16,7 @@ embodied-claude（ma-home / こより）の運用・設計ドキュメント。*
 | **Gateway / 自律 tick の設計** | [architecture/gateway-direct-actions.md](./architecture/gateway-direct-actions.md) |
 | **Heartbeat・pulse** | [architecture/heartbeat-loop.md](./architecture/heartbeat-loop.md) |
 | **認知層・設計方針** | [architecture/cognitive-layers.md](./architecture/cognitive-layers.md) |
+| **相対日・deixis（今日/明日）** | [tracks/utterance-anchoring.md](./tracks/utterance-anchoring.md) |
 | **MEM-8 / 記憶パイプライン** | [mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) · [mem-pipeline.md](./architecture/mem-pipeline.md) |
 | **運用スクリプト** | [ops/scripts-reference.md](./ops/scripts-reference.md) |
 | **キオスク・Surface 運用** | [ops/](./ops/) · [backlog-koyori.md](./backlog-koyori.md) |
@@ -43,6 +44,7 @@ docs/
 │   ├── cam-tapo-ptz.md
 │   ├── ear.md
 │   ├── gapi.md
+│   ├── utterance-anchoring.md
 │   └── surface-vision.md
 │
 ├── architecture/
@@ -82,6 +84,7 @@ docs/
 | [cam-tapo-ptz.md](./tracks/cam-tapo-ptz.md) | Tapo PTZ 調査 |
 | [ear.md](./tracks/ear.md) | Surface マイク・環境音 |
 | [gapi.md](./tracks/gapi.md) | Google Calendar/Drive |
+| [utterance-anchoring.md](./tracks/utterance-anchoring.md) | TEMP · 相対日 / uttered_at |
 | [surface-vision.md](./tracks/surface-vision.md) | V1–V9 UI 残件 |
 
 ---

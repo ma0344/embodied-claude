@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ（ダッシュボード）
 
-**最終更新**: 2026-06-27（GAPI prep-1/2 ma-home OK · router 実線は prep-3 待ち）  
+**最終更新**: 2026-06-28（TEMP 段階分類 POC · utterance anchoring · GAPI prep-1/2）  
 **詳細の正（アーカイブ）**: [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md)  
 **完了一覧**: [backlog-archive-ma-home.md](./backlog-archive-ma-home.md)
 
@@ -94,6 +94,7 @@
 | **VIS** | VL health・間接視覚 | 💤 | [tracks/vis-health.md](./tracks/vis-health.md) |
 | **V** | Surface UI 残（V4 等） | 部分済 | [tracks/surface-vision.md](./tracks/surface-vision.md) |
 | **GAPI** | Google Calendar / Drive | ✅ prep-1/2 CLI · 📋 配線要検討 → prep-3 | [tracks/gapi.md](./tracks/gapi.md) · [gapi-setup.md](./ops/gapi-setup.md) |
+| **TEMP** | TEMP-1〜4 ✅ · TEMP-C3 ✅ · 次 [interpretation-shift-routing.md](./tracks/interpretation-shift-routing.md) SHIFT-R | [utterance-anchoring.md](./tracks/utterance-anchoring.md) |
 | **WS** | 会話 Web 検索 | ✅ WS-1〜2c · 📋 WS-5（[北極星: 地震例](./ops/ws-5-spontaneous-search.md#北極星シナリオ--会話中の興味疑問2026-06-27)） | [ws-2](./ops/ws-2-conversation-web-search.md) · [ws-5](./ops/ws-5-spontaneous-search.md) |
 
 トピック索引: [backlog-koyori.md](./backlog-koyori.md)

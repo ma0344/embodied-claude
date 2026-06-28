@@ -17,6 +17,8 @@
 - **OL5（未）**: 予定消化（作った/できた）でも loop close — [tracks/ol5.md](../tracks/ol5.md)
 - 手動掃除: `scripts/purge-stale-open-loops.py`（共有ロジックは `social_core.date_resolution`）
 
+**横断（2026-06-28）**: open loop 以外の inject（interpretation_shift · dream_digest · memory recall）でも **uttered_at + resolved_date + as_of** が必要 → [tracks/utterance-anchoring.md](../tracks/utterance-anchoring.md)（TEMP）。OL2 の `resolved_date` / stale パターンがテンプレート。
+
 ### OL2 — リマインド
 
 1. 部屋で「10時に〇〇をリマインドして」等 → `create_commitment(due_at)`（`reminder_intent.py`）

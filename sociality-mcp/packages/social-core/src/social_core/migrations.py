@@ -415,6 +415,12 @@ MIGRATIONS = [
             ON session_episode_closures(person_id, closed_at DESC);
         """,
     ),
+    Migration(
+        name="008_interpretation_shift_resolved_date",
+        sql="""
+        ALTER TABLE interpretation_shifts ADD COLUMN resolved_date TEXT;
+        """,
+    ),
 ]
 
 

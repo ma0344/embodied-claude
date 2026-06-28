@@ -187,7 +187,10 @@ class TestRecord:
         plan = plan_response(
             PlanResponseInput(interaction_context=ctx, user_text="夜中どうする？")
         )
-        assert any("policy purpose (protect sleep)" in item for item in plan.must_include)
+        joined = " ".join(plan.must_include)
+        assert "do not regress" in joined
+        assert "policy purpose (protect sleep)" not in joined
+        assert "sample wording is a hard rule" not in joined
 
     def test_bare_greeting_does_not_force_shift_regurgitation(self, stores):
         stores["orchestrator"].record_interpretation_shift(
@@ -209,6 +212,126 @@ class TestRecord:
         assert "bare greeting only" in joined
         assert "do NOT recite schedule" in joined
         assert "今日は入浴介助" not in joined
+
+    def test_record_interpretation_shift_anchors_today(self, stores):
+        stores["orchestrator"].record_interpretation_shift(
+            RecordInterpretationShiftInput(
+                person_id="ma",
+                topic="today schedule",
+                old_interpretation="Assumed default",
+                new_interpretation="今日は入浴介助で15時位まで",
+                trigger="ma clarified",
+                confidence=0.9,
+                ts="2026-06-27T08:00:00+09:00",
+            )
+        )
+        shift = stores["orchestrator"].recent_interpretation_shifts(limit=1)[0]
+        assert shift.resolved_date == "2026-06-27"
+        assert "2026年6月27日" in shift.new_interpretation
+
+    def test_stale_schedule_shift_suppressed_from_compose(self, stores, monkeypatch):
+        stores["orchestrator"].record_interpretation_shift(
+            RecordInterpretationShiftInput(
+                person_id="ma",
+                topic="today schedule",
+                old_interpretation="Assumed default",
+                new_interpretation="今日は入浴介助で15時位まで",
+                trigger="ma clarified",
+                confidence=0.9,
+                ts="2026-06-27T08:00:00+09:00",
+            )
+        )
+        monkeypatch.setattr(
+            "interaction_orchestrator_mcp.compose.utc_now",
+            lambda: "2026-06-28T08:00:00+09:00",
+        )
+        ctx = _compose(stores, user_text="おはよう")
+        assert "入浴介助" not in ctx.compact_prompt_block
+        assert ctx.agent_state.recent_interpretation_shifts == []
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text="おはよう")
+        )
+        joined = " ".join(plan.must_include)
+        assert "今日は入浴介助" not in joined
+        assert "入浴介助" not in joined
+
+    def test_stale_shift_suppressed_on_non_greeting_turn(self, stores, monkeypatch):
+        stores["orchestrator"].record_interpretation_shift(
+            RecordInterpretationShiftInput(
+                person_id="ma",
+                topic="today schedule",
+                old_interpretation="Assumed default",
+                new_interpretation="今日は入浴介助で15時位まで",
+                trigger="ma clarified",
+                confidence=0.9,
+                ts="2026-06-27T08:00:00+09:00",
+            )
+        )
+        monkeypatch.setattr(
+            "interaction_orchestrator_mcp.compose.utc_now",
+            lambda: "2026-06-28T08:00:00+09:00",
+        )
+        ctx = _compose(stores, user_text="今日どうする？")
+        assert "入浴介助" not in ctx.compact_prompt_block
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text="今日どうする？")
+        )
+        joined = " ".join(plan.must_include)
+        assert "interpretation shift on" not in joined
+        assert "入浴介助" not in joined
+
+    def test_shift_relativized_on_compose_inject(self, stores, monkeypatch):
+        stores["orchestrator"].record_interpretation_shift(
+            RecordInterpretationShiftInput(
+                person_id="ma",
+                topic="kakuni plan",
+                old_interpretation="Assumed default",
+                new_interpretation="明日、角煮を作る",
+                trigger="ma clarified",
+                confidence=0.9,
+                ts="2026-06-27T20:00:00+09:00",
+            )
+        )
+        monkeypatch.setattr(
+            "interaction_orchestrator_mcp.compose.utc_now",
+            lambda: "2026-06-28T08:00:00+09:00",
+        )
+        ctx = _compose(stores, user_text="角煮の件")
+        assert ctx.agent_state.recent_interpretation_shifts
+        new_text = ctx.agent_state.recent_interpretation_shifts[0].new_interpretation
+        assert "今日" in new_text
+        assert "2026年6月28日" not in new_text
+        assert "今日" in ctx.compact_prompt_block or "角煮" in ctx.compact_prompt_block
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text="角煮の件")
+        )
+        joined = " ".join(plan.must_include)
+        assert "角煮を作る" not in joined
+        assert "do not regress" in joined
+
+    def test_schedule_shift_surfaces_on_temporal_question(self, stores, monkeypatch):
+        stores["orchestrator"].record_interpretation_shift(
+            RecordInterpretationShiftInput(
+                person_id="ma",
+                topic="kakuni plan",
+                old_interpretation="Assumed default",
+                new_interpretation="明日、角煮を作る",
+                trigger="ma clarified",
+                confidence=0.9,
+                ts="2026-06-27T20:00:00+09:00",
+            )
+        )
+        monkeypatch.setattr(
+            "interaction_orchestrator_mcp.compose.utc_now",
+            lambda: "2026-06-28T08:00:00+09:00",
+        )
+        ctx = _compose(stores, user_text="今日の予定は？")
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text="今日の予定は？")
+        )
+        joined = " ".join(plan.must_include)
+        assert "interpretation_shift schedule" in joined
+        assert "角煮" in joined
 
     def test_soul_sections_in_compact_block(self, stores, monkeypatch, tmp_path):
         import json as _json

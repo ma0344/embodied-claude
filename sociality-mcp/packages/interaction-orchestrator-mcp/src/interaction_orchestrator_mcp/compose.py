@@ -44,6 +44,7 @@ from .session_adapter import (
     OrchestratorSessionAdapter,
     make_default_session_adapter,
 )
+from .shift_temporal import prepare_shifts_for_inject
 from .store import InteractionOrchestratorStore
 
 
@@ -130,8 +131,13 @@ def compose_interaction_context(
     recent_experiences = orchestrator_store.recent_agent_experiences(
         person_id=payload.person_id, limit=5, include_private=payload.include_private
     )
-    recent_shifts = orchestrator_store.recent_interpretation_shifts(
-        person_id=payload.person_id, limit=3
+    recent_shifts = prepare_shifts_for_inject(
+        orchestrator_store.recent_interpretation_shifts(
+            person_id=payload.person_id, limit=5
+        ),
+        as_of_ts=ts,
+        tz_name=policy_timezone,
+        limit=3,
     )
 
     memory = memory_adapter or make_default_memory_adapter()

@@ -5,8 +5,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from relationship_mcp.inference import is_archive_remember_utterance
-
 from .recall_query import (
     extract_schedule_facts,
     is_temporal_question,
@@ -23,6 +21,7 @@ from .schemas import (
     ToneHint,
     VoiceHint,
 )
+from .shift_temporal import append_shift_plan_constraints
 
 # Quiet hours: inward desires may still run (private DB / recall only).
 _QUIET_INWARD_DESIRES = frozenset(
@@ -421,24 +420,17 @@ def _pick_must_lists(
             f"concrete day (e.g. {samples[0]}); do not infer or anchor yourself"
         )
     if ctx.agent_state.recent_interpretation_shifts and primary_move != "stay_silent":
-        latest = ctx.agent_state.recent_interpretation_shifts[0]
-        if _is_bare_greeting(user_text):
-            must_include.append(
-                "bare greeting only — reply briefly (おはよう); do NOT recite schedule "
-                "from dream_digest, overnight_inner_voice, or yesterday's episodes; "
-                "do NOT volunteer today's plan unless まー asks; hold interpretation "
-                "shift in background without regurgitating"
-            )
-            must_avoid.append(
-                "dumping 入浴介助/角煮/予定 from overnight context on a bare おはよう"
-            )
-        else:
-            must_include.append(
-                "interpretation shift on "
-                f"'{latest.topic}': do NOT revert to "
-                f"「{latest.old_interpretation}」 — hold "
-                f"「{latest.new_interpretation}」"
-            )
+        append_shift_plan_constraints(
+            must_include=must_include,
+            must_avoid=must_avoid,
+            shifts=ctx.agent_state.recent_interpretation_shifts,
+            user_text=user_text,
+            primary_move=primary_move,
+            tz_name=ctx.timezone or "Asia/Tokyo",
+            is_bare_greeting=_is_bare_greeting,
+            is_temporal_question=is_temporal_question,
+            temporal_schedule_contract_enabled=temporal_schedule_contract_enabled,
+        )
     elif ctx.agent_state.interpretation_shifts >= 1 and primary_move != "stay_silent":
         must_include.append(
             "respect the most recent interpretation shift (do not regress to old interpretation)"

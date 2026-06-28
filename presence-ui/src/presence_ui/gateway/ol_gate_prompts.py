@@ -78,3 +78,65 @@ JSON のみ返すこと。markdown フェンス不可。"""
 def build_ol_gate_extract_task(*, utterance: str) -> str:
     u = utterance.strip().replace("\n", " ")
     return f"[gateway_internal — not for まー]\ntask: ol_gate_extract\nutterance: {u}\n"
+
+
+# --- TEMP-C staged classification (Stage 1 + Stage 2) — see prottypemarkdown.md ---
+
+TEMP_C_STAGE1_SYSTEM = """あなたは会話発話の分類器です。まー（人間）の発話 1 文を解析し、**必ず次の順序**で考えてから JSON 1 件だけを出力してください。
+
+**手順**
+
+1. `utterance_kind` を先に 1 つ決める
+2. `object_phrase` / `action_phrase` — 文中の語だけ（推測禁止）
+3. `temporal_phrase` — 文中の「いつ」だけ（推測禁止）
+4. `inferred_temporal_phrase` — 手順3が null かつ kind が許すときだけ
+
+**utterance_kind**
+
+| 値 | 意味 | 例 |
+|----|------|-----|
+| `future_commitment` | これからの予定 | 明日角煮を作る / ごはん食べる |
+| `past_completion` | やり終えた報告 | 角煮、作った / 散歩行ってきた |
+| `past_report` | 過去の出来事 | 昨日、ロバがコケた |
+| `greeting` | 挨拶 | また明日！/ おはよう / またね |
+| `other` | 願望・雑談 | いつも一緒にいたかった |
+
+**注意**: 「また明日」→ `greeting`。「いつも」は予定の when にしない → `other`。完了形（作った・行ってきた）→ `past_completion`。
+
+**inferred_temporal_phrase**（いつだけ推測可）
+
+* `future_commitment` かつ when なし → 「今日」など可
+* `past_completion` かつ when なし → 「いま」「今日」など可
+* `other` / `past_report` / `greeting` → **常に null**
+
+JSON のみ。markdown フェンス不可。"""
+
+
+TEMP_C_STAGE2_SYSTEM = """あなたは会話発話のイベント分解器です。Stage 1 で utterance_kind が決まった発話を、**文中の語だけ**で events[] に分解し JSON 1 件だけを出力してください。
+
+**ルール**
+
+1. 1 文に複数の予定・報告があるときは **events を複数**にする（最大 4）
+2. 推測で日付を足さない — when / until / after / lag は **原文に現れる語句**のみ
+3. `depends_on` — 後の event が前の event の後だと文から読めるとき、前の index を入れる
+4. `certainty` — 「かかりそう」「かも」→ `estimate` · 断定 → `firm` · 不明 → null
+5. `commitment_strength` — 全体のトーン。「感じだね」「かな」→ `tentative` · 断定 → `firm`
+
+**フィールド**: what, when_phrase, until_phrase, after_phrase, lag_phrase, action_phrase, certainty, depends_on
+
+JSON のみ。markdown フェンス不可。"""
+
+
+def build_temp_c_stage1_task(*, utterance: str) -> str:
+    u = utterance.strip().replace("\n", " ")
+    return f"[gateway_internal — not for まー]\ntask: temp_c_stage1\nutterance: {u}\n"
+
+
+def build_temp_c_stage2_task(*, utterance: str, utterance_kind: str) -> str:
+    u = utterance.strip().replace("\n", " ")
+    return (
+        f"[gateway_internal — not for まー]\n"
+        f"task: temp_c_stage2\n"
+        f"utterance_kind: {utterance_kind}\n"
+        f"utterance: {u}\n"
+    )

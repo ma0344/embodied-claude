@@ -218,28 +218,39 @@ class InteractionOrchestratorStore:
         self, payload: RecordInterpretationShiftInput
     ) -> StoredExperience:
         shift_id = f"shft_{uuid.uuid4().hex[:12]}"
-        ts = utc_now()
+        ts = payload.ts or utc_now()
+        from social_core.date_resolution import DEFAULT_TIMEZONE, anchor_relative_dates_in_text
+
+        tz_name = DEFAULT_TIMEZONE
+        old_interpretation, _ = anchor_relative_dates_in_text(
+            payload.old_interpretation, updated_at=ts, tz_name=tz_name
+        )
+        new_interpretation, resolved = anchor_relative_dates_in_text(
+            payload.new_interpretation, updated_at=ts, tz_name=tz_name
+        )
+        resolved_date = resolved.isoformat() if resolved else None
         with self.db.transaction() as conn:
             conn.execute(
                 """
                 INSERT INTO interpretation_shifts(
                     shift_id, ts, person_id, topic,
                     old_interpretation, new_interpretation, trigger,
-                    confidence, implications_json, created_at
+                    confidence, implications_json, created_at, resolved_date
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     shift_id,
                     ts,
                     payload.person_id,
                     payload.topic,
-                    payload.old_interpretation,
-                    payload.new_interpretation,
+                    old_interpretation,
+                    new_interpretation,
                     payload.trigger,
                     payload.confidence,
                     json.dumps(payload.implications, ensure_ascii=False),
                     ts,
+                    resolved_date,
                 ),
             )
         return StoredExperience(experience_id=shift_id, ts=ts)
@@ -263,7 +274,7 @@ class InteractionOrchestratorStore:
         rows = self.db.fetchall(
             f"""
             SELECT shift_id, ts, topic, old_interpretation, new_interpretation,
-                   trigger, confidence
+                   trigger, confidence, resolved_date
             FROM interpretation_shifts
             {clause}
             ORDER BY ts DESC, created_at DESC
@@ -280,6 +291,7 @@ class InteractionOrchestratorStore:
                 new_interpretation=row[4],
                 trigger=row[5],
                 confidence=float(row[6]),
+                resolved_date=row[7],
             )
             for row in rows
         ]

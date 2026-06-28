@@ -8,8 +8,10 @@ from social_core.date_resolution import (
     anchor_relative_dates_in_text,
     anchor_temporal_in_text,
     calendar_anchor_line,
+    deixis_for_day,
     format_jp_date,
     is_resolved_date_stale,
+    relativize_for_as_of,
     resolve_relative_date,
     resolve_this_weekend,
     stale_from_detail_json,
@@ -65,6 +67,25 @@ def test_is_resolved_date_stale_include_today() -> None:
         )
         is True
     )
+
+
+def test_deixis_for_day() -> None:
+    as_of = date(2026, 6, 28)
+    assert deixis_for_day(day=as_of, as_of=as_of) == "今日"
+    assert deixis_for_day(day=date(2026, 6, 29), as_of=as_of) == "明日"
+    assert deixis_for_day(day=date(2026, 6, 27), as_of=as_of) == "昨日"
+    assert deixis_for_day(day=date(2026, 7, 1), as_of=as_of) == "2026年7月1日"
+
+
+def test_relativize_for_as_of_tomorrow_becomes_today() -> None:
+    anchored, _ = anchor_relative_dates_in_text(
+        "明日、角煮を作る",
+        updated_at="2026-06-27T20:00:00+09:00",
+        tz_name="Asia/Tokyo",
+    )
+    surface = relativize_for_as_of(anchored, as_of=date(2026, 6, 28))
+    assert surface.startswith("今日")
+    assert "2026年6月28日" not in surface
 
 
 def test_sunday_start_week_bounds_from_friday() -> None:

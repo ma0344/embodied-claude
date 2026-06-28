@@ -396,6 +396,34 @@ def as_of_date(*, as_of_ts: str, tz_name: str) -> date:
     return dt.astimezone(ZoneInfo(tz_name)).date()
 
 
+_EXPLICIT_JP_DATE_IN_TEXT = re.compile(r"(\d{4})年(\d{1,2})月(\d{1,2})日")
+
+
+def deixis_for_day(*, day: date, as_of: date) -> str:
+    """Map a calendar day to 今日/明日/… relative to *as_of*."""
+    delta = (day - as_of).days
+    labels = {0: "今日", 1: "明日", 2: "明後日", -1: "昨日", -2: "一昨日"}
+    if delta in labels:
+        return labels[delta]
+    return format_jp_date(day)
+
+
+def relativize_for_as_of(text: str, *, as_of: date) -> str:
+    """Replace concrete ``YYYY年M月D日`` spans with deixis relative to *as_of*."""
+    raw = str(text or "")
+    if not raw:
+        return raw
+
+    def _replacer(match: re.Match[str]) -> str:
+        try:
+            day = date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        except ValueError:
+            return match.group(0)
+        return deixis_for_day(day=day, as_of=as_of)
+
+    return _EXPLICIT_JP_DATE_IN_TEXT.sub(_replacer, raw)
+
+
 def calendar_anchor_line(*, ts: str, tz_name: str = DEFAULT_TIMEZONE) -> str:
     """One-line compose anchor: concrete calendar day for the model."""
     day = as_of_date(as_of_ts=ts, tz_name=tz_name)

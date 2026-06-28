@@ -20,6 +20,7 @@
 | **EAR** | 📋 | [tracks/ear.md](./tracks/ear.md) |
 | **VIS** | 💤 | [tracks/vis-health.md](./tracks/vis-health.md) |
 | **GAPI** | ✅ prep-1/2 · 📋 配線要検討 | [tracks/gapi.md](./tracks/gapi.md) · [ops/gapi-setup.md](./ops/gapi-setup.md) |
+| **TEMP** | 🔧 utterance anchoring + 段階分類 POC | [tracks/utterance-anchoring.md](./tracks/utterance-anchoring.md) · [prottypemarkdown.md](../prottypemarkdown.md) |
 | **V / Surface UI 残** | 部分済 | [tracks/surface-vision.md](./tracks/surface-vision.md) |
 | **BIO-8** | ✅ | [heartbeat-loop.md](./architecture/heartbeat-loop.md) § Somatic |
 | **Outbound** | ✅ | [architecture/outbound-channels.md](./architecture/outbound-channels.md) |

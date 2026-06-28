@@ -128,6 +128,7 @@ class InterpretationShiftSummary(BaseModel):
     new_interpretation: str
     trigger: str
     confidence: float = Field(ge=0.0, le=1.0)
+    resolved_date: str | None = None
 
 
 class AgentStateSummary(BaseModel):
@@ -273,6 +274,7 @@ class RecordInterpretationShiftInput(BaseModel):
     trigger: str
     confidence: float = Field(ge=0.0, le=1.0)
     implications: list[str] = Field(default_factory=list)
+    ts: str | None = None
 
 
 class AppendPrivateReflectionInput(BaseModel):

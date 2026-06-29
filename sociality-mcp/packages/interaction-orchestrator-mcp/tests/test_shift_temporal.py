@@ -10,6 +10,7 @@ from interaction_orchestrator_mcp.recall_query import (
 )
 from interaction_orchestrator_mcp.schemas import InterpretationShiftSummary
 from interaction_orchestrator_mcp.shift_temporal import (
+    append_bare_greeting_plan_constraints,
     append_shift_plan_constraints,
     effective_shift_resolved_date,
     filter_injectable_shifts,
@@ -129,6 +130,23 @@ def test_is_schedule_like_shift() -> None:
     schedule = _shift()
     assert not is_schedule_like_shift(policy, tz_name="Asia/Tokyo")
     assert is_schedule_like_shift(schedule, tz_name="Asia/Tokyo")
+
+
+def test_append_bare_greeting_plan_constraints_open_loops() -> None:
+    must_include: list[str] = []
+    must_avoid: list[str] = []
+    append_bare_greeting_plan_constraints(
+        must_include=must_include,
+        must_avoid=must_avoid,
+        open_loop_topics=["お昼→書類", "散歩", "書類15時まで"],
+    )
+    joined = " ".join(must_include)
+    assert "bare greeting" in joined
+    assert "[open_loops]" in joined
+    assert "each open loop" in joined
+    assert "書類15時まで" in joined
+    assert "do NOT volunteer" not in joined
+    assert any("dream_digest" in item for item in must_avoid)
 
 
 def test_append_shift_plan_constraints_compact_policy() -> None:

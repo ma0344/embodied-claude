@@ -14,7 +14,8 @@
 - **OL1c（2026-06-19）**: 日曜始まりの週界 + 曜日 lookup（コードのみ）— `来週の火曜` / `再来週の月曜` / `一週間後` / `N日後` / `来月の頭` / `今週末` / `6月20日` など
 - **OL2（temporal）（2026-06-19）**: `次の{曜}` / `今度の{曜}`（同義・次に来るその曜日）、`来週中` 等の曖昧スパンはアンカーせず `needs_date_confirmation` → compose `[date_confirmation_needed]` / plan `must_include` でまーに聞く。`social_core.ja_timex_bridge`（任意・PoC/ベンチ用）
 - 期限切れ loop は ingest / 自律 tick 前の `close_stale_open_loops` で `status=closed`（アンカー後は `resolved_date` でも判定）
-- **OL5（未）**: 予定消化（作った/できた）でも loop close — [tracks/ol5.md](../tracks/ol5.md)
+- **OL5-a/b**: 予定消化（作った/できた）でも loop close — [tracks/ol5.md](../tracks/ol5.md) ✅
+- **OL5-c / OL6 / OL-STALE**: 📋 計画済 — 同 doc
 - 手動掃除: `scripts/purge-stale-open-loops.py`（共有ロジックは `social_core.date_resolution`）
 
 **横断（2026-06-28）**: open loop 以外の inject（interpretation_shift · dream_digest · memory recall）でも **uttered_at + resolved_date + as_of** が必要 → [tracks/utterance-anchoring.md](../tracks/utterance-anchoring.md)（TEMP）。OL2 の `resolved_date` / stale パターンがテンプレート。
@@ -125,6 +126,73 @@ Gateway: `create_open_loop = utterance_kind == future_commitment && object && ac
 
 ---
 
+## OL-STALE — 日跨ぎで閉じない loop
+
+**状態**: 📋 計画（2026-06-29 合意）  
+**関連**: [ol5.md § OL-STALE](../tracks/ol5.md#ol-stale--日跨ぎで閉じない-loop計画) · [utterance-anchoring.md § TEMP-C4](../tracks/utterance-anchoring.md#temp-c4--open-loop-アンカー計画)
+
+### 現状
+
+`close_stale_open_loops`（ingest / tick 前）は **原則すべての open loop** を対象:
+
+- topic / `detail.resolved_date` からカレンダー日を解決
+- **その日を過ぎたら** `status=closed`（`kind=stale`）
+
+**問題例**:
+
+| loop | 望み | 現状 |
+|------|------|------|
+| 明日の角煮 | 6/29 終了後に stale close | ✅ 意図どおり（TEMP-C4 で `resolved_date` 安定後） |
+| 県に提出する書類（日付なし） | 終わるまで open | stale **効かない** · OL5 も弱い |
+| 来週までの書類 | 来週まで open | 誤って **明日扱い** anchor されると翌日 close — **避けたい** |
+
+### `stale_policy`（案）
+
+loop 作成時または訂正 ingest で `detail_json` に載せる:
+
+| 値 | 意味 | stale | close 経路 |
+|----|------|-------|------------|
+| `default`（省略時） | 単日予定 | ✅ 日跨ぎ close | OL5 · dismiss · OL6 |
+| `until_completed` | 完了まで日跨ぎ OK | ❌ skip | **OL5 / OL6 / dismiss のみ** |
+| `until_date` | 明示期限まで | `stale_after` ISO 日まで skip | 期限日翌日から stale |
+
+### ルート一覧 — 「日跨ぎで終了しないでほしい」とき
+
+| ID | ルート | きっかけ（例） | Stage / 層 | 結果 |
+|----|--------|----------------|------------|------|
+| **OL-STALE-1** | **作成時 — 曖昧スパン** | 「来週中」「そのうち」 | OL2 既存 — `needs_date_confirmation` · loop **作らない or 日付確定まで保留** | stale 問題を未然に防ぐ |
+| **OL-STALE-2** | **作成時 — multi-day 明示** | 「終わるまで覚えて」「日跨いでも」 | Stage2 将来フィールド `persistence: multi_day` または Stage3 ヒューリスティック | `stale_policy=until_completed` |
+| **OL-STALE-3** | **訂正 ingest** | 「書類は明日で終わりじゃない」 | SHIFT-R `correction` → `schedule` / 新 `persistence` ルート | policy 更新 · `resolved_date` クリア or 延長 |
+| **OL-STALE-4** | **dismiss ではない継続** | 「忘れないで」（dismiss 反対） | boundary / rule shift · または OL-STALE-2 と同型 | exempt 付与 |
+| **OL-STALE-5** | **再 anchor** | 「来週の金曜まで」 | correction `schedule` · TEMP anchor | `until_date` + `stale_after` 設定 → その日まで open |
+| **OL-STALE-6** | **手動 / 運用** | DB · script | `detail_json.stale_policy` 直接 · 将来 UI | 緊急用 |
+
+**dismiss（忘れて）との違い**: dismiss = **もう追わない**（closed）。OL-STALE = **追い続けるが日跨ぎでは消さない**。
+
+### close 経路の全体像（計画後）
+
+```
+                    ┌─ OL5-b (past_completion + 固有語+完了語)
+                    ├─ OL5-c (広い completion_verbs)
+open loop ─ close ─┼─ OL6 (pending 確認 →「終わったよ」)
+                    ├─ dismiss / correction dismiss_topic
+                    └─ stale (default policy のみ · resolved_date 翌日)
+                         ↑ until_completed / until_date は skip
+```
+
+### 実装タッチポイント（案）
+
+| 変更 | 場所 |
+|------|------|
+| `stale_policy` 読み取り | `relationship_mcp/store.py` — `close_stale_open_loops` · `apply_ol_gate_decision` |
+| 作成時付与 | `temp_c_staged.py` Stage3 · `merge_ol_gate_gateway` detail |
+| 訂正 | `correction_routing.py` — `schedule` / 新 target `persistence` |
+| compose 表示 | `[open_loops]` に `(ongoing)` 等 — 表層が OL6 確認しやすく |
+
+**TEMP-C4 との関係**: C4 で **単日** loop に `resolved_date` を確実に付ける → **default** の stale が正しく効く。exempt は **意図的に multi-day** なものだけ。
+
+---
+
 ## 残リスク・既知の制限（運用メモ）
 
 | 項目 | 内容 | 対策 |
@@ -135,6 +203,8 @@ Gateway: `create_open_loop = utterance_kind == future_commitment && object && ac
 | **時刻精度** | Windows タスクは **15分間隔**（18:26 → 次 18:41）。`3分後` は最大 ~15分遅れ | presence-ui **reminder watchdog**（既定60秒、`PRESENCE_REMINDER_POLL_SEC`） |
 | **音声（Surface）** | `room_inbound` のみだと SSE 切断時に無音。MCP `say` 経路と別 | `room_say` SSE + **poll フォールバック**（`/api/v1/tts/room-say/pending`） |
 | **当日の相対日** | `明日` loop は **会議当日は open のまま**（`include_today=false`）。当日終了後に auto-close | 当日中に閉じたいときは `purge-stale-open-loops.py --include-today` |
+| **multi-day / 日付なし loop** | stale が効かない or 意図とずれる | **OL-STALE** · **TEMP-C4** — 上記 § OL-STALE |
+| **確認→「終わったよ」** | OL5-b 単体では close しない | **OL6 ✅** — 予定時刻後 **初回会話**で確認 → [ol5.md](../tracks/ol5.md) |
 
 ---
 

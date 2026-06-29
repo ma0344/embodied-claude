@@ -21,7 +21,7 @@ from .schemas import (
     ToneHint,
     VoiceHint,
 )
-from .shift_temporal import append_shift_plan_constraints
+from .shift_temporal import append_bare_greeting_plan_constraints, append_shift_plan_constraints
 
 # Quiet hours: inward desires may still run (private DB / recall only).
 _QUIET_INWARD_DESIRES = frozenset(
@@ -30,6 +30,7 @@ _QUIET_INWARD_DESIRES = frozenset(
 
 _BARE_GREETING_RE = re.compile(
     r"^(?:"
+    r"おはよ(?:う(?:さん|う|ございます)?)?|"
     r"おはよう(?:さん|う|ございます)?|"
     r"こんにちは|こんばんは|"
     r"ただいま|おやすみ|"
@@ -116,7 +117,11 @@ def plan_response(payload: PlanResponseInput) -> ResponsePlan:
         user_text=user_text,
     )
 
-    followup = _pick_followup(primary_move=primary_move, ctx=ctx)
+    followup = _pick_followup(
+        primary_move=primary_move,
+        ctx=ctx,
+        user_text=user_text,
+    )
 
     return ResponsePlan(
         primary_move=primary_move,
@@ -187,6 +192,11 @@ def _pick_primary_move(
         return (
             "stay_silent",
             "Availability signals do_not_interrupt; staying silent avoids social cost.",
+        )
+    if ctx.loops_due_for_check and user_text:
+        return (
+            "answer_directly",
+            "Post-deadline open loop — greet or reply and naturally check if the task is done.",
         )
     if user_text.endswith(("?", "？")) or "どう" in user_text or "教えて" in user_text:
         return (
@@ -402,8 +412,12 @@ def _pick_must_lists(
             "continue THIS room's thread — reference preceding turns in session_history; "
             "do not cold-start or impersonate a different persona"
         )
+    user_stripped = (user_text or "").strip()
+    bare_greeting = _is_bare_greeting(user_stripped)
+    today_open_topics = [loop.topic[:80] for loop in ctx.open_loops if loop.topic.strip()]
+
     if ctx.open_loops and primary_move in {"answer_directly", "write_private_reflection"}:
-        if not schedule_answer:
+        if not schedule_answer and not bare_greeting:
             must_include.append("reference at least one concrete open loop if relevant")
     pending_dates = [loop for loop in ctx.open_loops if loop.needs_date_confirmation]
     if pending_dates and primary_move in {
@@ -419,7 +433,29 @@ def _pick_must_lists(
             "open loop has ambiguous date — ask まー one short question for the "
             f"concrete day (e.g. {samples[0]}); do not infer or anchor yourself"
         )
-    if ctx.agent_state.recent_interpretation_shifts and primary_move != "stay_silent":
+    if (
+        user_stripped
+        and is_temporal_question(user_stripped)
+        and temporal_schedule_contract_enabled()
+        and primary_move in {"answer_directly", "answer_with_empathy"}
+    ):
+        must_avoid.append(
+            "adding schedule items from dream_digest, overnight_inner_voice, "
+            "relevant_memories, or interpretation_shifts unless they appear in [open_loops]"
+        )
+        if today_open_topics:
+            joined = "; ".join(today_open_topics[:6])
+            must_include.append(
+                "temporal schedule question — answer from [open_loops] only: "
+                f"{joined}; do not add ghost items from dream or recall"
+            )
+    if bare_greeting and primary_move != "stay_silent":
+        append_bare_greeting_plan_constraints(
+            must_include=must_include,
+            must_avoid=must_avoid,
+            open_loop_topics=today_open_topics,
+        )
+    elif ctx.agent_state.recent_interpretation_shifts and primary_move != "stay_silent":
         append_shift_plan_constraints(
             must_include=must_include,
             must_avoid=must_avoid,
@@ -498,12 +534,44 @@ def _pick_must_lists(
             must_avoid.append(
                 "meta narration like （記憶を検索中） or pretending to search memory"
             )
+    if (
+        ctx.loops_due_for_check
+        and user_text
+        and primary_move in {"answer_directly", "answer_with_empathy"}
+    ):
+        due = ctx.loops_due_for_check[0]
+        until = due.until_phrase or "deadline passed"
+        prompt = (
+            "OL6 post-deadline loop — naturally ask if this task is done "
+            f"(one short question): {due.topic[:100]} (until {until})"
+        )
+        if bare_greeting:
+            must_include.append(
+                f"{prompt} — weave into the greeting; do not skip the check"
+            )
+        else:
+            must_include.append(prompt)
+        must_avoid.append(
+            "interrogating every open loop — only the post-deadline item above"
+        )
     return must_include, must_avoid
 
 
 def _pick_followup(
-    *, primary_move: PrimaryMove, ctx: InteractionContext
+    *, primary_move: PrimaryMove, ctx: InteractionContext, user_text: str = ""
 ) -> dict[str, Any] | None:
+    if (
+        ctx.loops_due_for_check
+        and user_text
+        and primary_move in {"answer_directly", "answer_with_empathy"}
+    ):
+        due = ctx.loops_due_for_check[0]
+        return {
+            "kind": "loop_check_asked",
+            "loop_id": due.loop_id,
+            "topic": due.topic[:120],
+            "until_phrase": due.until_phrase,
+        }
     if primary_move == "act_autonomously" and ctx.agent_state.dominant_desire:
         return {
             "kind": "satisfy_desire",

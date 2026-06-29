@@ -5,11 +5,13 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
+from typing import Literal
 
 import httpx
 
 from presence_ui.gateway.llm_intent import _extract_json_object, lm_studio_available
 from presence_ui.services.llm import (
+    _lm_classifier_settings,
     _lm_studio_settings,
     _parse_openai_chat_content,
     build_gateway_stable_append,
@@ -72,15 +74,23 @@ def run_classifier_turn(
     temperature: float = 0.35,
     timeout: float | None = None,
     log_label: str = "GW classifier",
+    model_scope: Literal["classifier", "surface"] = "classifier",
 ) -> str | None:
-    """Stateless LM Studio completion (OL-GATE — no SOUL / no session history)."""
+    """Stateless LM Studio completion (OL-GATE — no SOUL / no session history).
+
+    ``model_scope="classifier"`` (default): ``PRESENCE_CLASSIFIER_*`` when set,
+    else same model as surface chat. GW-S1 uses ``model_scope="surface"``.
+    """
     if not lm_studio_available(timeout=2.0):
         logger.warning("%s: LM Studio unavailable", log_label)
         return None
     if timeout is None:
         timeout = float(os.environ.get("PRESENCE_GW_S2_TIMEOUT", "45"))
 
-    base, model, token = _lm_studio_settings()
+    if model_scope == "surface":
+        base, model, token = _lm_studio_settings()
+    else:
+        base, model, token = _lm_classifier_settings()
     messages = [
         {"role": "system", "content": system.strip()},
         {"role": "user", "content": user.strip()},
@@ -138,4 +148,5 @@ def run_silent_internal_turn(
         temperature=temperature,
         timeout=timeout,
         log_label="GW-S1",
+        model_scope="surface",
     )

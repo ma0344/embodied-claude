@@ -37,7 +37,17 @@
 |------|------|
 | B2 自動ロード | 🪦 閉 — 手動 + `check-koyori-stack.ps1` 警告 |
 | Concurrent Predictions | **1**（KV） |
-| 二モデル | Gemma 会話 + Qwen vision（KV 分離） |
+| **いま** | Gemma 12B QAT（表層）+ Qwen2.5-VL-3B（vision）— KV 分離 |
+| **ロードマップ（合意 2026-06-29）** | 表層 12B · **前頭葉 e4b**（classifier）· vision **Qwen → e4b**（POC 後） |
+
+### モデル整理（段階）
+
+```
+Phase 1  12B = 表層 · e4b = Stage1/2 + correction（PRESENCE_CLASSIFIER_*）· Qwen = vision（現状維持）
+Phase 2  vision POC — 同じ /see 画像で e4b vs Qwen 比較 → 合格なら Qwen 退役
+```
+
+前頭葉 POC（e4b Stage1/2）: [prottypemarkdown.md](../../prottypemarkdown.md) · vision POC 合格基準: [vis-health.md](../tracks/vis-health.md) § e4b vision
 
 ---
 

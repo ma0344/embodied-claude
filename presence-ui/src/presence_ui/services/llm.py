@@ -36,6 +36,17 @@ def _lm_studio_settings() -> tuple[str, str, str]:
     return base, model, token
 
 
+def _lm_classifier_settings() -> tuple[str, str, str]:
+    """OL-GATE / Stage1/2 / correction — optional split from surface chat (PFC-1)."""
+    base, surface_model, token = _lm_studio_settings()
+    override_base = os.environ.get("PRESENCE_CLASSIFIER_BASE_URL", "").strip().rstrip("/")
+    override_model = os.environ.get("PRESENCE_CLASSIFIER_MODEL", "").strip()
+    if override_base:
+        base = override_base
+    model = override_model or surface_model
+    return base, model, token
+
+
 def _parse_openai_chat_content(data: dict) -> str | None:
     choices = data.get("choices") or []
     if not choices:

@@ -99,6 +99,7 @@ TEMP_C_STAGE1_SYSTEM = """あなたは会話発話の分類器です。まー（
 | `past_completion` | やり終えた報告 | 角煮、作った / 散歩行ってきた |
 | `past_report` | 過去の出来事 | 昨日、ロバがコケた |
 | `greeting` | 挨拶 | また明日！/ おはよう / またね |
+| `correction` | 訂正・境界・忘れて・違う | 違うみたい / 夜は静かに / 〜の話は忘れていい |
 | `other` | 願望・雑談 | いつも一緒にいたかった |
 
 **注意**: 「また明日」→ `greeting`。「いつも」は予定の when にしない → `other`。完了形（作った・行ってきた）→ `past_completion`。
@@ -122,6 +123,26 @@ TEMP_C_STAGE2_SYSTEM = """あなたは会話発話のイベント分解器です
 4. `certainty` — 「かかりそう」「かも」→ `estimate` · 断定 → `firm` · 不明 → null
 5. `commitment_strength` — 全体のトーン。「感じだね」「かな」→ `tentative` · 断定 → `firm`
 
+**what と action_phrase（重要 — 小モデル向け）**
+
+- `what` = **名詞句・活動名のみ**（入浴介助 / 豚バラ軟骨角煮 / 部屋の掃除）。**動詞を what に入れない**
+- `action_phrase` = **動詞・動作句のみ**（作る / やって / 食べる / 作るよ）。文中に動詞があれば **必ずここに分離**
+- ❌ what=「豚バラ軟骨角煮を作る」, action_phrase=null
+- ✅ what=「豚バラ軟骨角煮」, action_phrase=「作る」
+- `utterance_kind=future_commitment` で **これからやる行為**がある event は、原則 **action_phrase を null にしない**
+- **例外**: 所要時間だけのブロック（入浴介助で15時まで等）で **完了動詞が文中に無い** event は action_phrase=null 可
+- 「作る感じだね」「やる感じ」→ action_phrase=「作る」「やる」（「感じだね」は commitment_strength 側）
+
+**較正例（future_commitment · 必須合格）**
+
+発話: 「今日は入浴介助で15時位までかかりそうだから、帰ってきたらすぐ豚バラ軟骨角煮を作る感じだね。」
+
+期待（参考・そのままコピー不要）:
+{"commitment_strength":"tentative","events":[
+  {"index":0,"what":"入浴介助","when_phrase":"今日","until_phrase":"15時位まで","action_phrase":null,"certainty":"estimate","depends_on":null},
+  {"index":1,"what":"豚バラ軟骨角煮","after_phrase":"帰ってきたら","lag_phrase":"すぐ","action_phrase":"作る","depends_on":0}
+]}
+
 **フィールド**: what, when_phrase, until_phrase, after_phrase, lag_phrase, action_phrase, certainty, depends_on
 
 JSON のみ。markdown フェンス不可。"""
@@ -140,3 +161,37 @@ def build_temp_c_stage2_task(*, utterance: str, utterance_kind: str) -> str:
         f"utterance_kind: {utterance_kind}\n"
         f"utterance: {u}\n"
     )
+
+
+# --- SHIFT-R2 correction routing (Stage 2 after Stage 1 ``correction``) ---
+
+SHIFT_R2_CORRECTION_STAGE2_SYSTEM = """あなたは会話発話の訂正・理解更新分類器です。Stage 1 で utterance_kind=correction と判定された発話を解析し JSON 1 件だけを出力してください。
+
+**correction_target（1 つだけ）**
+
+| 値 | 意味 | 例 |
+|----|------|-----|
+| `world_fact` | 世界・事実の訂正（HP・天気・場所） | 違うみたい。松本市のHPに無いかな |
+| `schedule` | 予定・スケジュールの訂正 | 違う、明日じゃなくて明後日 |
+| `dismiss_topic` | 話題を忘れて・もういい | 松本市HPの話は忘れていい |
+| `boundary` | 静かに・見ないで・プライバシー | 夜は静かにして |
+| `relationship` | 距離感・関係 | しつこい、距離置いて |
+| `rule` | 方針・ルール・ポリシー | ルールは睡眠優先で |
+| `agent_behavior` | エージェントの振る舞い訂正 | そう返すんじゃなくて |
+| `self_model` | 自己理解の更新 | うちはそういう存在じゃない |
+
+**フィールド**
+
+- `canonical_topic`: 短い英語または日本語ラベル（生発話 80 字切り捨て禁止）。例: `quiet hours and presence`
+- `old_interpretation`: エージェントが以前持っていた解釈（推定可・短く）
+- `new_interpretation`: まーの訂正後の解釈（文中の語をベースに）
+- `persists_across_turns`: 以降のターンにも効くなら true（world_fact / dismiss は false）
+- `dismiss_topic_hint`: dismiss_topic のとき loop 照合用の短いキー（null 可）
+- `confidence`: 0.0–1.0
+
+JSON のみ。markdown フェンス不可。"""
+
+
+def build_shift_r2_correction_stage2_task(*, utterance: str) -> str:
+    u = utterance.strip().replace("\n", " ")
+    return f"[gateway_internal — not for まー]\ntask: shift_r2_correction_stage2\nutterance: {u}\n"

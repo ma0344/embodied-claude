@@ -68,6 +68,8 @@ API リクエストだけ非 QAT モデルになることがある。`set-lmstud
 
 **二モデル構成（2026-06〜）:** チャット = `google/gemma-4-12b-qat`、vision = **Qwen2.5-VL-3B** など別ロード。KV キャッシュを分離する。
 
+**ロードマップ（2026-06-29）:** vision を **Qwen → `google/gemma-4-e4b`** に寄せる方向（[vis-health.md](../tracks/vis-health.md) § e4b vision POC）。前頭葉 classifier も e4b。切替前に caption / corrupt 比較必須。
+
 ## SOUL.core — チャットモデルの System Prompt（RP Phase 1）
 
 人格の Deep 層を LM Studio 側に置く。**Vision モデルには貼らない**（チャット用 Gemma のみ）。

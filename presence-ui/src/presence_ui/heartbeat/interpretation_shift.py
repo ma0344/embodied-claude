@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from typing import Literal
 
@@ -15,6 +16,16 @@ from interaction_orchestrator_mcp.schemas import (
 logger = logging.getLogger(__name__)
 
 ShiftKind = Literal["user_correction", "boundary", "relationship", "policy"]
+
+
+def legacy_shift_hook_enabled() -> bool:
+    """SHIFT-R1 — disable regex post-reply shift when ingest correction routing is on."""
+    from presence_ui.gateway.correction_routing import correction_routing_enabled
+
+    if correction_routing_enabled():
+        return False
+    flag = os.environ.get("PRESENCE_SHIFT_LEGACY_HOOK", "1").strip().lower()
+    return flag not in {"0", "false", "no", "off"}
 
 _CORRECTION_CUE = re.compile(
     r"(?:"
@@ -79,6 +90,9 @@ def infer_interpretation_shifts(
     """Heuristic v1 — user correction cues and boundary hints."""
     user = (user_text or "").strip()
     if not user:
+        return []
+
+    if not legacy_shift_hook_enabled():
         return []
 
     has_cue = bool(_CORRECTION_CUE.search(user))

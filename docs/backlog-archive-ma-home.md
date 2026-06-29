@@ -20,7 +20,7 @@
 - **list_open_loops.detail** — OL-GATE when/what/how・`completion_verbs` をデバッグ露出
 - **GW-S1** — LW-READ PAUSE 黙考配線（`gw_silent.py`、hook/felt/next_move、v0 fallback）
 - **LW-READ FSM** — 二重 reflect 防止、`last_reflected_passage_index`、stuck heal
-- **朝 compose** — dream_digest 日付フェンス、bare greeting で shift 再掲抑止
+- **朝 compose** — dream_digest 日付フェンス · stale shift inject 抑止 · **open_loops は挨拶で触れてよい**（幽霊禁止のみ）
 - **docs** — ma-home バックログ slim + tracks/ 索引
 
 ## 2026-06-26

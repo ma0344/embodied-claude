@@ -122,6 +122,37 @@ def is_schedule_like_shift(
     return effective_shift_resolved_date(shift, tz_name=tz_name) is not None
 
 
+def append_bare_greeting_plan_constraints(
+    *,
+    must_include: list[str],
+    must_avoid: list[str],
+    open_loop_topics: list[str] | None = None,
+) -> None:
+    """TEMP-4b — greeting may surface today's [open_loops]; ghost sources forbidden."""
+    must_include.append(
+        "bare greeting — reply briefly (おはよう); [open_loops] is authoritative "
+        "for today's plan when present"
+    )
+    topics = [t.strip() for t in (open_loop_topics or []) if t and t.strip()]
+    if topics:
+        joined = "; ".join(topics[:6])
+        must_include.append(
+            "briefly touch each open loop for today without skipping any: "
+            f"{joined}"
+        )
+    else:
+        must_include.append(
+            "no open loops listed for today — do not invent schedule from dream or memories"
+        )
+    must_avoid.extend(
+        [
+            "dumping schedule from dream_digest, overnight_inner_voice, "
+            "interpretation_shifts, or yesterday's episodes unless also in [open_loops]",
+            "dumping 入浴介助/角煮/予定 from overnight context on a bare おはよう",
+        ]
+    )
+
+
 def append_shift_plan_constraints(
     *,
     must_include: list[str],
@@ -134,7 +165,7 @@ def append_shift_plan_constraints(
     is_temporal_question: Callable[[str], bool],
     temporal_schedule_contract_enabled: Callable[[], bool],
 ) -> None:
-    """TEMP-4 — compact shift guard; schedule body only on temporal questions."""
+    """TEMP-4/4b — compact shift guard; bare greeting handled separately."""
     if not shifts or primary_move == "stay_silent":
         return
 
@@ -142,15 +173,6 @@ def append_shift_plan_constraints(
     user = (user_text or "").strip()
 
     if is_bare_greeting(user):
-        must_include.append(
-            "bare greeting only — reply briefly (おはよう); do NOT recite schedule "
-            "from dream_digest, overnight_inner_voice, or yesterday's episodes; "
-            "do NOT volunteer today's plan unless まー asks; hold interpretation "
-            "shift in background without regurgitating"
-        )
-        must_avoid.append(
-            "dumping 入浴介助/角煮/予定 from overnight context on a bare おはよう"
-        )
         return
 
     topic_label = latest.topic[:60]
@@ -175,7 +197,7 @@ def append_shift_plan_constraints(
             snippet = latest.new_interpretation.strip()[:180]
             if snippet:
                 must_include.append(
-                    "temporal schedule question — if open loops and memories lack "
-                    "a clearer answer, you may state the active interpretation_shift "
-                    f"schedule: {snippet}"
+                    "temporal schedule question — if [open_loops] lacks a clearer answer, "
+                    "you may state the active interpretation_shift schedule: "
+                    f"{snippet}; otherwise use [open_loops] only"
                 )

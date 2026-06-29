@@ -272,7 +272,133 @@ class RelationshipStore:
             text=text,
             ts=ts,
         )
+        ol6_closed = self.try_ol6_pending_close(
+            person_id=person_id,
+            text=text,
+            ts=ts,
+            source_event_id=source_event_id,
+        )
+        if ol6_closed:
+            outcome = outcome.model_copy(
+                update={"closed_loops": [*outcome.closed_loops, *ol6_closed]}
+            )
         return outcome
+
+    def try_ol6_pending_close(
+        self,
+        *,
+        person_id: str,
+        text: str,
+        ts: str,
+        source_event_id: str,
+    ) -> list[str]:
+        """Close loop when pending OL6 check exists and human confirms completion."""
+        from social_core.ol6_check import is_ol6_completion_confirm, is_ol6_completion_denial
+
+        utterance = (text or "").strip()
+        if not utterance:
+            return []
+        rows = self.db.fetchall(
+            """
+            SELECT loop_id, topic, detail_json
+            FROM open_loops
+            WHERE person_id = ? AND status = 'open'
+            ORDER BY updated_at DESC
+            LIMIT 30
+            """,
+            (person_id,),
+        )
+        closed: list[str] = []
+        for row in rows:
+            detail = self._parse_loop_detail(str(row["detail_json"] or ""))
+            pending = detail.get("pending_check")
+            if not isinstance(pending, dict) or not pending.get("asked_at"):
+                continue
+            loop_id = str(row["loop_id"])
+            topic = str(row["topic"])
+            if is_ol6_completion_denial(utterance):
+                self._clear_loop_pending_check(loop_id=loop_id, person_id=person_id)
+                return closed
+            if not is_ol6_completion_confirm(utterance):
+                continue
+            self._close_open_loop(
+                loop_id=loop_id,
+                person_id=person_id,
+                topic=topic,
+                ts=ts,
+                source_event_id=source_event_id,
+                source_text=utterance,
+                close_kind="ol6_completion",
+            )
+            closed.append(topic)
+            return closed
+        return closed
+
+    def mark_loop_check_asked(
+        self,
+        *,
+        loop_id: str,
+        person_id: str,
+        ts: str,
+        topic: str = "",
+        ask_snippet: str = "",
+    ) -> None:
+        """Record that Koyori asked about loop completion (OL6 pending)."""
+        rows = self.db.fetchall(
+            """
+            SELECT detail_json FROM open_loops
+            WHERE loop_id = ? AND person_id = ? AND status = 'open'
+            LIMIT 1
+            """,
+            (loop_id, person_id),
+        )
+        if not rows:
+            return
+        detail = self._parse_loop_detail(str(rows[0]["detail_json"] or ""))
+        snippet = (ask_snippet or topic or "").strip()[:120]
+        detail["check_asked_at"] = ts
+        detail["pending_check"] = {
+            "asked_at": ts,
+            "loop_id": loop_id,
+            "topic_snippet": snippet,
+            "trigger": "post_deadline_first_turn",
+            "expires_after_sec": 3600,
+        }
+        with self.db.transaction() as connection:
+            connection.execute(
+                """
+                UPDATE open_loops
+                SET detail_json = ?, updated_at = ?
+                WHERE loop_id = ? AND person_id = ? AND status = 'open'
+                """,
+                (json.dumps(detail, ensure_ascii=False), ts, loop_id, person_id),
+            )
+
+    def _clear_loop_pending_check(self, *, loop_id: str, person_id: str) -> None:
+        rows = self.db.fetchall(
+            """
+            SELECT detail_json FROM open_loops
+            WHERE loop_id = ? AND person_id = ? AND status = 'open'
+            LIMIT 1
+            """,
+            (loop_id, person_id),
+        )
+        if not rows:
+            return
+        detail = self._parse_loop_detail(str(rows[0]["detail_json"] or ""))
+        pending = detail.get("pending_check")
+        if not isinstance(pending, dict):
+            return
+        detail.pop("pending_check", None)
+        with self.db.transaction() as connection:
+            connection.execute(
+                """
+                UPDATE open_loops
+                SET detail_json = ?
+                WHERE loop_id = ? AND person_id = ? AND status = 'open'
+                """,
+                (json.dumps(detail, ensure_ascii=False), loop_id, person_id),
+            )
 
     def apply_ol_gate_decision(
         self,
@@ -332,14 +458,19 @@ class RelationshipStore:
         topic = loop_topic.strip()
         detail_payload: dict[str, object] = {"kind": "future_task_or_question", **(detail or {})}
         detail_payload["ol_gate"] = True
+        event_block = detail.get("event") if isinstance(detail, dict) else None
+        if isinstance(event_block, dict):
+            until = event_block.get("until_phrase")
+            if until and str(until).strip():
+                detail_payload.setdefault("until_phrase", str(until).strip())
         if terms:
             detail_payload["action_terms"] = terms[:5]
         if verbs:
-            detail_payload["completion_verbs"] = verbs[:5]
+            detail_payload["completion_verbs"] = verbs[:10]
         elif detail:
             seeded = detail.get("completion_verbs")
             if isinstance(seeded, list) and seeded:
-                detail_payload["completion_verbs"] = seeded[:5]
+                detail_payload["completion_verbs"] = seeded[:10]
         if detail_payload.get("resolved_date"):
             pass
         elif detail and detail.get("needs_date_confirmation"):
@@ -347,6 +478,25 @@ class RelationshipStore:
             ambiguous = detail.get("ambiguous_phrases")
             if isinstance(ambiguous, list):
                 detail_payload["ambiguous_phrases"] = ambiguous
+        elif not detail_payload.get("resolved_date"):
+            event_block = detail.get("event") if isinstance(detail, dict) else None
+            temporal_raw = detail_payload.get("temporal_phrase")
+            if not temporal_raw and isinstance(event_block, dict):
+                temporal_raw = event_block.get("effective_when_phrase") or event_block.get(
+                    "when_phrase"
+                )
+            temporal_text = str(temporal_raw or "").strip()
+            if temporal_text and temporal_text not in topic:
+                anchored = anchor_temporal_in_text(
+                    f"{temporal_text} {topic}",
+                    updated_at=ts,
+                    tz_name=timezone,
+                )
+                if not anchored.needs_date_confirmation and anchored.resolved_date is not None:
+                    if anchored.text != topic:
+                        detail_payload.setdefault("original_topic", topic)
+                        topic = anchored.text
+                    detail_payload["resolved_date"] = anchored.resolved_date.isoformat()
 
         today = as_of_date(as_of_ts=ts, tz_name=timezone)
         stale_day = is_stale(topic=topic, updated_at=ts, tz_name=timezone, as_of=today)
@@ -454,6 +604,35 @@ class RelationshipStore:
             closed_loops=closed_loops,
             cancelled_commitments=cancelled_commitments,
         )
+
+    def close_open_loops_matching_topic(
+        self,
+        *,
+        person_id: str,
+        topic_hint: str,
+        ts: str,
+        source_event_id: str,
+        source_text: str,
+    ) -> DismissOutcome:
+        """Close open loops whose topic contains *topic_hint* (SHIFT-R2 dismiss fallback)."""
+        hint = (topic_hint or "").strip().lower()
+        if not hint:
+            return DismissOutcome()
+        closed_loops: list[str] = []
+        for loop in self.list_open_loops(person_id=person_id, limit=20):
+            if hint not in loop.topic.lower():
+                continue
+            self._close_open_loop(
+                loop_id=loop.id,
+                person_id=person_id,
+                topic=loop.topic,
+                ts=ts,
+                source_event_id=source_event_id,
+                source_text=source_text,
+                close_kind="dismissed",
+            )
+            closed_loops.append(loop.topic)
+        return DismissOutcome(closed_loops=closed_loops)
 
     def _close_recall_noise_loops(
         self,
@@ -783,6 +962,8 @@ class RelationshipStore:
         "action_terms",
         "completion_verbs",
         "resolved_date",
+        "until_phrase",
+        "check_asked_at",
         "needs_date_confirmation",
         "ambiguous_phrases",
         "original_topic",

@@ -28,7 +28,7 @@ from presence_ui.gateway.ol_gate_prompts import (
 logger = logging.getLogger(__name__)
 
 VALID_UTTERANCE_KINDS = frozenset(
-    {"future_commitment", "past_completion", "past_report", "greeting", "other"}
+    {"future_commitment", "past_completion", "past_report", "greeting", "correction", "other"}
 )
 _PAST_TEMPORAL_MARKERS = ("昨日", "一昨日", "先週", "先月", "yesterday", "last week")
 _OBJECT_PARTICLE_RE = re.compile(r"[をがはにでと]$")
@@ -264,6 +264,9 @@ def merge_ol_gate_gateway(
         )
 
     loop_topic = parsed.utterance.strip()
+    temporal = _effective_temporal(parsed)
+    if temporal and temporal not in loop_topic:
+        loop_topic = f"{temporal} {loop_topic}".strip()
     anchored_result = anchor_temporal_in_text(loop_topic, updated_at=ts, tz_name=timezone)
     resolved = anchored_result.resolved_date
     create = _is_future_commitment(parsed, resolved_date=resolved, as_of_day=as_of_day)
@@ -386,6 +389,9 @@ async def try_ol_gate_after_ingest(
             )
         return None
     decision = merge_ol_gate_gateway(parsed, ts=ts, timezone=tz)
+    from presence_ui.gateway.ol5_completion_verbs import enrich_decision_completion_verbs
+
+    decision = enrich_decision_completion_verbs(decision)
     stores.relationship.apply_ol_gate_decision(
         person_id=person_id,
         ts=ts,

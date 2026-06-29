@@ -33,6 +33,7 @@ _VALID_EXPERIENCE_KINDS: frozenset[str] = frozenset(
         "desire_satisfied",
         "boundary_respected",
         "open_loop_progress",
+        "loop_check_asked",
     }
 )
 
@@ -94,8 +95,21 @@ def finalize_chat_turn(
         candidate = str(followup.get("experience_kind") or experience_kind)
         if candidate in _VALID_EXPERIENCE_KINDS:
             experience_kind = candidate  # type: ignore[assignment]
+    if followup.get("kind") == "loop_check_asked":
+        experience_kind = "loop_check_asked"
 
     summary = _agent_response_experience_summary(user_text=user_text, reply=reply)
+    artifacts: list[dict] = [{"user_text": user_text[:200], "channel": "native_chat"}]
+    if followup.get("kind") == "loop_check_asked":
+        loop_id = str(followup.get("loop_id") or "")
+        if loop_id:
+            artifacts.append(
+                {
+                    "loop_id": loop_id,
+                    "topic": str(followup.get("topic") or "")[:120],
+                    "until_phrase": str(followup.get("until_phrase") or ""),
+                }
+            )
     try:
         stores.orchestrator.record_agent_experience(
             RecordAgentExperienceInput(
@@ -107,11 +121,25 @@ def finalize_chat_turn(
                 importance=3,
                 privacy_level="relationship",
                 related_event_ids=[],
-                artifacts=[{"user_text": user_text[:200], "channel": "native_chat"}],
+                artifacts=artifacts,
             )
         )
     except Exception as exc:
         logger.warning("record_agent_experience failed: %s", exc)
+
+    if followup.get("kind") == "loop_check_asked":
+        loop_id = str(followup.get("loop_id") or "")
+        if loop_id:
+            try:
+                stores.relationship.mark_loop_check_asked(
+                    loop_id=loop_id,
+                    person_id=person_id,
+                    ts=ts,
+                    topic=str(followup.get("topic") or ""),
+                    ask_snippet=reply[:120],
+                )
+            except Exception as exc:
+                logger.warning("mark_loop_check_asked failed: %s", exc)
 
     if followup.get("kind") == "satisfy_desire":
         desire_name = str(followup.get("desire_name") or "")

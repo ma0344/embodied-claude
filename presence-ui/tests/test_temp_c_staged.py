@@ -54,7 +54,64 @@ def test_inherit_when_from_depends_on() -> None:
     assert events[1].effective_when_phrase == "今日"
 
 
-def test_staged_gateway_creates_loop_only_for_action_event() -> None:
+def test_inherit_when_multihop_and_utterance_fallback() -> None:
+    events = inherit_when_phrases(
+        [
+            StagedEvent(index=0, what="書類作成", until_phrase="15時まで"),
+            StagedEvent(index=1, what="散歩", action_phrase="行く", depends_on=0),
+            StagedEvent(index=2, what="買い物", action_phrase="する", depends_on=1),
+        ],
+        utterance_fallback_when="明日",
+    )
+    assert events[0].effective_when_phrase == "明日"
+    assert events[1].effective_when_phrase == "明日"
+    assert events[2].effective_when_phrase == "明日"
+
+
+def test_temp_c4_child_event_gets_resolved_date_in_loop_topic() -> None:
+    result = StagedClassifyResult(
+        utterance="明日、お昼ご飯を12時ごろ食べた後、県に提出する書類を作るよ",
+        stage1=OlGateParsed(
+            utterance="明日、お昼ご飯を12時ごろ食べた後、県に提出する書類を作るよ",
+            utterance_kind="future_commitment",
+            temporal_phrase="明日",
+            inferred_temporal_phrase=None,
+            temporal_source="explicit",
+            object_phrase=None,
+            action_phrase=None,
+            action_terms=(),
+            completion_verbs=(),
+            ineligibility_reason=None,
+        ),
+        commitment_strength="firm",
+        events=(
+            StagedEvent(
+                index=0,
+                what="お昼ご飯",
+                when_phrase="明日",
+                action_phrase="食べる",
+            ),
+            StagedEvent(
+                index=1,
+                what="県に提出する書類",
+                after_phrase="お昼ご飯を12時ごろ食べた後",
+                action_phrase="作る",
+                depends_on=0,
+            ),
+        ),
+    )
+    decisions = staged_to_gateway_decisions(
+        result, ts="2026-06-28T11:00:00+09:00", timezone="Asia/Tokyo"
+    )
+    assert len(decisions) == 2
+    doc = decisions[1]
+    assert doc.create_open_loop is True
+    assert doc.detail.get("resolved_date") == "2026-06-29"
+    assert "2026年6月29日" in doc.loop_topic
+    assert doc.detail.get("event", {}).get("effective_when_phrase") == "明日"
+
+
+def test_staged_gateway_creates_loops_for_action_and_duration_events() -> None:
     result = StagedClassifyResult(
         utterance="今日は入浴介助…角煮…",
         stage1=OlGateParsed(
@@ -86,7 +143,9 @@ def test_staged_gateway_creates_loop_only_for_action_event() -> None:
         result, ts="2026-06-27T10:00:00+09:00", timezone="Asia/Tokyo"
     )
     assert len(decisions) == 2
-    assert decisions[0].create_open_loop is False
+    assert decisions[0].create_open_loop is True
+    assert "入浴介助" in decisions[0].loop_topic
+    assert "15時" in decisions[0].loop_topic
     assert decisions[1].create_open_loop is True
     assert "角煮" in decisions[1].loop_topic or "豚バラ" in decisions[1].loop_topic
 
@@ -115,6 +174,12 @@ def test_should_create_loop_for_event() -> None:
         utterance_kind="future_commitment",
         event=StagedEvent(index=0, what="入浴介助", when_phrase="今日"),
     ) is False
+    assert should_create_loop_for_event(
+        utterance_kind="future_commitment",
+        event=StagedEvent(
+            index=0, what="書類作成", when_phrase="明日", until_phrase="15時くらいまで"
+        ),
+    ) is True
     assert should_create_loop_for_event(
         utterance_kind="future_commitment",
         event=StagedEvent(index=1, what="角煮", action_phrase="作る"),

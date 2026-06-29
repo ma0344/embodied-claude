@@ -34,6 +34,7 @@ ExperienceKind = Literal[
     "desire_satisfied",
     "boundary_respected",
     "open_loop_progress",
+    "loop_check_asked",
     "body_affliction",
 ]
 
@@ -84,6 +85,17 @@ class OpenLoopSummary(BaseModel):
     updated_at: str | None = None
     needs_date_confirmation: bool = False
     ambiguous_phrases: list[str] = Field(default_factory=list)
+    until_phrase: str | None = None
+    resolved_date: str | None = None
+
+
+class LoopDueForCheck(BaseModel):
+    """Open loop past until deadline — OL6 first-conversation check-in."""
+
+    loop_id: str
+    topic: str
+    until_phrase: str | None = None
+    resolved_date: str | None = None
 
 
 class CommitmentSummary(BaseModel):
@@ -166,6 +178,7 @@ class InteractionContext(BaseModel):
 
     person_model: dict[str, Any] | None = None
     open_loops: list[OpenLoopSummary] = Field(default_factory=list)
+    loops_due_for_check: list[LoopDueForCheck] = Field(default_factory=list)
     commitments_due: list[CommitmentSummary] = Field(default_factory=list)
     suggested_followups: list[FollowupSuggestion] = Field(default_factory=list)
 

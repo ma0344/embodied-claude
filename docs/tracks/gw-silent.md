@@ -368,3 +368,4 @@ messages = [
 - **デバッグ** — `list_open_loops` が `detail`（when/what/how、`completion_verbs`）を返す。
 - **次**: Claude `--resume` 経路（チャット直後 KV 再利用）、OL5 close の ma-home 運用確認。
 - **環境**: `PRESENCE_GW_S1_ENABLED=1`（既定）、`PRESENCE_GW_S1_TIMEOUT=90`、`PRESENCE_GW_S2_ENABLED=1`（本番 ON 時）。
+- **PFC-1（2026-06-29）** — OL-GATE / Stage1/2 / correction は `run_classifier_turn(model_scope="classifier")` → `PRESENCE_CLASSIFIER_MODEL`（未設定なら表層と同じ）。GW-S1 は `model_scope="surface"` で 12B 維持。

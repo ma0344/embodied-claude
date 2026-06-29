@@ -347,6 +347,35 @@ def test_list_open_loops_includes_ol_gate_detail(store):
     assert loops[0].detail.get("action_terms") == ["肉じゃが"]
 
 
+def test_apply_ol_gate_anchors_unanchored_topic_from_temporal_detail(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-25T10:00:00+09:00",
+        source_event_id="evt-anchor",
+        source_text="明日、県に提出する書類を作るよ",
+        create_open_loop=True,
+        try_ol5_close=False,
+        loop_topic="県に提出する書類 作る",
+        action_terms=["県に提出する書類"],
+        completion_verbs=["作った"],
+        detail={
+            "kind": "ol_gate",
+            "utterance_kind": "future_commitment",
+            "temporal_phrase": "明日",
+            "event": {
+                "what": "県に提出する書類",
+                "effective_when_phrase": "明日",
+                "action_phrase": "作る",
+            },
+        },
+    )
+    loops = store.list_open_loops(person_id="ma")
+    assert len(loops) == 1
+    assert loops[0].topic.startswith("2026年6月26日")
+    assert loops[0].detail.get("resolved_date") == "2026-06-26"
+
+
 def test_apply_ol_gate_creates_future_loop(store):
     store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
     store.apply_ol_gate_decision(
@@ -485,3 +514,72 @@ def test_note_human_utterance_skips_rule_loops_when_disabled(store):
         rule_open_loops=False,
     )
     assert store.list_open_loops(person_id="ma") == []
+
+
+def test_ol6_mark_check_and_close_on_short_confirm(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-29T08:00:00+09:00",
+        source_event_id="evt-clean",
+        source_text="今日10時ごろまで部屋の掃除",
+        create_open_loop=True,
+        try_ol5_close=False,
+        loop_topic="2026年6月29日 部屋の掃除 10時ごろまで",
+        action_terms=["掃除"],
+        completion_verbs=["終わった", "片付けた"],
+        detail={
+            "resolved_date": "2026-06-29",
+            "until_phrase": "10時ごろまで",
+        },
+    )
+    loops = store.list_open_loops(person_id="ma")
+    assert len(loops) == 1
+    loop_id = loops[0].id
+    store.mark_loop_check_asked(
+        loop_id=loop_id,
+        person_id="ma",
+        ts="2026-06-29T10:05:00+09:00",
+        topic=loops[0].topic,
+        ask_snippet="掃除、終わった？",
+    )
+    closed = store.try_ol6_pending_close(
+        person_id="ma",
+        text="終わったよ",
+        ts="2026-06-29T10:06:00+09:00",
+        source_event_id="evt-confirm",
+    )
+    assert closed
+    assert store.list_open_loops(person_id="ma") == []
+
+
+def test_ol6_pending_clear_on_denial(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-29T08:00:00+09:00",
+        source_event_id="evt-doc",
+        source_text="書類15時まで",
+        create_open_loop=True,
+        try_ol5_close=False,
+        loop_topic="2026年6月29日 書類 15時まで",
+        action_terms=["書類"],
+        completion_verbs=["提出した"],
+        detail={"resolved_date": "2026-06-29", "until_phrase": "15時まで"},
+    )
+    loop_id = store.list_open_loops(person_id="ma")[0].id
+    store.mark_loop_check_asked(
+        loop_id=loop_id,
+        person_id="ma",
+        ts="2026-06-29T15:05:00+09:00",
+        topic="書類",
+    )
+    assert store.try_ol6_pending_close(
+        person_id="ma",
+        text="まだ",
+        ts="2026-06-29T15:06:00+09:00",
+        source_event_id="evt-deny",
+    ) == []
+    detail = store.list_open_loops(person_id="ma")[0].detail
+    assert "pending_check" not in detail
+    assert detail.get("check_asked_at")

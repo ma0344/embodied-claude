@@ -34,6 +34,7 @@ from .schemas import (
     FollowupSuggestion,
     InteractionContext,
     InterpretationShiftSummary,
+    LoopDueForCheck,
     OpenLoopSummary,
     RecentExperienceRef,
     RelevantMemoryRef,
@@ -78,6 +79,7 @@ def compose_interaction_context(
     person_model = None
     person_name = None
     open_loops: list[OpenLoopSummary] = []
+    loops_due_for_check: list[LoopDueForCheck] = []
     commitments: list[CommitmentSummary] = []
     followups: list[FollowupSuggestion] = []
     if payload.person_id:
@@ -94,12 +96,19 @@ def compose_interaction_context(
                 updated_at=item.get("updated_at"),
                 needs_date_confirmation=bool(item.get("needs_date_confirmation")),
                 ambiguous_phrases=list(item.get("ambiguous_phrases") or []),
+                until_phrase=_open_loop_until_phrase(item),
+                resolved_date=_open_loop_resolved_date(item),
             )
             for item in _optional_list(
                 relationship_store, "list_open_loops", person_id=payload.person_id
             )
             if not _is_noise_open_loop(str(item.get("topic") or ""))
         ]
+        loops_due_for_check = _collect_loops_due_for_check(
+            _optional_list(relationship_store, "list_open_loops", person_id=payload.person_id),
+            as_of_ts=ts,
+            tz_name=policy_timezone,
+        )
         commitments = [
             CommitmentSummary(
                 commitment_id=item.get("commitment_id") or item.get("id", ""),
@@ -232,6 +241,7 @@ def compose_interaction_context(
         desires=desires,
         discomforts=discomforts,
         open_loops=open_loops,
+        loops_due_for_check=loops_due_for_check,
         commitments_due=commitments,
         recent_shifts=recent_shifts,
         recent_experiences=recent_experiences,
@@ -253,6 +263,7 @@ def compose_interaction_context(
         boundary_hints=boundary_hints,
         person_model=person_model,
         open_loops=open_loops,
+        loops_due_for_check=loops_due_for_check,
         commitments_due=commitments,
         suggested_followups=followups,
         self_summary=self_summary_dict,
@@ -674,6 +685,75 @@ def _commitment_delivery(item: dict[str, Any]) -> str:
     return "nudge_only" if delivery == "nudge_only" else "say"
 
 
+def _open_loop_detail(item: dict[str, Any]) -> dict[str, Any]:
+    detail = item.get("detail")
+    return detail if isinstance(detail, dict) else {}
+
+
+def _open_loop_until_phrase(item: dict[str, Any]) -> str | None:
+    from social_core.ol6_check import extract_until_phrase
+
+    detail = _open_loop_detail(item)
+    until = extract_until_phrase(detail=detail, topic=str(item.get("topic") or ""))
+    return until or None
+
+
+def _open_loop_resolved_date(item: dict[str, Any]) -> str | None:
+    detail = _open_loop_detail(item)
+    raw = detail.get("resolved_date")
+    return str(raw) if raw else None
+
+
+def _collect_loops_due_for_check(
+    items: list[dict[str, Any]],
+    *,
+    as_of_ts: str,
+    tz_name: str,
+) -> list[LoopDueForCheck]:
+    from social_core.ol6_check import extract_until_phrase, loop_due_for_check
+
+    due: list[LoopDueForCheck] = []
+    for item in items:
+        topic = str(item.get("topic") or "")
+        if _is_noise_open_loop(topic):
+            continue
+        detail = _open_loop_detail(item)
+        if not loop_due_for_check(
+            detail=detail,
+            topic=topic,
+            as_of_ts=as_of_ts,
+            tz_name=tz_name,
+        ):
+            continue
+        loop_id = str(item.get("loop_id") or item.get("id") or "")
+        if not loop_id:
+            continue
+        due.append(
+            LoopDueForCheck(
+                loop_id=loop_id,
+                topic=topic,
+                until_phrase=extract_until_phrase(detail=detail, topic=topic),
+                resolved_date=_open_loop_resolved_date(item),
+            )
+        )
+    return due[:1]
+
+
+def _format_loops_due_for_check_section(
+    loops: list[LoopDueForCheck], *, max_items: int = 1
+) -> list[str]:
+    if not loops:
+        return []
+    lines = ["[loops_due_for_check]"]
+    for loop in loops[:max_items]:
+        until = loop.until_phrase or "deadline passed"
+        lines.append(
+            f"- loop_id={loop.loop_id} | {loop.topic[:100]} | until {until} "
+            "— gently ask if done (one short natural question)"
+        )
+    return lines
+
+
 def _format_open_loops_section(
     open_loops: list[OpenLoopSummary], *, max_items: int = 3
 ) -> list[str]:
@@ -830,6 +910,7 @@ def _compact_block(
     desires: dict[str, Any] | None = None,
     discomforts: dict[str, Any] | None = None,
     open_loops: list[OpenLoopSummary] | None = None,
+    loops_due_for_check: list[LoopDueForCheck] | None = None,
     commitments_due: list[CommitmentSummary] | None = None,
     recent_shifts: list[InterpretationShiftSummary] | None = None,
     recent_experiences: list[RecentExperienceRef] | None = None,
@@ -895,6 +976,7 @@ def _compact_block(
             discomforts=discomforts or {},
         ),
         *_format_open_loops_section(open_loops or []),
+        *_format_loops_due_for_check_section(loops_due_for_check or []),
         *_format_date_confirmation_section(open_loops or []),
         *_format_commitments_due_section(commitments_due or []),
         *_format_shifts_section(recent_shifts or []),

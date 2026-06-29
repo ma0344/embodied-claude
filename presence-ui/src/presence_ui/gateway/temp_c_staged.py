@@ -7,6 +7,14 @@ import os
 from dataclasses import dataclass, replace
 
 from presence_ui.deps import PresenceStores
+from presence_ui.gateway.correction_routing import (
+    CorrectionParsed,
+    correction_routing_enabled,
+    route_correction,
+    run_correction_stage2,
+    should_run_correction_stage2,
+    promote_correction_kind_if_cued,
+)
 from presence_ui.gateway.gw_silent import run_classifier_turn
 from presence_ui.gateway.llm_intent import _extract_json_object
 from presence_ui.gateway.ol_gate import (
@@ -14,6 +22,7 @@ from presence_ui.gateway.ol_gate import (
     OlGateParsed,
     merge_ol_gate_gateway,
 )
+from presence_ui.gateway.ol5_completion_verbs import enrich_decision_completion_verbs
 from presence_ui.gateway.ol_gate_prompts import (
     TEMP_C_STAGE1_SYSTEM,
     TEMP_C_STAGE2_SYSTEM,
@@ -24,9 +33,16 @@ from presence_ui.gateway.ol_gate_prompts import (
 logger = logging.getLogger(__name__)
 
 STAGE1_KINDS = frozenset(
-    {"future_commitment", "past_completion", "past_report", "greeting", "other"}
+    {
+        "future_commitment",
+        "past_completion",
+        "past_report",
+        "greeting",
+        "correction",
+        "other",
+    }
 )
-STAGE2_KINDS = frozenset({"future_commitment", "past_completion", "past_report"})
+STAGE2_EVENTS_KINDS = frozenset({"future_commitment", "past_completion", "past_report"})
 MAX_EVENTS = 4
 
 
@@ -72,6 +88,7 @@ class StagedClassifyResult:
     stage1: OlGateParsed
     commitment_strength: str | None
     events: tuple[StagedEvent, ...]
+    correction: CorrectionParsed | None = None
 
 
 def parse_stage1_response(text: str, *, fallback_utterance: str = "") -> OlGateParsed | None:
@@ -163,23 +180,41 @@ def parse_stage2_response(
     return strength, tuple(inherit_when_phrases(events))
 
 
-def inherit_when_phrases(events: list[StagedEvent]) -> list[StagedEvent]:
-    """G6 — child event inherits when_phrase from depends_on parent."""
+def inherit_when_phrases(
+    events: list[StagedEvent],
+    *,
+    utterance_fallback_when: str | None = None,
+) -> list[StagedEvent]:
+    """G6 — inherit when_phrase via depends_on chain; utterance-level fallback (TEMP-C4)."""
     by_index = {event.index: event for event in events}
+    fallback = (utterance_fallback_when or "").strip() or None
+
+    def resolve_when(event: StagedEvent, *, visiting: set[int]) -> str | None:
+        if event.when_phrase:
+            return event.when_phrase
+        if event.depends_on is not None and event.depends_on not in visiting:
+            parent = by_index.get(event.depends_on)
+            if parent is not None:
+                visiting.add(event.index)
+                if parent.effective_when_phrase:
+                    return parent.effective_when_phrase
+                inherited = resolve_when(parent, visiting=visiting)
+                if inherited:
+                    return inherited
+        return fallback
+
     out: list[StagedEvent] = []
     for event in events:
         effective = event.when_phrase
-        if effective is None and event.depends_on is not None:
-            parent = by_index.get(event.depends_on)
-            if parent is not None:
-                effective = parent.when_phrase or parent.effective_when_phrase
+        if effective is None:
+            effective = resolve_when(event, visiting=set())
         out.append(replace(event, effective_when_phrase=effective))
     return out
 
 
 def should_run_stage2(stage1: OlGateParsed) -> bool:
-    """G1 — greeting / other must not call Stage 2."""
-    return stage1.utterance_kind in STAGE2_KINDS
+    """G1 — greeting / other / correction must not call events Stage 2."""
+    return stage1.utterance_kind in STAGE2_EVENTS_KINDS
 
 
 def event_to_topic(event: StagedEvent) -> str:
@@ -232,10 +267,10 @@ def should_create_loop_for_event(
     utterance_kind: str,
     event: StagedEvent,
 ) -> bool:
-    """POC policy — OL for actionable future events (e.g. 角煮), skip duration-only blocks."""
+    """Open loop for future actions or duration blocks (until_phrase set)."""
     if utterance_kind != "future_commitment":
         return False
-    return bool(event.action_phrase)
+    return bool(event.action_phrase or event.until_phrase)
 
 
 def run_staged_classify(*, utterance: str) -> StagedClassifyResult | None:
@@ -249,6 +284,20 @@ def run_staged_classify(*, utterance: str) -> StagedClassifyResult | None:
     stage1 = parse_stage1_response(raw1 or "", fallback_utterance=utterance)
     if stage1 is None:
         return None
+    stage1 = promote_correction_kind_if_cued(stage1, utterance=utterance)
+
+    correction: CorrectionParsed | None = None
+    if correction_routing_enabled() and should_run_correction_stage2(
+        utterance_kind=stage1.utterance_kind
+    ):
+        correction = run_correction_stage2(utterance=utterance)
+        return StagedClassifyResult(
+            utterance=utterance,
+            stage1=stage1,
+            commitment_strength=None,
+            events=(),
+            correction=correction,
+        )
 
     if not should_run_stage2(stage1):
         return StagedClassifyResult(
@@ -297,8 +346,14 @@ def staged_to_gateway_decisions(
     if not result.events:
         return [merge_ol_gate_gateway(result.stage1, ts=ts, timezone=timezone)]
 
+    fallback_when = result.stage1.temporal_phrase or result.stage1.inferred_temporal_phrase
+    events = inherit_when_phrases(
+        list(result.events),
+        utterance_fallback_when=fallback_when,
+    )
+
     decisions: list[OlGateGatewayDecision] = []
-    for event in result.events:
+    for event in events:
         parsed = event_to_parsed(
             utterance=result.utterance,
             utterance_kind=kind,
@@ -328,6 +383,8 @@ def staged_to_gateway_decisions(
             "certainty": event.certainty,
             "depends_on": event.depends_on,
         }
+        if event.until_phrase and str(event.until_phrase).strip():
+            detail["until_phrase"] = str(event.until_phrase).strip()
         decisions.append(replace(decision, detail=detail))
     return decisions
 
@@ -342,8 +399,24 @@ def apply_staged_decisions(
     result: StagedClassifyResult,
     timezone: str,
 ) -> list[OlGateGatewayDecision]:
+    if (
+        correction_routing_enabled()
+        and result.stage1.utterance_kind == "correction"
+        and result.correction is not None
+    ):
+        route_correction(
+            stores,
+            person_id=person_id,
+            text=text,
+            ts=ts,
+            source_event_id=source_event_id,
+            parsed=result.correction,
+        )
+        return []
+
     decisions = staged_to_gateway_decisions(result, ts=ts, timezone=timezone)
     for decision in decisions:
+        decision = enrich_decision_completion_verbs(decision)
         stores.relationship.apply_ol_gate_decision(
             person_id=person_id,
             ts=ts,

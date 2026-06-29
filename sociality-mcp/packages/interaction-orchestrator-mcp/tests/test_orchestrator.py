@@ -8,6 +8,7 @@ from interaction_orchestrator_mcp.schemas import (
     AppendPrivateReflectionInput,
     ComposeInteractionContextInput,
     ComposePrivateLetterInput,
+    LoopDueForCheck,
     PlanResponseInput,
     RecordAgentExperienceInput,
     RecordInterpretationShiftInput,
@@ -209,9 +210,28 @@ class TestRecord:
             PlanResponseInput(interaction_context=ctx, user_text="おはようさん")
         )
         joined = " ".join(plan.must_include)
-        assert "bare greeting only" in joined
-        assert "do NOT recite schedule" in joined
+        assert "bare greeting" in joined
+        assert "[open_loops]" in joined
+        assert "do NOT volunteer" not in joined
         assert "今日は入浴介助" not in joined
+
+    def test_ol6_plan_post_deadline_check(self, stores):
+        ctx = _compose(stores, user_text="おはようさん")
+        due = LoopDueForCheck(
+            loop_id="loop_test",
+            topic="2026年6月29日 部屋の掃除 10時ごろまで",
+            until_phrase="10時ごろまで",
+            resolved_date="2026-06-29",
+        )
+        ctx = ctx.model_copy(update={"loops_due_for_check": [due]})
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text="おはようさん")
+        )
+        joined = " ".join(plan.must_include)
+        assert "OL6 post-deadline" in joined
+        assert plan.followup_action is not None
+        assert plan.followup_action["kind"] == "loop_check_asked"
+        assert plan.followup_action["loop_id"] == "loop_test"
 
     def test_record_interpretation_shift_anchors_today(self, stores):
         stores["orchestrator"].record_interpretation_shift(

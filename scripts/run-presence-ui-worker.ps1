@@ -20,6 +20,12 @@ if (-not (Test-Path $PresenceDir)) {
 
 New-Item -ItemType Directory -Force -Path (Split-Path $LogFile -Parent) | Out-Null
 
+$Rotated = Rotate-PresenceUiLogIfLarge -LogFile $LogFile
+if ($Rotated) {
+    $mb = [math]::Round($Rotated.PreviousBytes / 1MB, 1)
+    Write-Host "rotated presence-ui.log (${mb} MB) -> $($Rotated.Archive)"
+}
+
 function Write-Log([string]$Message) {
     $line = "{0:yyyy-MM-dd HH:mm:ss} {1}" -f (Get-Date), $Message
     Add-Content -Path $LogFile -Value $line -Encoding utf8

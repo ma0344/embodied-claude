@@ -6,7 +6,13 @@ from unittest.mock import MagicMock
 
 from interaction_orchestrator_mcp.schemas import InteractionContext, ResponseContract, ResponsePlan
 
-from presence_ui.heartbeat.interpretation_shift import infer_interpretation_shifts, record_interpretation_shifts
+from presence_ui.heartbeat.interpretation_shift import (
+    build_shift_new_interpretation,
+    compact_reply_acknowledgment,
+    infer_interpretation_shifts,
+    record_interpretation_shifts,
+    strip_acknowledged_cheerleader_suffix,
+)
 
 
 def _ctx(*, boundary_hints: list[str] | None = None) -> InteractionContext:
@@ -79,6 +85,40 @@ def test_infer_shift_skips_compose_policy_boundary_hints_only() -> None:
         plan=_plan(),
     )
     assert shifts == []
+
+
+def test_build_shift_new_interpretation_strips_cheerleader() -> None:
+    user = (
+        "今日は入浴介助で15時位までかかりそう。"
+        "帰ってきたら豚バラ軟骨角煮を作る。松本市HPの話は忘れていい。"
+    )
+    reply = (
+        "そっか、今日は15時くらいまで入浴介助やね。無理せんと休みながら頑張ってな。\n\n"
+        "帰ってきたらすぐ角煮作るんやね！楽しみやなぁ。\n\n"
+        "また何かあったら、いつでも言うてな。応援してるで！"
+    )
+    stored = build_shift_new_interpretation(user, reply)
+    assert "応援してる" not in stored
+    assert "楽しみ" not in stored
+    assert "入浴介助" in stored
+    assert "→ ack:" in stored
+
+
+def test_compact_reply_acknowledgment_keeps_first_ack_only() -> None:
+    reply = "了解、松本市HPのことはもう気にせん。応援してるで！"
+    facts = compact_reply_acknowledgment(reply)
+    assert "了解" in facts
+    assert "応援" not in facts
+
+
+def test_strip_acknowledged_cheerleader_suffix_deletes_polluted() -> None:
+    polluted = "今日は入浴介助 → acknowledged: そっか、頑張ってな。応援してるで！"
+    assert strip_acknowledged_cheerleader_suffix(polluted) is None
+
+
+def test_strip_acknowledged_cheerleader_suffix_keeps_user_part() -> None:
+    clean = "夜は静かに → acknowledged: わかった、夜は声出さへん"
+    assert strip_acknowledged_cheerleader_suffix(clean) == "夜は静かに"
 
 
 def test_record_interpretation_shifts_dedupes() -> None:

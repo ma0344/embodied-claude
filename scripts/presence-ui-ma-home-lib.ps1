@@ -9,6 +9,28 @@ function Get-PresenceUiLogFile {
     Join-Path $env:USERPROFILE ".config\embodied-claude\logs\presence-ui.log"
 }
 
+function Rotate-PresenceUiLogIfLarge {
+    param(
+        [string]$LogFile = $(Get-PresenceUiLogFile),
+        [long]$MaxBytes = $(if ($env:PRESENCE_UI_LOG_MAX_BYTES) { [long]$env:PRESENCE_UI_LOG_MAX_BYTES } else { 32MB })
+    )
+
+    if (-not (Test-Path $LogFile)) {
+        return $null
+    }
+    $Length = (Get-Item $LogFile).Length
+    if ($Length -le $MaxBytes) {
+        return $null
+    }
+    $Archive = "$LogFile.$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+    Move-Item -LiteralPath $LogFile -Destination $Archive -Force
+    New-Item -ItemType File -Path $LogFile -Force | Out-Null
+    return @{
+        Archive = $Archive
+        PreviousBytes = $Length
+    }
+}
+
 function Get-PresenceUiUrl {
     param([string]$Port = $(if ($env:PRESENCE_UI_PORT) { $env:PRESENCE_UI_PORT } else { "8090" }))
     "http://localhost:${Port}/"

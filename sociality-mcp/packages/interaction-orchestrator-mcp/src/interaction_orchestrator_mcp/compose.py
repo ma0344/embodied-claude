@@ -438,6 +438,8 @@ def _pick_contract(
                 "breaking character into neutral chatbot",
                 "pretending to remember unsupported facts",
                 "meta comments about TTS or using tools",
+                "closing cheerleading every turn (応援してるで, 楽しみにしてるで, "
+                "頑張ってね as default sign-off)",
             ],
             prefer=[
                 "soft Kansai casual (うち / タメ口) per SOUL.md",

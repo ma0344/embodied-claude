@@ -14,6 +14,23 @@ from presence_ui.gateway.gw_silent import gw_after_chat_enabled, gw_s1_claude_en
 logger = logging.getLogger(__name__)
 
 
+def _reflect_post_chat_in_worker(
+    *,
+    person_id: str,
+    ctx: InteractionContext,
+    plan: ResponsePlan,
+):
+    """Run PAUSE reflect on the worker thread (SQLite via thread-local get_stores)."""
+    from presence_ui.gateway.direct_actions import reflect_on_aozora_passage_direct
+
+    return reflect_on_aozora_passage_direct(
+        get_stores(),
+        person_id=person_id,
+        ctx=ctx,
+        plan=plan,
+    )
+
+
 async def run_post_chat_internal_turn(
     *,
     session_id: str,
@@ -35,13 +52,10 @@ async def run_post_chat_internal_turn(
     if state.phase != "pause" or not passage_needs_reflect(state):
         return
 
-    from presence_ui.gateway.direct_actions import reflect_on_aozora_passage_direct
-
     resume_ctx = ctx.model_copy(update={"session_id": sid})
     try:
         outcome = await asyncio.to_thread(
-            reflect_on_aozora_passage_direct,
-            get_stores(),
+            _reflect_post_chat_in_worker,
             person_id=person_id,
             ctx=resume_ctx,
             plan=plan,

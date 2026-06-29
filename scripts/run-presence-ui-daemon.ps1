@@ -28,6 +28,12 @@ function Write-Log([string]$Message) {
     Write-Host $line
 }
 
+$Rotated = Rotate-PresenceUiLogIfLarge -LogFile $LogFile
+if ($Rotated) {
+    $mb = [math]::Round($Rotated.PreviousBytes / 1MB, 1)
+    Write-Log "rotated presence-ui.log (${mb} MB) -> $($Rotated.Archive)"
+}
+
 Write-Log "daemon start repo=$Repo port=$Port backend=$BackendPort"
 
 while ($true) {

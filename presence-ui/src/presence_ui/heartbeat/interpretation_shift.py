@@ -27,6 +27,76 @@ def legacy_shift_hook_enabled() -> bool:
     flag = os.environ.get("PRESENCE_SHIFT_LEGACY_HOOK", "1").strip().lower()
     return flag not in {"0", "false", "no", "off"}
 
+_ACK_MARKERS = ("わかった", "了解", "覚え", "守る", "気をつけ", "そっか", "そうやね", "そうなん", "OK")
+
+_CHEERLEADER_RE = re.compile(
+    r"(?:"
+    r"応援して|楽しみ(?:にして|や)|頑張って|いつでも言うて|何か(?:手伝|あったら)|"
+    r"お疲れさ|無理せんと|適度に休|根詰めしすぎ|ペースで進め|ずっと応援"
+    r")"
+)
+
+
+def _split_sentences(text: str) -> list[str]:
+    parts = re.split(r"(?<=[。！？\n])", text or "")
+    return [part.strip() for part in parts if part and part.strip()]
+
+
+def _is_cheerleader_sentence(sentence: str) -> bool:
+    return bool(_CHEERLEADER_RE.search(sentence))
+
+
+def compact_reply_acknowledgment(reply_text: str, *, max_len: int = 100) -> str:
+    """Drop cheerleader sign-offs; keep the first factual ack sentence if any."""
+    reply = (reply_text or "").strip()
+    if not reply:
+        return ""
+    kept: list[str] = []
+    for sentence in _split_sentences(reply):
+        if _is_cheerleader_sentence(sentence):
+            continue
+        if any(marker in sentence for marker in _ACK_MARKERS) or not kept:
+            kept.append(sentence)
+        if len(kept) >= 2:
+            break
+    if not kept:
+        return ""
+    joined = " ".join(kept).strip()
+    return joined[:max_len].strip()
+
+
+def build_shift_new_interpretation(user_text: str, reply_text: str) -> str:
+    """Facts from ma's correction — not the agent's cheerleader closing."""
+    user = (user_text or "").strip()
+    if not user:
+        return ""
+    base = user[:200]
+    reply = (reply_text or "").strip()
+    if not reply:
+        return user[:400]
+    if not any(marker in reply for marker in _ACK_MARKERS):
+        return user[:400]
+    facts = compact_reply_acknowledgment(reply)
+    if not facts:
+        return base
+    return f"{base} → ack: {facts}"
+
+
+def strip_acknowledged_cheerleader_suffix(new_interpretation: str) -> str | None:
+    """Return sanitized new_interpretation, or None if row should be deleted."""
+    text = (new_interpretation or "").strip()
+    if not text:
+        return None
+    if "→ acknowledged:" not in text and "→ ack:" not in text:
+        if _CHEERLEADER_RE.search(text):
+            return None
+        return text
+    if _CHEERLEADER_RE.search(text):
+        return None
+    user_part = re.split(r"\s*→\s*(?:ack(?:nowledged)?(?:\s*:)?\s*)", text, maxsplit=1)[0].strip()
+    return user_part[:400] if user_part else None
+
+
 _CORRECTION_CUE = re.compile(
     r"(?:"
     r"違う|そうじゃない|それは違|間違って|忘れて|やめて|しないで|"
@@ -35,6 +105,7 @@ _CORRECTION_CUE = re.compile(
     r")",
     re.IGNORECASE,
 )
+
 
 _TOPIC_RULES: list[tuple[ShiftKind, re.Pattern[str], str]] = [
     (
@@ -103,11 +174,7 @@ def infer_interpretation_shifts(
     boundary_hints = list(ctx.boundary_hints) if ctx else []
     kind, topic = _topic_for(user)
 
-    new_text = user[:400]
-    if reply_text.strip():
-        reply = reply_text.strip()
-        if any(marker in reply for marker in ("わかった", "了解", "覚え", "守る", "気をつけ")):
-            new_text = f"{user[:200]} → acknowledged: {reply[:180]}"
+    new_text = build_shift_new_interpretation(user, reply_text)
 
     confidence = 0.72
     if has_cue:

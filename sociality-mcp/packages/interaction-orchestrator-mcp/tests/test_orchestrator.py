@@ -722,6 +722,7 @@ class TestPlan:
         )
         joined = " ".join(plan.must_avoid)
         assert "generic assistant tone" in joined
+        assert "cheerleading" in joined
 
     def test_plan_somatic_pending_in_must_include(self, stores):
         ctx = _compose(stores, user_text="please help")

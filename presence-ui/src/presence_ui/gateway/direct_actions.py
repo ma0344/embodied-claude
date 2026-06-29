@@ -838,7 +838,7 @@ async def observe_room_direct(
         summary = f"{summary}（{len(captures)} angles）"
     from presence_ui.services.somatic import maybe_record_eye_affliction, maybe_record_eye_ok
 
-    remedy = "qwen_reload" if vision.vision_reloaded else None
+    remedy = "vision_reload" if vision.vision_reloaded else None
     affliction = maybe_record_eye_affliction(
         stores,
         person_id=person_id,
@@ -1312,7 +1312,7 @@ async def look_preset_direct(
     summary = observation_summary_from_vision(vision)
     from presence_ui.services.somatic import maybe_record_eye_affliction, maybe_record_eye_ok
 
-    remedy = "qwen_reload" if vision.vision_reloaded else None
+    remedy = "vision_reload" if vision.vision_reloaded else None
     affliction = maybe_record_eye_affliction(
         stores,
         person_id=person_id,

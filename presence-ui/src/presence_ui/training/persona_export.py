@@ -77,6 +77,8 @@ class PersonaTrainingExample:
     user: str
     assistant: str
     line_no: int
+    kind: str | None = None
+    source: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,6 +334,8 @@ def load_persona_jsonl(path: Path) -> list[PersonaTrainingExample]:
                     user=_message_content(messages, "user"),
                     assistant=_message_content(messages, "assistant"),
                     line_no=line_no,
+                    kind=str(record.get("kind") or "") or None,
+                    source=str(record.get("source") or "") or None,
                 )
             )
     return examples

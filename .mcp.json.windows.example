@@ -83,7 +83,7 @@
         "WIFI_CAM_VISION_DESCRIBE": "true",
         "ANTHROPIC_BASE_URL": "http://127.0.0.1:1234",
         "CLAUDE_MODEL": "google/gemma-4-12b-qat",
-        "LM_STUDIO_VISION_MODEL": "qwen/qwen2.5-vl-3b-instruct"
+        "LM_STUDIO_VISION_MODEL": "google/gemma-4-e4b"
       }
     },
     "usb-webcam": {

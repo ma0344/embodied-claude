@@ -46,6 +46,16 @@ def _set_capture_failure(msg: str) -> None:
     _capture_backoff_until = time.monotonic() + _BACKOFF_SECONDS
 
 
+def _clear_camera_failure() -> None:
+    global _camera_last_failure
+    _camera_last_failure = None
+
+
+def _record_camera_failure(msg: str) -> None:
+    global _camera_last_failure
+    _camera_last_failure = msg
+
+
 def _in_capture_backoff() -> bool:
     return time.monotonic() < _capture_backoff_until
 
@@ -69,8 +79,7 @@ async def camera_move(direction: str, degrees: int = 30) -> tuple[bool, str]:
             camera = await _get_camera()
             move = await asyncio.wait_for(camera.move(move_dir, degrees), timeout=15.0)
             if move.success:
-                global _camera_last_failure
-                _camera_last_failure = None
+                _clear_camera_failure()
                 return True, move.message
             return False, move.message
         except TimeoutError:
@@ -148,7 +157,7 @@ async def camera_go_to_preset(preset_id: str) -> tuple[bool, str]:
             if not move.success:
                 return False, move.message
             await asyncio.sleep(_PRESET_SETTLE_SECONDS)
-            _camera_last_failure = None
+            _clear_camera_failure()
             return True, move.message
         except Exception as exc:
             msg = str(exc) or type(exc).__name__
@@ -174,7 +183,11 @@ async def capture_for_mode(mode: SeeMode, *, save_to_file: bool | None = None) -
         save_to_file = _camera_save_to_disk()
 
     if mode == "window":
-        from presence_ui.services.usb_camera import capture_usb_frame, usb_camera_enabled
+        from presence_ui.services.usb_camera import (
+            capture_usb_frame,
+            resolved_usb_camera_label,
+            usb_camera_enabled,
+        )
 
         if usb_camera_enabled():
             try:
@@ -182,7 +195,7 @@ async def capture_for_mode(mode: SeeMode, *, save_to_file: bool | None = None) -
                 return CaptureOutcome(
                     ok=True,
                     capture=capture,
-                    view_label="外 (USB webcam)",
+                    view_label=f"外 (USB: {resolved_usb_camera_label()})",
                 )
             except Exception as exc:
                 msg = str(exc) or type(exc).__name__
@@ -230,13 +243,13 @@ async def capture_for_mode(mode: SeeMode, *, save_to_file: bool | None = None) -
                     timeout=float(os.getenv("PRESENCE_CAMERA_LOOKAROUND_TIMEOUT_SECONDS", "45")),
                 )
                 if not captures:
-                    _camera_last_failure = "look_around returned no captures"
+                    _record_camera_failure("look_around returned no captures")
                     return CaptureOutcome(
                         ok=False,
                         error=_camera_last_failure,
                         view_label="room scan",
                     )
-                _camera_last_failure = None
+                _clear_camera_failure()
                 return CaptureOutcome(
                     ok=True,
                     capture=captures[0],
@@ -245,7 +258,7 @@ async def capture_for_mode(mode: SeeMode, *, save_to_file: bool | None = None) -
                 )
 
             result = await _capture_raw(save_to_file=save_to_file)
-            _camera_last_failure = None
+            _clear_camera_failure()
             return CaptureOutcome(
                 ok=True,
                 capture=result,
@@ -349,10 +362,9 @@ async def camera_look_around() -> list:
                 timeout=float(os.getenv("PRESENCE_CAMERA_LOOKAROUND_TIMEOUT_SECONDS", "45")),
             )
             if captures:
-                global _camera_last_failure
-                _camera_last_failure = None
+                _clear_camera_failure()
             else:
-                _camera_last_failure = "look_around returned no captures"
+                _record_camera_failure("look_around returned no captures")
             return captures
         except TimeoutError:
             msg = "camera look_around timed out"

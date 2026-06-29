@@ -3,6 +3,32 @@
     {
       "name": "embodied-claude",
       "path": ".",
+      "settings": {
+        "python.defaultInterpreterPath": "${workspaceFolder:embodied-claude}/presence-ui/.venv/Scripts/python.exe",
+        "basedpyright.analysis.venvPath": "${workspaceFolder:embodied-claude}/presence-ui",
+        "basedpyright.analysis.venv": ".venv",
+        "basedpyright.analysis.extraPaths": [
+          "${workspaceFolder:embodied-claude}/presence-ui/src",
+          "${workspaceFolder:embodied-claude}/wifi-cam-mcp/src",
+          "${workspaceFolder:embodied-claude}/usb-webcam-mcp/src",
+          "${workspaceFolder:embodied-claude}/sociality-mcp/packages/social-core/src",
+          "${workspaceFolder:embodied-claude}/sociality-mcp/packages/interaction-orchestrator-mcp/src"
+        ]
+      }
+    },
+    {
+      "name": "presence-ui",
+      "path": "presence-ui",
+      "settings": {
+        "python.defaultInterpreterPath": "${workspaceFolder:presence-ui}/.venv/Scripts/python.exe",
+        "basedpyright.analysis.venvPath": "${workspaceFolder:presence-ui}",
+        "basedpyright.analysis.venv": ".venv",
+        "basedpyright.analysis.extraPaths": [
+          "${workspaceFolder:presence-ui}/src",
+          "${workspaceFolder:embodied-claude}/sociality-mcp/packages/social-core/src",
+          "${workspaceFolder:embodied-claude}/sociality-mcp/packages/interaction-orchestrator-mcp/src"
+        ]
+      }
     },
     {
       "name": "memory-mcp",
@@ -21,6 +47,30 @@
         "basedpyright.analysis.venvPath": "${workspaceFolder:sociality-mcp}",
         "basedpyright.analysis.venv": ".venv",
       },
+    },
+    {
+      "name": "wifi-cam-mcp",
+      "path": "wifi-cam-mcp",
+      "settings": {
+        "python.defaultInterpreterPath": "${workspaceFolder:wifi-cam-mcp}/.venv/Scripts/python.exe",
+        "basedpyright.analysis.venvPath": "${workspaceFolder:wifi-cam-mcp}",
+        "basedpyright.analysis.venv": ".venv",
+        "basedpyright.analysis.extraPaths": [
+          "${workspaceFolder:wifi-cam-mcp}/src"
+        ]
+      }
+    },
+    {
+      "name": "usb-webcam-mcp",
+      "path": "usb-webcam-mcp",
+      "settings": {
+        "python.defaultInterpreterPath": "${workspaceFolder:usb-webcam-mcp}/.venv/Scripts/python.exe",
+        "basedpyright.analysis.venvPath": "${workspaceFolder:usb-webcam-mcp}",
+        "basedpyright.analysis.venv": ".venv",
+        "basedpyright.analysis.extraPaths": [
+          "${workspaceFolder:usb-webcam-mcp}/src"
+        ]
+      }
     },
   ],
   "settings": {

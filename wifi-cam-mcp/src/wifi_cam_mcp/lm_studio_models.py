@@ -73,15 +73,60 @@ def mark_reload_done() -> None:
     _last_vision_reload_monotonic = time.monotonic()
 
 
+async def unload_vision_model(
+    client: httpx.AsyncClient,
+    *,
+    base: str,
+    token: str,
+    model_id: str,
+) -> int:
+    """Unload all loaded instances for model_id. Returns count unloaded."""
+    headers = _lm_auth_headers(token)
+    try:
+        resp = await client.get(f"{base}/api/v1/models", headers=headers)
+        resp.raise_for_status()
+    except Exception as exc:
+        logger.warning("LM Studio list models failed during unload: %s", exc)
+        return 0
+
+    payload = resp.json()
+    models = payload.get("models") if isinstance(payload, dict) else None
+    if not isinstance(models, list):
+        return 0
+
+    entry = find_model_entry(models, model_id)
+    if not entry:
+        return 0
+
+    unloaded = 0
+    for inst in entry.get("loaded_instances") or []:
+        inst_id = str(inst.get("id") or "").strip()
+        if not inst_id:
+            continue
+        try:
+            uresp = await client.post(
+                f"{base}/api/v1/models/unload",
+                headers=headers,
+                json={"instance_id": inst_id},
+            )
+            uresp.raise_for_status()
+            unloaded += 1
+            logger.info("Unloaded vision instance %s", inst_id)
+        except Exception as exc:
+            logger.warning("Unload %s failed: %s", inst_id, exc)
+    return unloaded
+
+
 async def reload_vision_model(
     client: httpx.AsyncClient,
     *,
     base: str,
     token: str,
     model_id: str,
+    force: bool = False,
 ) -> bool:
     """Unload then reload the vision model via POST /api/v1/models/*."""
-    if not reload_cooldown_allows():
+    if not force and not reload_cooldown_allows():
         logger.info(
             "Vision model reload skipped (cooldown %.0fs)",
             vision_reload_cooldown_sec(),
@@ -159,6 +204,23 @@ async def reload_vision_model(
         context_length,
     )
     return True
+
+
+async def prepare_isolated_vision_model(
+    client: httpx.AsyncClient,
+    *,
+    base: str,
+    token: str,
+    model_id: str,
+    other_model_ids: list[str] | None = None,
+) -> bool:
+    """Unload peers then reload target — fair A/B on one GPU."""
+    for other in other_model_ids or []:
+        if not model_ids_match(other, model_id):
+            await unload_vision_model(client, base=base, token=token, model_id=other)
+    return await reload_vision_model(
+        client, base=base, token=token, model_id=model_id, force=True
+    )
 
 
 async def reload_configured_vision_model(client: httpx.AsyncClient) -> bool:

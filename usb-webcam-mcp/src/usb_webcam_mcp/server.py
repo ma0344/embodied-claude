@@ -9,30 +9,40 @@ from typing import Any
 os.environ["OPENCV_LOG_LEVEL"] = "OFF"
 os.environ["OPENCV_VIDEOIO_DEBUG"] = "0"
 
-import cv2
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from mcp.types import (
+import cv2  # noqa: E402
+from mcp.server import Server  # noqa: E402
+from mcp.server.stdio import stdio_server  # noqa: E402
+from mcp.types import (  # noqa: E402
     ImageContent,
     TextContent,
     Tool,
 )
-from PIL import Image
+from PIL import Image  # noqa: E402
 
 
 server = Server("usb-webcam-mcp")
 
 
 def find_available_cameras(max_cameras: int = 10) -> list[dict[str, Any]]:
-    """Find available camera devices."""
+    """Find available camera devices (OpenCV probe — index only)."""
+    from usb_webcam_mcp.devices import list_camera_devices
+
+    named = list_camera_devices()
+    if named:
+        return [
+            {"index": dev.index, "name": dev.name, "width": None, "height": None}
+            for dev in named
+        ]
     cameras = []
+    backend = cv2.CAP_DSHOW if os.name == "nt" else cv2.CAP_ANY
     for i in range(max_cameras):
-        cap = cv2.VideoCapture(i)
+        cap = cv2.VideoCapture(i, backend)
         if cap.isOpened():
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             cameras.append({
                 "index": i,
+                "name": f"Camera {i}",
                 "width": width,
                 "height": height,
             })
@@ -44,9 +54,20 @@ def capture_from_camera(
     camera_index: int = 0,
     width: int | None = None,
     height: int | None = None,
+    *,
+    camera_name: str | None = None,
 ) -> bytes:
-    """Capture an image from the specified camera."""
-    cap = cv2.VideoCapture(camera_index)
+    """Capture an image from the specified camera (index or name hint)."""
+    if camera_name:
+        from usb_webcam_mcp.devices import resolve_camera_index
+
+        camera_index = resolve_camera_index(
+            name_hint=camera_name,
+            fallback_index=camera_index,
+        )
+
+    backend = cv2.CAP_DSHOW if os.name == "nt" else cv2.CAP_ANY
+    cap = cv2.VideoCapture(camera_index, backend)
 
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open camera at index {camera_index}")
@@ -98,8 +119,12 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "camera_index": {
                         "type": "integer",
-                        "description": "Camera device index (default: 0)",
+                        "description": "Camera device index (default: 0). Ignored if camera_name is set.",
                         "default": 0,
+                    },
+                    "camera_name": {
+                        "type": "string",
+                        "description": "Substring match on device friendly name (e.g. QuickCam Pro 9000)",
                     },
                     "width": {
                         "type": "integer",
@@ -126,16 +151,26 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent | 
 
         lines = ["Available cameras:"]
         for cam in cameras:
-            lines.append(f"  - Index {cam['index']}: {cam['width']}x{cam['height']}")
+            label = cam.get("name") or f"Camera {cam['index']}"
+            size = ""
+            if cam.get("width") and cam.get("height"):
+                size = f" {cam['width']}x{cam['height']}"
+            lines.append(f"  - Index {cam['index']}: {label}{size}")
         return [TextContent(type="text", text="\n".join(lines))]
 
     elif name == "see":
         camera_index = arguments.get("camera_index", 0)
+        camera_name = arguments.get("camera_name")
         width = arguments.get("width")
         height = arguments.get("height")
 
         try:
-            image_bytes = capture_from_camera(camera_index, width, height)
+            image_bytes = capture_from_camera(
+                camera_index,
+                width,
+                height,
+                camera_name=camera_name,
+            )
             image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
             return [

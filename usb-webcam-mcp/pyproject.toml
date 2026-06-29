@@ -9,6 +9,14 @@ dependencies = [
     "pillow>=10.0.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [project.scripts]
 usb-webcam-mcp = "usb_webcam_mcp.server:main"
 

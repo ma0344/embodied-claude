@@ -103,7 +103,7 @@ async def prefetch_camera_for_message(
                 from presence_ui.services.somatic import maybe_record_eye_affliction
 
                 action = f"see_{see.mode}"
-                remedy = "qwen_reload" if result.vision_reloaded else None
+                remedy = "vision_reload" if result.vision_reloaded else None
                 maybe_record_eye_affliction(
                     stores,
                     person_id=person_id,

@@ -18,6 +18,12 @@ from .camera import CaptureResult
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_WIFI_CAM_VISION_PROMPT = (
+    "この部屋の写真。見えているものを具体的に日本語で書いてください。"
+    "人物・姿勢・家具・明るさ・窓やモニタの有無。推測や見えないことは書かない。"
+    "5〜8文程度。箇条書きや見出しは使わず地の文のみ。"
+)
+
 
 def caption_looks_corrupt(caption: str | None) -> bool:
     """Reject LM Studio outputs that are only replacement question marks."""
@@ -109,14 +115,36 @@ def _lm_auth_headers(token: str) -> dict[str, str]:
     }
 
 
-def _parse_openai_chat_content(data: dict) -> str | None:
+def vision_use_system_prompt() -> bool:
+    raw = os.environ.get("WIFI_CAM_VISION_USE_SYSTEM", "1").strip().lower()
+    return raw not in {"0", "false", "no", "off"}
+
+
+def vision_prompt_parts() -> tuple[str | None, str]:
+    """Split instruction (system) from user turn text — matches LM Studio UI layout."""
+    instruction = os.environ.get(
+        "WIFI_CAM_VISION_PROMPT",
+        DEFAULT_WIFI_CAM_VISION_PROMPT,
+    ).strip()
+    user_text = os.environ.get(
+        "WIFI_CAM_VISION_USER_TEXT",
+        "この写真を説明してください。",
+    ).strip() or "この写真を説明してください。"
+    if vision_use_system_prompt():
+        return instruction, user_text
+    return None, instruction
+
+
+def _parse_openai_chat_content(data: dict) -> tuple[str | None, str | None]:
     choices = data.get("choices") or []
     if not choices:
-        return None
-    message = choices[0].get("message") or {}
+        return None, None
+    choice = choices[0]
+    finish_reason = choice.get("finish_reason")
+    message = choice.get("message") or {}
     content = message.get("content")
     if isinstance(content, str) and content.strip():
-        return content.strip()
+        return content.strip(), finish_reason
     if isinstance(content, list):
         parts = [
             block.get("text", "")
@@ -124,11 +152,12 @@ def _parse_openai_chat_content(data: dict) -> str | None:
             if isinstance(block, dict) and block.get("type") == "text"
         ]
         joined = "\n".join(p for p in parts if p).strip()
-        return joined or None
-    return None
+        return (joined or None), finish_reason
+    return None, finish_reason
 
 
-def _parse_anthropic_message_content(data: dict) -> str | None:
+def _parse_anthropic_message_content(data: dict) -> tuple[str | None, str | None]:
+    stop_reason = data.get("stop_reason") if isinstance(data, dict) else None
     content = (data.get("content") or []) if isinstance(data, dict) else []
     parts: list[str] = []
     for block in content:
@@ -136,7 +165,8 @@ def _parse_anthropic_message_content(data: dict) -> str | None:
             text = block.get("text", "")
             if text and str(text).strip():
                 parts.append(str(text).strip())
-    return "\n".join(parts).strip() or None
+    joined = "\n".join(parts).strip() or None
+    return joined, stop_reason
 
 
 async def _describe_via_chat(
@@ -144,27 +174,32 @@ async def _describe_via_chat(
     base: str,
     model: str,
     headers: dict[str, str],
-    prompt: str,
+    system_prompt: str | None,
+    user_text: str,
     image_b64: str,
     *,
     max_tokens: int,
-) -> str | None:
+) -> tuple[str | None, str | None]:
     url = f"{base}/v1/chat/completions"
+    messages: list[dict[str, object]] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append(
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": user_text},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"},
+                },
+            ],
+        }
+    )
     payload = {
         "model": model,
         "max_tokens": max_tokens,
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"},
-                    },
-                ],
-            }
-        ],
+        "messages": messages,
     }
     resp = await client.post(url, json=payload, headers=headers)
     resp.raise_for_status()
@@ -176,20 +211,21 @@ async def _describe_via_messages(
     base: str,
     model: str,
     headers: dict[str, str],
-    prompt: str,
+    system_prompt: str | None,
+    user_text: str,
     image_b64: str,
     *,
     max_tokens: int,
-) -> str | None:
+) -> tuple[str | None, str | None]:
     url = f"{base}/v1/messages"
-    payload = {
+    payload: dict[str, object] = {
         "model": model,
         "max_tokens": max_tokens,
         "messages": [
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": prompt},
+                    {"type": "text", "text": user_text},
                     {
                         "type": "image",
                         "source": {
@@ -202,9 +238,19 @@ async def _describe_via_messages(
             }
         ],
     }
+    if system_prompt:
+        payload["system"] = system_prompt
     resp = await client.post(url, json=payload, headers=headers)
     resp.raise_for_status()
     return _parse_anthropic_message_content(resp.json())
+
+
+@dataclass(slots=True)
+class DescribeAttemptResult:
+    caption: str | None
+    saw_corrupt: bool = False
+    finish_reason: str | None = None
+    api_route: str | None = None
 
 
 async def _describe_attempt(
@@ -213,25 +259,38 @@ async def _describe_attempt(
     base: str,
     model: str,
     headers: dict[str, str],
-    prompt: str,
+    system_prompt: str | None,
+    user_text: str,
     image_b64: str,
     max_tokens: int,
     api_order: list[str],
-) -> tuple[str | None, bool]:
-    """Return (caption, saw_corrupt_raw)."""
+) -> DescribeAttemptResult:
     saw_corrupt = False
     for kind in api_order:
+        label = "/v1/chat/completions" if kind == "chat" else "/v1/messages"
         try:
             if kind == "chat":
-                raw = await _describe_via_chat(
-                    client, base, model, headers, prompt, image_b64, max_tokens=max_tokens
+                raw, finish_reason = await _describe_via_chat(
+                    client,
+                    base,
+                    model,
+                    headers,
+                    system_prompt,
+                    user_text,
+                    image_b64,
+                    max_tokens=max_tokens,
                 )
-                label = "/v1/chat/completions"
             else:
-                raw = await _describe_via_messages(
-                    client, base, model, headers, prompt, image_b64, max_tokens=max_tokens
+                raw, finish_reason = await _describe_via_messages(
+                    client,
+                    base,
+                    model,
+                    headers,
+                    system_prompt,
+                    user_text,
+                    image_b64,
+                    max_tokens=max_tokens,
                 )
-                label = "/v1/messages"
             if raw and caption_looks_corrupt(raw):
                 saw_corrupt = True
                 logger.warning(
@@ -241,12 +300,22 @@ async def _describe_attempt(
                 )
             caption = normalize_vision_caption(raw)
             if caption:
-                logger.info("Vision describe OK via %s (%d chars)", label, len(caption))
-                return caption, saw_corrupt
-            logger.warning("Vision describe %s: empty or corrupt content", label)
+                logger.info(
+                    "Vision describe OK via %s (%d chars, finish=%s)",
+                    label,
+                    len(caption),
+                    finish_reason,
+                )
+                return DescribeAttemptResult(
+                    caption=caption,
+                    saw_corrupt=saw_corrupt,
+                    finish_reason=finish_reason,
+                    api_route=label,
+                )
+            logger.debug("Vision describe %s: empty or corrupt (finish=%s)", label, finish_reason)
         except Exception as exc:
-            logger.warning("Vision describe %s failed: %s", kind, exc)
-    return None, saw_corrupt
+            logger.warning("Vision describe %s failed: %s", label, exc)
+    return DescribeAttemptResult(caption=None, saw_corrupt=saw_corrupt)
 
 
 @dataclass(slots=True)
@@ -254,17 +323,50 @@ class VisionDescribeOutcome:
     caption: str | None
     saw_corrupt: bool = False
     reloaded: bool = False
+    finish_reason: str | None = None
+    api_route: str | None = None
 
 
 async def describe_image_outcome(image_base64: str) -> VisionDescribeOutcome:
     """Send JPEG to LM Studio vision; include corrupt/reload metadata."""
     base, model, token = lm_studio_settings()
+    return await _describe_image_outcome_for_model(
+        image_base64,
+        base=base,
+        model=model,
+        token=token,
+    )
+
+
+async def describe_image_with_model(
+    image_base64: str,
+    *,
+    model: str,
+    base: str | None = None,
+    token: str | None = None,
+) -> VisionDescribeOutcome:
+    """Describe using an explicit LM Studio model id (VIS-e4b POC)."""
+    resolved_base, _, resolved_token = lm_studio_settings()
+    return await _describe_image_outcome_for_model(
+        image_base64,
+        base=base or resolved_base,
+        model=model,
+        token=token or resolved_token,
+        auto_reload=False,
+    )
+
+
+async def _describe_image_outcome_for_model(
+    image_base64: str,
+    *,
+    base: str,
+    model: str,
+    token: str,
+    auto_reload: bool = True,
+) -> VisionDescribeOutcome:
     max_side = int(os.environ.get("WIFI_CAM_VISION_MAX_SIDE", "1024"))
     max_tokens = int(os.environ.get("WIFI_CAM_VISION_MAX_TOKENS", "720"))
-    prompt = os.environ.get(
-        "WIFI_CAM_VISION_PROMPT",
-        "この画像を説明して。実際に見えるものだけ。見えないことは書かない。",
-    )
+    system_prompt, user_text = vision_prompt_parts()
     image_b64 = resize_image_base64(image_base64, max_side=max_side)
     headers = _lm_auth_headers(token)
     api_pref = os.environ.get("WIFI_CAM_VISION_API", "auto").strip().lower()
@@ -278,40 +380,50 @@ async def describe_image_outcome(image_base64: str) -> VisionDescribeOutcome:
     saw_corrupt = False
     reloaded = False
     async with httpx.AsyncClient(timeout=120.0) as client:
-        caption, saw_corrupt = await _describe_attempt(
+        attempt = await _describe_attempt(
             client,
             base=base,
             model=model,
             headers=headers,
-            prompt=prompt,
+            system_prompt=system_prompt,
+            user_text=user_text,
             image_b64=image_b64,
             max_tokens=max_tokens,
             api_order=order,
         )
-        if caption:
-            return VisionDescribeOutcome(caption=caption, saw_corrupt=saw_corrupt)
+        if attempt.caption:
+            return VisionDescribeOutcome(
+                caption=attempt.caption,
+                saw_corrupt=attempt.saw_corrupt,
+                finish_reason=attempt.finish_reason,
+                api_route=attempt.api_route,
+            )
+        saw_corrupt = attempt.saw_corrupt
 
         if saw_corrupt:
             from .lm_studio_models import reload_configured_vision_model, vision_auto_reload_enabled
 
-            if vision_auto_reload_enabled():
+            if auto_reload and vision_auto_reload_enabled():
                 reloaded = await reload_configured_vision_model(client)
                 if reloaded:
-                    caption, _ = await _describe_attempt(
+                    retry = await _describe_attempt(
                         client,
                         base=base,
                         model=model,
                         headers=headers,
-                        prompt=prompt,
+                        system_prompt=system_prompt,
+                        user_text=user_text,
                         image_b64=image_b64,
                         max_tokens=max_tokens,
                         api_order=order,
                     )
-                    if caption:
+                    if retry.caption:
                         return VisionDescribeOutcome(
-                            caption=caption,
+                            caption=retry.caption,
                             saw_corrupt=True,
                             reloaded=True,
+                            finish_reason=retry.finish_reason,
+                            api_route=retry.api_route,
                         )
 
     return VisionDescribeOutcome(caption=None, saw_corrupt=saw_corrupt, reloaded=reloaded)

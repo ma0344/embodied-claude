@@ -1,0 +1,17 @@
+{
+  "include": ["src", "tests"],
+  "exclude": ["**/__pycache__", "**/.venv"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.12",
+  "extraPaths": [
+    "src",
+    "../sociality-mcp/packages/social-core/src",
+    "../sociality-mcp/packages/interaction-orchestrator-mcp/src",
+    "../sociality-mcp/packages/social-state-mcp/src",
+    "../sociality-mcp/packages/self-narrative-mcp/src",
+    "../sociality-mcp/packages/boundary-mcp/src",
+    "../sociality-mcp/packages/relationship-mcp/src",
+    "../sociality-mcp/packages/joint-attention-mcp/src"
+  ]
+}

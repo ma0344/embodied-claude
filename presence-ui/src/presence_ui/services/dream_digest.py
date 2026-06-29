@@ -82,4 +82,12 @@ def save_dream_digest(record: DreamDigestRecord) -> Path:
         json.dumps(record.to_dict(), ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    if record.inner_voice_summary:
+        from presence_ui.training.persona_inner_export import append_inner_voice_archive
+
+        append_inner_voice_archive(
+            local_day=record.local_day,
+            dreamed_at=record.dreamed_at,
+            body=record.inner_voice_summary,
+        )
     return path

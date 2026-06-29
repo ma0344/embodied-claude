@@ -11,7 +11,7 @@
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "google/gemma-4-12b-qat",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "google/gemma-4-12b-qat",
     "CLAUDE_CODE_SUBAGENT_MODEL": "google/gemma-4-12b-qat",
-    "LM_STUDIO_VISION_MODEL": "qwen/qwen2.5-vl-3b-instruct"
+    "LM_STUDIO_VISION_MODEL": "google/gemma-4-e4b"
   },
   "enabledMcpjsonServers": [
     "system-temperature"

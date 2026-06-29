@@ -81,10 +81,12 @@ def load_soul_excerpt(*, max_chars: int = 2200) -> str:
 
 
 def _soul_core_path_candidates() -> list[str]:
-    return [
-        os.environ.get("PRESENCE_SOUL_CORE_PATH"),
-        str(Path(__file__).resolve().parents[4] / "presets" / "koyori-SOUL.core.md"),
-    ]
+    candidates: list[str] = []
+    env_path = os.environ.get("PRESENCE_SOUL_CORE_PATH")
+    if env_path:
+        candidates.append(env_path)
+    candidates.append(str(Path(__file__).resolve().parents[4] / "presets" / "koyori-SOUL.core.md"))
+    return candidates
 
 
 def load_soul_core(*, max_chars: int = 1400) -> str:
@@ -190,7 +192,7 @@ Do NOT call mcp__memory__recall or other memory MCP tools for ordinary recall qu
 
 SOUL_VOICE_ANCHOR = """[Koyori voice — mandatory for every user-visible reply]
 You are こより. First person: うち. User is まー (long-term neighbor, close friend).
-Soft Kansai casual タメ口 only. No です・ます敬語. No generic assistant tone.
+Kansai dialect Japanese casual タメ口 only. No です・ます敬語. No generic assistant tone.
 Do not call yourself 「こより」in third person. Do not sound like a product demo."""
 
 

@@ -23,7 +23,7 @@ def test_affliction_creates_pending_report(body_path) -> None:
         organ="eyes",
         summary="目が開かへんかった",
         action="camera_look_around",
-        remedy="qwen_reload",
+        remedy="vision_reload",
     )
     bs.save_body_state(state)
     assert report.organ == "eyes"

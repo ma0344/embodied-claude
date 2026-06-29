@@ -62,9 +62,31 @@ uv run python ..\scripts\export-persona-lora-jsonl.py --dry-run
    - `koyori-persona.jsonl` — **LoRA 学習用**（候補 − 人手除外）
    - `koyori-persona-rejected.json` — 除外 fingerprint（再 export 後も維持）
 
+   **Phase 2c — Persona Inner（内省）** ✅ export / review
+
+   表層会話に加え、**非公開の一人称散文**（private_reflection · overnight inner voice）を別 JSONL で LoRA 素材にする。
+
+   | ファイル | 内容 |
+   |---------|------|
+   | `koyori-persona-inner-candidates.jsonl` | 内省候補 |
+   | `koyori-persona-inner.jsonl` | 内省 LoRA 学習用 |
+   | `koyori-persona-inner-rejected.json` | 内省除外 manifest |
+   | `inner-voice-archive.jsonl` | dreaming 時の overnight inner voice 履歴（追記のみ） |
+
+   ```powershell
+   cd C:\Users\ma\src\embodied-claude\presence-ui
+   uv run python ..\scripts\export-persona-inner-jsonl.py
+   ```
+
+   - **素材**: `private_reflections`（social.db）· `inner-voice-archive.jsonl`
+   - **user cue**: `（内省・非公開）{title}` 等（まーの実発話ではない）
+   - **入れない**: compose / plan / dream_digest 箇条書き / GW JSON
+   - **学習 mix 目安**: surface : inner = **4:1 〜 3:1**（RP-2b）
+   - **review**: `http://localhost:8090/training/persona` → **内省** タブ
+
    **ブラウザで確認（ma-home）**:
 
-   `http://localhost:8090/training/persona` — **「会話から再 export」**で native JSONL から候補を再生成 → チェックで選択 → **選択を学習から除外**。候補 / 学習用 / 除外件数を表示。API: `POST /api/v1/training/persona/export`, `GET /api/v1/training/persona`, `POST /api/v1/training/persona/reject`
+   `http://localhost:8090/training/persona` — **会話** / **内省** タブ。内省は `POST /api/v1/training/persona-inner/export` 等。
 
    **プレビュー（Markdown）**:
 
@@ -108,3 +130,7 @@ uv run python ..\scripts\preview-persona-lora-jsonl.py -o preview.md --limit 20
 | `PERSONA_TRAINING_JSONL` | `~/.claude/memories/training/koyori-persona.jsonl` | LoRA 学習 JSONL（候補 − 人手除外） |
 | `PERSONA_TRAINING_CANDIDATES_JSONL` | `~/.claude/memories/training/koyori-persona-candidates.jsonl` | export 候補（review 対象） |
 | `PERSONA_TRAINING_REJECTED_JSON` | `~/.claude/memories/training/koyori-persona-rejected.json` | 人手除外 manifest |
+| `PERSONA_INNER_TRAINING_JSONL` | `~/.claude/memories/training/koyori-persona-inner.jsonl` | 内省 LoRA 学習 JSONL |
+| `PERSONA_INNER_TRAINING_CANDIDATES_JSONL` | `~/.claude/memories/training/koyori-persona-inner-candidates.jsonl` | 内省 export 候補 |
+| `PERSONA_INNER_TRAINING_REJECTED_JSON` | `~/.claude/memories/training/koyori-persona-inner-rejected.json` | 内省人手除外 |
+| `PERSONA_INNER_VOICE_ARCHIVE_JSONL` | `~/.claude/memories/training/inner-voice-archive.jsonl` | overnight inner voice 履歴 |

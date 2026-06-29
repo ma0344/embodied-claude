@@ -37,7 +37,7 @@ def soul_read_prefetch_block(*, max_chars: int = 4500) -> str:
         "[/soul_prefetch]\n"
         "[Gateway directive — not for the user]\n"
         "Full SOUL.md is above (kiosk has no Read tool — this IS the file).\n"
-        "Reply to まー in 1-3 short sentences: soft Kansai タメ口, 一人称うち.\n"
+        "Reply to まー in 1-3 short sentences: Kansai dialect Japanese タメ口, 一人称うち.\n"
         "No ですます敬語. No long meta-summary. No 「ありがとうございます」.\n"
         "Good: 「読み直したで。うち、こよりのままや。」"
     )

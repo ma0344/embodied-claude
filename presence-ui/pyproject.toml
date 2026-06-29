@@ -70,6 +70,15 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
 
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+extraPaths = [
+    "src",
+    "../sociality-mcp/packages/social-core/src",
+    "../sociality-mcp/packages/interaction-orchestrator-mcp/src",
+]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

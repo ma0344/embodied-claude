@@ -42,6 +42,37 @@ def persona_rejected_json_path() -> Path:
     return training_dir() / "koyori-persona-rejected.json"
 
 
+def persona_inner_curated_jsonl_path() -> Path:
+    raw = os.getenv("PERSONA_INNER_TRAINING_JSONL", "").strip()
+    if raw:
+        return Path(raw).expanduser()
+    return training_dir() / "koyori-persona-inner.jsonl"
+
+
+def persona_inner_candidates_jsonl_path() -> Path:
+    raw = os.getenv("PERSONA_INNER_TRAINING_CANDIDATES_JSONL", "").strip()
+    if raw:
+        return Path(raw).expanduser()
+    return training_dir() / "koyori-persona-inner-candidates.jsonl"
+
+
+def persona_inner_rejected_json_path() -> Path:
+    raw = os.getenv("PERSONA_INNER_TRAINING_REJECTED_JSON", "").strip()
+    if raw:
+        return Path(raw).expanduser()
+    return training_dir() / "koyori-persona-inner-rejected.json"
+
+
+def resolve_inner_candidates_jsonl_path() -> Path:
+    path = persona_inner_candidates_jsonl_path()
+    if path.is_file():
+        return path
+    legacy = persona_inner_curated_jsonl_path()
+    if legacy.is_file():
+        return legacy
+    return path
+
+
 def pair_fingerprint(user: str, assistant: str) -> str:
     payload = f"{_normalize_pair_text(user)}\n{_normalize_pair_text(assistant)}"
     return sha256(payload.encode("utf-8")).hexdigest()[:16]
@@ -72,8 +103,8 @@ def _preview(text: str, *, limit: int = 80) -> str:
     return body[: limit - 1] + "…"
 
 
-def load_rejected_fingerprints() -> set[str]:
-    path = persona_rejected_json_path()
+def load_rejected_fingerprints(rejected_path: Path | None = None) -> set[str]:
+    path = rejected_path or persona_rejected_json_path()
     if not path.is_file():
         return set()
     try:
@@ -92,8 +123,8 @@ def load_rejected_fingerprints() -> set[str]:
     return out
 
 
-def load_rejected_records() -> list[dict[str, str]]:
-    path = persona_rejected_json_path()
+def load_rejected_records(rejected_path: Path | None = None) -> list[dict[str, str]]:
+    path = rejected_path or persona_rejected_json_path()
     if not path.is_file():
         return []
     try:
@@ -119,8 +150,12 @@ def load_rejected_records() -> list[dict[str, str]]:
     return out
 
 
-def _save_rejected_records(records: list[dict[str, str]]) -> None:
-    path = persona_rejected_json_path()
+def _save_rejected_records(
+    records: list[dict[str, str]],
+    *,
+    rejected_path: Path | None = None,
+) -> None:
+    path = rejected_path or persona_rejected_json_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps({"rejected": records}, ensure_ascii=False, indent=2) + "\n",
@@ -128,9 +163,15 @@ def _save_rejected_records(records: list[dict[str, str]]) -> None:
     )
 
 
-def reject_training_pairs(pairs: list[tuple[str, str]]) -> tuple[int, PersonaCurationStats]:
+def reject_training_pairs(
+    pairs: list[tuple[str, str]],
+    *,
+    candidates_path: Path | None = None,
+    curated_path: Path | None = None,
+    rejected_path: Path | None = None,
+) -> tuple[int, PersonaCurationStats]:
     """Add pairs to the rejected manifest and rebuild curated JSONL."""
-    existing = {row["fingerprint"]: row for row in load_rejected_records()}
+    existing = {row["fingerprint"]: row for row in load_rejected_records(rejected_path)}
     added = 0
     now = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     for user, assistant in pairs:
@@ -148,9 +189,25 @@ def reject_training_pairs(pairs: list[tuple[str, str]]) -> tuple[int, PersonaCur
             "rejected_at": now,
         }
         added += 1
-    _save_rejected_records(sorted(existing.values(), key=lambda row: row["rejected_at"]))
-    stats = apply_persona_curation()
+    _save_rejected_records(
+        sorted(existing.values(), key=lambda row: row["rejected_at"]),
+        rejected_path=rejected_path,
+    )
+    stats = apply_persona_curation(
+        candidates_path=candidates_path,
+        curated_path=curated_path,
+        rejected_path=rejected_path,
+    )
     return added, stats
+
+
+def reject_inner_training_pairs(pairs: list[tuple[str, str]]) -> tuple[int, PersonaCurationStats]:
+    return reject_training_pairs(
+        pairs,
+        candidates_path=resolve_inner_candidates_jsonl_path(),
+        curated_path=persona_inner_curated_jsonl_path(),
+        rejected_path=persona_inner_rejected_json_path(),
+    )
 
 
 def curation_stats_from_examples(
@@ -173,11 +230,12 @@ def apply_persona_curation(
     *,
     candidates_path: Path | None = None,
     curated_path: Path | None = None,
+    rejected_path: Path | None = None,
 ) -> PersonaCurationStats:
     """Write curated LoRA JSONL = candidates minus rejected fingerprints."""
     src = candidates_path or resolve_candidates_jsonl_path()
     dst = curated_path or persona_curated_jsonl_path()
-    rejected = load_rejected_fingerprints()
+    rejected = load_rejected_fingerprints(rejected_path)
 
     if not src.is_file():
         dst.parent.mkdir(parents=True, exist_ok=True)
@@ -196,17 +254,33 @@ def apply_persona_curation(
     with dst.open("w", encoding="utf-8") as handle:
         for ex in kept:
             assistant = strip_trailing_cheerleader_closings(ex.assistant)
-            record = {
+            record: dict[str, object] = {
                 "messages": [
                     {"role": "system", "content": ex.system},
                     {"role": "user", "content": ex.user},
                     {"role": "assistant", "content": assistant},
                 ]
             }
+            if ex.kind:
+                record["kind"] = ex.kind
+            if ex.source:
+                record["source"] = ex.source
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     return PersonaCurationStats(
         candidates=stats.candidates,
         curated=len(kept),
         rejected=stats.rejected,
+    )
+
+
+def apply_persona_inner_curation(
+    *,
+    candidates_path: Path | None = None,
+    curated_path: Path | None = None,
+) -> PersonaCurationStats:
+    return apply_persona_curation(
+        candidates_path=candidates_path or resolve_inner_candidates_jsonl_path(),
+        curated_path=curated_path or persona_inner_curated_jsonl_path(),
+        rejected_path=persona_inner_rejected_json_path(),
     )

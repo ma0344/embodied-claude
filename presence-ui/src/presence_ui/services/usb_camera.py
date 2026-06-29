@@ -1,4 +1,4 @@
-"""ma-home USB webcam capture for outside/window view (Logitech QuickCam, etc.)."""
+"""USB outside camera — name-based device selection for look_outside."""
 
 from __future__ import annotations
 
@@ -24,18 +24,55 @@ def usb_camera_enabled() -> bool:
     }
 
 
-def usb_camera_index() -> int:
-    raw = os.getenv("USB_CAMERA_INDEX", "1").strip()
+def usb_camera_name_hint() -> str:
+    """Substring match for outside camera (ma-home default: Logitech QuickCam)."""
+    raw = os.getenv("USB_CAMERA_NAME", "").strip()
+    if raw:
+        return raw
+    return "QuickCam"
+
+
+def usb_camera_fallback_index() -> int:
+    raw = os.getenv("USB_CAMERA_INDEX", "0").strip()
     try:
         return max(0, int(raw))
     except ValueError:
-        return 1
+        return 0
 
 
-def _capture_sync(*, camera_index: int, width: int | None, height: int | None) -> bytes:
+def resolve_usb_camera_index() -> int:
+    from usb_webcam_mcp.devices import resolve_camera_index
+
+    name = usb_camera_name_hint()
+    index = resolve_camera_index(name_hint=name, fallback_index=usb_camera_fallback_index())
+    return index
+
+
+def resolved_usb_camera_label() -> str:
+    from usb_webcam_mcp.devices import list_camera_devices
+
+    index = resolve_usb_camera_index()
+    for dev in list_camera_devices():
+        if dev.index == index:
+            return dev.name
+    return f"index {index}"
+
+
+def _capture_sync(
+    *,
+    camera_index: int,
+    camera_name: str | None,
+    width: int | None,
+    height: int | None,
+) -> bytes:
     from usb_webcam_mcp.server import capture_from_camera
 
-    return capture_from_camera(camera_index=camera_index, width=width, height=height)
+    return capture_from_camera(
+        camera_index,
+        width,
+        height,
+        camera_name=camera_name,
+    )
 
 
 def _jpeg_to_capture_result(jpeg_bytes: bytes, *, file_path: str | None) -> object:
@@ -61,7 +98,8 @@ async def capture_usb_frame(
     camera_index: int | None = None,
 ) -> object:
     """Capture one JPEG frame from USB webcam; returns wifi-cam CaptureResult."""
-    idx = usb_camera_index() if camera_index is None else camera_index
+    name_hint = usb_camera_name_hint()
+    fallback = usb_camera_fallback_index() if camera_index is None else camera_index
     width_raw = os.getenv("USB_CAMERA_WIDTH", "").strip()
     height_raw = os.getenv("USB_CAMERA_HEIGHT", "").strip()
     width = int(width_raw) if width_raw.isdigit() else None
@@ -70,7 +108,8 @@ async def capture_usb_frame(
     async with _usb_lock:
         jpeg_bytes = await asyncio.to_thread(
             _capture_sync,
-            camera_index=idx,
+            camera_index=fallback,
+            camera_name=name_hint,
             width=width,
             height=height,
         )
@@ -86,8 +125,9 @@ async def capture_usb_frame(
 
     result = _jpeg_to_capture_result(jpeg_bytes, file_path=file_path)
     logger.info(
-        "USB capture index=%d %dx%d saved=%s",
-        idx,
+        "USB capture name_hint=%r device=%s %dx%d saved=%s",
+        name_hint,
+        resolved_usb_camera_label(),
         result.width,
         result.height,
         bool(file_path),

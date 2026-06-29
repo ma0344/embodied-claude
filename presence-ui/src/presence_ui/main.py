@@ -23,6 +23,7 @@ from presence_ui.schemas import (
     ClaudePermissionsResponse,
     ClaudePermissionsSaveRequest,
     ClaudePermissionsSaveResponse,
+    ClaudePermissionPresetItem,
     HealthResponse,
     NativeHiddenSessionsRequest,
     NativeHideSessionResponse,
@@ -30,6 +31,7 @@ from presence_ui.schemas import (
     NativeSessionMessagesResponse,
     OutboundAckRequest,
     OutboundAckResponse,
+    OutboundPendingItem,
     OutboundPendingResponse,
     PatchReminderSpeakLineRequest,
     PatchReminderSpeakLineResponse,
@@ -258,12 +260,12 @@ def create_app() -> FastAPI:
         presets, preserved = list_permission_state()
         return ClaudePermissionsResponse(
             presets=[
-                {
-                    "id": p.id,
-                    "rule": p.rule,
-                    "label": p.label,
-                    "enabled": p.enabled,
-                }
+                ClaudePermissionPresetItem(
+                    id=p.id,
+                    rule=p.rule,
+                    label=p.label,
+                    enabled=p.enabled,
+                )
                 for p in presets
             ],
             preserved_rules=preserved,
@@ -292,12 +294,12 @@ def create_app() -> FastAPI:
         presets, preserved = list_permission_state()
         return ClaudePermissionsSaveResponse(
             presets=[
-                {
-                    "id": p.id,
-                    "rule": p.rule,
-                    "label": p.label,
-                    "enabled": p.enabled,
-                }
+                ClaudePermissionPresetItem(
+                    id=p.id,
+                    rule=p.rule,
+                    label=p.label,
+                    enabled=p.enabled,
+                )
                 for p in presets
             ],
             preserved_rules=preserved,
@@ -326,8 +328,6 @@ def create_app() -> FastAPI:
         if is_kiosk_client(client):
             note_kiosk_seen()
         if not should_deliver_to_client(client):
-            from social_core import utc_now
-
             return OutboundPendingResponse(items=[], server_ts=utc_now())
 
         stores = get_stores()
@@ -340,14 +340,14 @@ def create_app() -> FastAPI:
         )
         return OutboundPendingResponse(
             items=[
-                {
-                    "nudge_id": item.nudge_id,
-                    "ts": item.ts,
-                    "text": item.text,
-                    "speak": item.speak,
-                    "channels": item.channels,
-                    "desire": item.desire,
-                }
+                OutboundPendingItem(
+                    nudge_id=item.nudge_id,
+                    ts=item.ts,
+                    text=item.text,
+                    speak=item.speak,
+                    channels=item.channels,
+                    desire=item.desire,
+                )
                 for item in items
             ],
             server_ts=utc_now(),
@@ -688,6 +688,40 @@ def create_app() -> FastAPI:
         from presence_ui.training.persona_review import run_persona_training_export
 
         result = await asyncio.to_thread(run_persona_training_export)
+        return utf8_json(result.model_dump())
+
+    @app.get("/api/v1/training/persona-inner")
+    def get_persona_inner_training_review(offset: int = 0, limit: int = 50) -> JSONResponse:
+        from presence_ui.training.persona_inner_review import fetch_persona_inner_training_review
+
+        return utf8_json(
+            fetch_persona_inner_training_review(
+                offset=offset,
+                limit=limit,
+            ).model_dump()
+        )
+
+    @app.post("/api/v1/training/persona-inner/reject")
+    async def post_persona_inner_training_reject(request: Request) -> JSONResponse:
+        from presence_ui.training.persona_inner_review import (
+            PersonaRejectRequest,
+            reject_persona_inner_training_pairs,
+        )
+
+        try:
+            raw = await request.json()
+        except json.JSONDecodeError:
+            raw = {}
+        body = PersonaRejectRequest.model_validate(raw if isinstance(raw, dict) else {})
+        return utf8_json(reject_persona_inner_training_pairs(body).model_dump())
+
+    @app.post("/api/v1/training/persona-inner/export")
+    async def post_persona_inner_training_export() -> JSONResponse:
+        import asyncio
+
+        from presence_ui.training.persona_inner_review import run_persona_inner_training_export
+
+        result = await asyncio.to_thread(run_persona_inner_training_export)
         return utf8_json(result.model_dump())
 
     @app.get("/training/persona")

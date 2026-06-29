@@ -92,8 +92,8 @@ def test_record_body_affliction_organ_metadata() -> None:
         organ="eyes",
         summary="目が…",
         action="see_current",
-        remedy="qwen_reload",
+        remedy="vision_reload",
     )
     payload = stores.orchestrator.record_agent_experience.call_args[0][0]
     assert payload.felt_state == {"organ": "eyes", "action": "see_current"}
-    assert payload.artifacts[1]["remedy_attempted"] == "qwen_reload"
+    assert payload.artifacts[1]["remedy_attempted"] == "vision_reload"

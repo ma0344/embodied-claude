@@ -66,9 +66,9 @@ git pull
 API リクエストだけ非 QAT モデルになることがある。`set-lmstudio-model.ps1` か
 `sync-lmstudio-settings.ps1` で揃えること。
 
-**二モデル構成（2026-06〜）:** チャット = `google/gemma-4-12b-qat`、vision = **Qwen2.5-VL-3B** など別ロード。KV キャッシュを分離する。
+**二モデル構成（2026-06〜）:** チャット = `google/gemma-4-12b-qat`、vision = **`google/gemma-4-e4b`**（classifier と同ロード可）。KV キャッシュを分離する。
 
-**ロードマップ（2026-06-29）:** vision を **Qwen → `google/gemma-4-e4b`** に寄せる方向（[vis-health.md](../tracks/vis-health.md) § e4b vision POC）。前頭葉 classifier も e4b。切替前に caption / corrupt 比較必須。
+**vision 切替（2026-06-29）:** Qwen2.5-VL-3B から e4b へ。手順: `.\scripts\enable-vis-e4b-ma-home.ps1` → LM Studio で Qwen unload → `restart-presence-ui.ps1`。
 
 ## SOUL.core — チャットモデルの System Prompt（RP Phase 1）
 
@@ -132,6 +132,8 @@ LM_STUDIO_VISION_MODEL=<上でコピーした ID>
 WIFI_CAM_VISION_MAX_SIDE=1024
 WIFI_CAM_VISION_MAX_TOKENS=720
 WIFI_CAM_VISION_PROMPT=この部屋の写真。見えているものを具体的に日本語で書いてください。人物・姿勢・家具・明るさ・窓やモニタの有無。推測や見えないことは書かない。5〜8文程度。
+# WIFI_CAM_VISION_USE_SYSTEM=1   # 既定: 上を system に、user は「この写真を説明してください。」
+# WIFI_CAM_VISION_USER_TEXT=この写真を説明してください。
 ```
 
 ```powershell
@@ -155,7 +157,9 @@ WIFI_CAM_VISION_PROMPT=この部屋の写真。見えているものを具体的
 | `LM_STUDIO_VISION_MODEL` | `CLAUDE_MODEL` | vision API の model ID |
 | `WIFI_CAM_VISION_MAX_SIDE` | 1024 | JPEG 長辺リサイズ |
 | `WIFI_CAM_VISION_MAX_TOKENS` | 720 | キャプション最大トークン |
-| `WIFI_CAM_VISION_PROMPT` | 日本語・実見のみ | プロンプト全文 |
+| `WIFI_CAM_VISION_PROMPT` | 日本語・実見のみ | 指示全文（既定は **system** に載せる） |
+| `WIFI_CAM_VISION_USE_SYSTEM` | `1` | `0` で従来どおり user メッセージに統合 |
+| `WIFI_CAM_VISION_USER_TEXT` | この写真を説明してください。 | user turn の短文 |
 | `WIFI_CAM_VISION_API` | auto | `chat` / `messages` 固定も可 |
 
 詳細: [lmstudio-kv-cache.md](./lmstudio-kv-cache.md)（チャット KV と vision 分離の背景）。

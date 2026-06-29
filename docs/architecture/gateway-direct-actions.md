@@ -94,7 +94,13 @@ TAPO_DINING_PRESET=3
 | まーのデスク | 「まーのデスク見て」 | `TAPO_MADESK_PRESET` |
 | ダイニング | 「ダイニングの様子どう？」 | `TAPO_DINING_PRESET` |
 
-`look_outside` desire と会話の「外／窓／天気」は **ma-home USB webcam**（`PRESENCE_USB_CAMERA_ENABLED=1`, 既定 `USB_CAMERA_INDEX=1` = Logitech QuickCam Pro 9000）を優先。USB 失敗時のみ Tapo window preset。部屋・見渡しは Tapo のまま。
+`look_outside` desire と会話の「外／窓／天気」は **ma-home USB webcam**（`PRESENCE_USB_CAMERA_ENABLED=1`）を優先。カメラ選択は **名前**（`USB_CAMERA_NAME=QuickCam Pro 9000` 等の部分一致）— 番号だけの `USB_CAMERA_INDEX` は名前が見つからないときの fallback。USB 失敗時のみ Tapo window preset。部屋・見渡しは Tapo のまま。
+
+```env
+PRESENCE_USB_CAMERA_ENABLED=1
+USB_CAMERA_NAME=QuickCam Pro 9000
+# USB_CAMERA_INDEX=0   # optional fallback if name list fails
+```
 
 ### 「忘れて」→ open loop を閉じる
 

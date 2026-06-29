@@ -296,9 +296,81 @@ utterance_kind は future_commitment です。次の発話を events[] に分解
 
 ### Vision POC（Phase 2 · LM Studio 手動）
 
+**自動比較スクリプト**（同一 JPEG · 同一 `WIFI_CAM_VISION_PROMPT`）:
+
+```powershell
+# LM Studio で Qwen をロード → キャプチャ + 比較（モデル切替は LM Studio 側）
+.\scripts\run-vis-e4b-poc.ps1 -Capture
+
+# 固定 JPEG
+.\scripts\run-vis-e4b-poc.ps1 -Image C:\path\to\frame.jpg -QwenModel qwen/qwen2.5-vl-3b-instruct -E4bModel google/gemma-4-e4b
+```
+
+出力: `benchmarks/vis-e4b-poc-<date>.md` · 合格基準 → [vis-health.md](./docs/tracks/vis-health.md) § e4b vision
+
+手動手順（スクリプトなし）:
+
 1. 直近の `/see` JPEG を 1 枚固定（または同じ部屋で 3 枚）
 2. **Qwen** と **e4b** に同じ `WIFI_CAM_VISION_PROMPT`（wifi-cam 既定）で describe
 3. 記録: 文字数 · `?` corrupt · 日本語具体性 · 人物/無人
-4. 合格 → [vis-health.md](./docs/tracks/vis-health.md) § e4b vision 基準
+4. 合格 → `LM_STUDIO_VISION_MODEL` を e4b に切替
 
 **切替後の LM 構成（目標）**: ロード 2 本 — 12B（表層 KV）+ e4b（classifier + vision 共用）。
+
+### POC 判定（2026-06-29）
+
+**総合: ❌ 本番切替見送り（Qwen 維持）** — 詳細 [benchmarks/vis-e4b-poc-verdict-2026-06-29.md](./benchmarks/vis-e4b-poc-verdict-2026-06-29.md)
+
+| 画角 | Qwen | e4b |
+|------|------|-----|
+| 室内（現角） | △ 文量不足（3文） | ❌ 途中切れ / 良 run ありで再現性△ |
+| 窓 preset（外） | △ 窓に1文・全体73字 | ❌ 「画像は」で58字切れ |
+
+corrupt なし。外は Tapo 窓 preset のみ（USB 外カメラは別経路）。再 POC は **モデル1本ロードずつ** + USB 外 or 実 `look_outside` capture 推奨。
+
+---
+
+## 自律的に「外を見る」導線（調査 2026-06-29）
+
+**結論: 配線済み（条件付き）。** 欲求 → tick/pulse → gateway 直実行。完全版 `/observe` 多段ループは未（OBS-1〜）。
+
+| 経路 | 実装 | トリガー |
+|------|------|----------|
+| **`observe_room`** | `observe_room_direct` — look_around + center describe + remember | `dominant=observe_room` · 15m tick / pulse · smoke |
+| **`look_outside`** | `look_outside_direct` — window preset（USB 優先） | `dominant=look_outside` · 同上 |
+| 会話 prefetch | `see_prefetch` / `detect_see_intent` | まー「見て」「外どう」 |
+| MCP `/see` | wifi-cam MCP | オンデマンド |
+| `/observe` 完全版 | ❌ | 5–8 ループ · state 機械なし → [obs.md](./docs/tracks/obs.md) |
+
+**フロー（自律 observe_room）**:
+
+```
+desire_updater (15m Task) → desires.json dominant=observe_room
+  → POST /api/v1/autonomous-tick
+  → compose → plan (act_autonomously + camera_look_around)
+  → observe_room_direct → Tapo look_around → LM Studio describe → :18900/remember
+  → satisfy_desire_direct → next_wake ~45min
+```
+
+**走らない主因**:
+
+1. **inward window** — quiet hours または **JST 20:00–06:00**（カメラ allowed なし → 内省/青空/記憶なぞり）
+2. **優先順位** — commitment / web_search / aozora / recall が observe より先
+3. **dominant が observe/look 以外** — literary_wander 等が勝つ
+4. `PRESENCE_GATEWAY_DIRECT_ACTIONS=0`
+
+**昼間スモーク**:
+
+```powershell
+Invoke-RestMethod -Uri http://127.0.0.1:8090/api/v1/autonomous-tick `
+  -Method POST -ContentType application/json `
+  -Body '{"smoke_action":"observe_room","trigger":"smoke"}'
+
+Invoke-RestMethod -Uri http://127.0.0.1:8090/api/v1/autonomous-tick `
+  -Method POST -ContentType application/json `
+  -Body '{"smoke_action":"look_outside","trigger":"smoke"}'
+```
+
+欲求: `look_outside` ≈1h で level 1.0 · `observe_room` ≈10min（`desire-system/desire_updater.py`）。20–06 JST は allostatic で observe/look の set_point +0.2（見にくくする）。
+
+詳細: [gateway-direct-actions.md](./docs/architecture/gateway-direct-actions.md) · [intent-bucket-flow.md](./docs/architecture/intent-bucket-flow.md)

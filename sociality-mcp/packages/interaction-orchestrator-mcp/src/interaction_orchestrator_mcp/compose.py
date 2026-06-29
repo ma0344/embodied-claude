@@ -472,7 +472,7 @@ def _pick_contract(
                 "頑張ってね as default sign-off)",
             ],
             prefer=[
-                "soft Kansai casual (うち / タメ口) per SOUL.md",
+                "Kansai dialect Japanese casual (うち / タメ口) per SOUL.md",
                 "relationship-aware specificity with まー",
                 "direct answers without over-explaining",
                 "explicit uncertainty when memory or evidence is weak",

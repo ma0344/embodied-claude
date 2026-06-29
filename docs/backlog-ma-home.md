@@ -91,7 +91,7 @@
 | **OBS** | `/observe` フェーズ化 | 📋 | [tracks/obs.md](./tracks/obs.md) |
 | **CAM** | Tapo PTZ | 💤 | [tracks/cam-tapo-ptz.md](./tracks/cam-tapo-ptz.md) |
 | **EAR** | Surface マイク | 📋 | [tracks/ear.md](./tracks/ear.md) |
-| **VIS** | VL health · **Qwen→e4b vision POC**（事前テスト必須） | 💤 POC 待ち | [tracks/vis-health.md](./tracks/vis-health.md) |
+| **VIS** | VL health · vision **e4b** | ✅ 切替済（2026-06-29） | [vis-health.md](./tracks/vis-health.md) |
 | **V** | Surface UI 残（V4 等） | 部分済 | [tracks/surface-vision.md](./tracks/surface-vision.md) |
 | **GAPI** | Google Calendar / Drive | ✅ prep-1/2 CLI · 📋 配線要検討 → prep-3 | [tracks/gapi.md](./tracks/gapi.md) · [gapi-setup.md](./ops/gapi-setup.md) |
 | **TEMP** | TEMP-1〜5 ✅ · TEMP-C3/b/c4 ✅ · SHIFT-R1/R2/R3 ✅ | [utterance-anchoring.md](./tracks/utterance-anchoring.md) · [interpretation-shift-routing.md](./tracks/interpretation-shift-routing.md) |

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 from datetime import date, datetime, time
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -14,14 +13,11 @@ from social_core.stm import StmEntry
 
 from presence_ui.deps import get_stores
 from presence_ui.services.llm import _lm_studio_settings, _parse_openai_chat_content
+from presence_ui.training.reflection_text import strip_reflection_noise
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_INNER_VOICE_MAX_CHARS = 1800
-_INJECTION_RE = re.compile(
-    r"\[(?:gateway_turn_context|stm_recent|dream_digest|interaction_context)\b",
-    re.I,
-)
 
 
 def format_overnight_inner_voice_block(text: str) -> str:
@@ -37,30 +33,6 @@ def _day_bounds_iso(local_day: str, timezone: str) -> tuple[str, str]:
     start = datetime.combine(day, time.min, tzinfo=tz)
     end = datetime.combine(day, time.max, tzinfo=tz)
     return start.isoformat(), end.isoformat()
-
-
-def _strip_reflection_noise(text: str) -> str:
-    lines: list[str] = []
-    for line in (text or "").splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if _INJECTION_RE.search(stripped):
-            continue
-        if stripped.startswith("Autonomous tick"):
-            continue
-        if stripped.startswith("Open loops:"):
-            continue
-        if stripped.startswith("Calendar today"):
-            continue
-        if stripped.startswith("[desires]") or stripped.startswith("[/desires]"):
-            continue
-        if "Dominant pull:" in stripped and "Open loops:" in stripped:
-            continue
-        if stripped.startswith("（自律の思考メモ）"):
-            stripped = stripped.removeprefix("（自律の思考メモ）").strip()
-        lines.append(stripped)
-    return "\n".join(lines).strip()
 
 
 def _collect_private_reflection_bodies(
@@ -83,7 +55,7 @@ def _collect_private_reflection_bodies(
     bodies: list[str] = []
     for row in rows:
         title = str(row["title"] or "").strip()
-        body = _strip_reflection_noise(str(row["body"] or ""))
+        body = strip_reflection_noise(str(row["body"] or ""))
         chunk = body or title
         if chunk:
             bodies.append(chunk[:600])
@@ -101,7 +73,7 @@ def collect_overnight_reflection_sources(
     reflections: list[str] = []
     for entry in entries:
         if entry.kind == "agent_private_reflection":
-            cleaned = _strip_reflection_noise(entry.summary)
+            cleaned = strip_reflection_noise(entry.summary)
             if cleaned:
                 reflections.append(cleaned[:600])
 

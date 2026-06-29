@@ -155,11 +155,35 @@
       font-size: 0.85rem;
       margin-left: auto;
     }
+    .tabs {
+      max-width: 920px;
+      margin: 0 auto 0.75rem;
+      display: flex;
+      gap: 0.5rem;
+    }
+    .tabs button {
+      font: inherit;
+      padding: 0.4rem 0.85rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .tabs button.active {
+      background: #4a6741;
+      color: #fff;
+      border-color: #4a6741;
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Persona LoRA 学習データ</h1>
+    <div class="tabs">
+      <button type="button" id="tabSurface" class="active">会話</button>
+      <button type="button" id="tabInner">内省</button>
+    </div>
     <p class="meta" id="meta">読み込み中…</p>
     <p class="meta stats" id="stats"></p>
   </header>
@@ -191,10 +215,14 @@
 
   <script>
     const PAGE = 30;
+    let track = "surface";
     let offset = 0;
     let total = 0;
     let lastPayload = null;
     const selected = new Map();
+
+    const tabSurface = document.getElementById("tabSurface");
+    const tabInner = document.getElementById("tabInner");
 
     const metaEl = document.getElementById("meta");
     const statsEl = document.getElementById("stats");
@@ -210,6 +238,38 @@
     const pagerBottom = document.getElementById("pagerBottom");
     const prevButtons = document.querySelectorAll(".pager-prev");
     const nextButtons = document.querySelectorAll(".pager-next");
+
+    function apiBase() {
+      return track === "inner"
+        ? "/api/v1/training/persona-inner"
+        : "/api/v1/training/persona";
+    }
+
+    function applyTrackUi() {
+      const inner = track === "inner";
+      tabSurface.classList.toggle("active", !inner);
+      tabInner.classList.toggle("active", inner);
+      exportBtn.textContent = inner
+        ? "内省から再 export"
+        : "会話から再 export";
+      qEl.placeholder = inner
+        ? "cue / こより の文面で絞り込み"
+        : "まー / こより の文面で絞り込み";
+    }
+
+    function setTrack(next) {
+      if (track === next) return;
+      track = next;
+      offset = 0;
+      selected.clear();
+      updateRejectButton();
+      applyTrackUi();
+      load();
+    }
+
+    tabSurface.addEventListener("click", () => setTrack("surface"));
+    tabInner.addEventListener("click", () => setTrack("inner"));
+    applyTrackUi();
 
     function showMessage(text, isError) {
       msgEl.hidden = false;
@@ -277,7 +337,7 @@
 
         const maLabel = document.createElement("div");
         maLabel.className = "label";
-        maLabel.textContent = "まー";
+        maLabel.textContent = track === "inner" ? "cue" : "まー";
         const maBubble = document.createElement("div");
         maBubble.className = "bubble ma";
         maBubble.textContent = p.user;
@@ -327,7 +387,7 @@
       statsEl.textContent = "";
       try {
         const res = await fetch(
-          `/api/v1/training/persona?offset=${offset}&limit=${PAGE}`
+          `${apiBase()}?offset=${offset}&limit=${PAGE}`
         );
         if (!res.ok) throw new Error("HTTP " + res.status);
         const data = await res.json();
@@ -335,7 +395,9 @@
         total = data.candidates_total || 0;
         if (!data.exists) {
           showMessage(
-            "学習 JSONL がまだありません。「会話から再 export」で native 会話 JSONL から生成できます。",
+            track === "inner"
+              ? "内省 JSONL がまだありません。「内省から再 export」で private_reflections 等から生成できます。"
+              : "学習 JSONL がまだありません。「会話から再 export」で native 会話 JSONL から生成できます。",
             false
           );
           metaEl.textContent = "ファイルなし";
@@ -368,7 +430,7 @@
       exportBtn.textContent = "export 中…";
       hideMessage();
       try {
-        const res = await fetch("/api/v1/training/persona/export", { method: "POST" });
+        const res = await fetch(`${apiBase()}/export`, { method: "POST" });
         const data = await res.json();
         if (!data.ok) {
           throw new Error(data.error || "export failed");
@@ -378,8 +440,11 @@
         updateRejectButton();
         await load();
         showMessage(
-          `export 完了: セッション ${data.sessions_scanned} · 候補 ${data.pairs_written} 件` +
-            `（フィルタ除外 ${data.pairs_skipped}）· 学習用 ${data.curated_total} · 除外 ${data.rejected_total}`,
+          track === "inner"
+            ? `export 完了: 候補 ${data.pairs_written} 件` +
+                `（フィルタ除外 ${data.pairs_skipped}）· 学習用 ${data.curated_total} · 除外 ${data.rejected_total}`
+            : `export 完了: セッション ${data.sessions_scanned} · 候補 ${data.pairs_written} 件` +
+                `（フィルタ除外 ${data.pairs_skipped}）· 学習用 ${data.curated_total} · 除外 ${data.rejected_total}`,
           false
         );
       } catch (err) {
@@ -394,7 +459,7 @@
       if (!selected.size) return;
       rejectBtn.disabled = true;
       try {
-        const res = await fetch("/api/v1/training/persona/reject", {
+        const res = await fetch(`${apiBase()}/reject`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

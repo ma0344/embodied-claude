@@ -16,11 +16,13 @@ from presence_ui.gateway.calendar_pending import (
     clear_pending,
     format_calendar_cancel_block,
     format_calendar_confirm_block,
+    format_calendar_ingest_failed_block,
     is_calendar_affirmation,
     is_calendar_denial,
     load_pending,
     pending_from_clarification,
     pending_from_resolved,
+    pending_matches_utterance,
     save_pending,
 )
 from presence_ui.gateway.calendar_stage import (
@@ -59,6 +61,18 @@ def _progress_for_status(*, action: str, status: str) -> str:
     return "カレンダーを確認中"
 
 
+def _clear_superseded_pending(
+    *,
+    person_id: str,
+    utterance: str,
+) -> None:
+    existing = load_pending(person_id=person_id)
+    if existing is None:
+        return
+    if not pending_matches_utterance(existing, utterance):
+        clear_pending(person_id=person_id)
+
+
 def process_calendar_staged_ingest(
     *,
     person_id: str,
@@ -73,6 +87,7 @@ def process_calendar_staged_ingest(
     when = ts or utc_now()
     extract = run_calendar_stage2_extract(utterance=utterance)
     if extract is None:
+        _clear_superseded_pending(person_id=person_id, utterance=utterance)
         return None
     missing = list(compute_missing_fields(extract))
     policy = load_google_policy()
@@ -89,6 +104,7 @@ def process_calendar_staged_ingest(
     try:
         service = get_calendar_service()
     except GoogleAuthError:
+        _clear_superseded_pending(person_id=person_id, utterance=utterance)
         return None
     draft = None
     if extract.action == "create":
@@ -121,6 +137,18 @@ def process_calendar_staged_ingest(
     return record
 
 
+def _ingest_failed_outcome(
+    *,
+    utterance: str,
+    events: list[dict[str, Any]],
+) -> CalendarTurnOutcome:
+    events.append(progress_event(phase="calendar", label="予定を読み取れなかった"))
+    return CalendarTurnOutcome(
+        confirm_block=format_calendar_ingest_failed_block(utterance=utterance),
+        progress_events=tuple(events),
+    )
+
+
 def process_calendar_turn_sync(
     *,
     person_id: str,
@@ -145,6 +173,10 @@ def process_calendar_turn_sync(
         )
 
     if pending and pending.status == "awaiting_confirm" and is_calendar_affirmation(text):
+        if not pending.start_iso or not pending.end_iso:
+            clear_pending(person_id=person_id)
+            events.append(progress_event(phase="calendar", label="カレンダー操作に失敗"))
+            return _ingest_failed_outcome(utterance=pending.source_utterance, events=events)
         block, status = execute_pending_calendar_sync(pending)
         clear_pending(person_id=person_id)
         label = _progress_for_status(action=pending.action, status=status)
@@ -152,8 +184,9 @@ def process_calendar_turn_sync(
         return CalendarTurnOutcome(write_block=block, progress_events=tuple(events))
 
     pending = load_pending(person_id=person_id)
+    is_calendar_op = looks_like_calendar_create(text) or looks_like_calendar_update(text)
     if pending and pending.status in {"awaiting_confirm", "needs_clarification"}:
-        if looks_like_calendar_create(text) or looks_like_calendar_update(text):
+        if is_calendar_op:
             when = utc_now()
             new_record = process_calendar_staged_ingest(
                 person_id=person_id, utterance=text, ts=when
@@ -164,6 +197,15 @@ def process_calendar_turn_sync(
                     confirm_block=format_calendar_confirm_block(new_record),
                     progress_events=tuple(events),
                 )
+            if not pending_matches_utterance(pending, text):
+                clear_pending(person_id=person_id)
+                return _ingest_failed_outcome(utterance=text, events=events)
+        if pending.status == "awaiting_confirm" and pending_matches_utterance(pending, text):
+            events.append(progress_event(phase="calendar", label="カレンダー入れの確認"))
+            return CalendarTurnOutcome(
+                confirm_block=format_calendar_confirm_block(pending),
+                progress_events=tuple(events),
+            )
         if pending.status == "awaiting_confirm":
             events.append(progress_event(phase="calendar", label="確認待ち"))
             return CalendarTurnOutcome(
@@ -171,7 +213,7 @@ def process_calendar_turn_sync(
                 progress_events=tuple(events),
             )
 
-    if looks_like_calendar_create(text) or looks_like_calendar_update(text):
+    if is_calendar_op:
         pending = load_pending(person_id=person_id)
         if pending and pending.source_utterance.strip() == text:
             label = (
@@ -201,6 +243,7 @@ def process_calendar_turn_sync(
                 confirm_block=format_calendar_confirm_block(record),
                 progress_events=tuple(events),
             )
+        return _ingest_failed_outcome(utterance=text, events=events)
 
     return CalendarTurnOutcome()
 

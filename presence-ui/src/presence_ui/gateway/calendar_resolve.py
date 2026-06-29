@@ -32,11 +32,13 @@ _TIME_RANGE_INLINE_RE = re.compile(
 
 
 def _normalize_time_phrase(phrase: str) -> str:
-    return (
+    line = (
         phrase.replace("：", ":")
         .replace("－", "-")
         .replace("―", "-")
     )
+    # "9月 8日" → "9月8日" (month-day spacing breaks explicit date parse)
+    return re.sub(r"(\d{1,2})月\s+(\d{1,2})日", r"\1月\2日", line)
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,21 +174,23 @@ def resolve_start_end_phrases(
     anchor_iso: str,
     tz_name: str,
 ) -> ResolvedRange | None:
-    if not (start_phrase or "").strip():
+    start_norm = _normalize_time_phrase(start_phrase or "")
+    end_norm = _normalize_time_phrase(end_phrase or "")
+    if not start_norm.strip():
         return None
     tz = ZoneInfo(tz_name)
-    combined = f"{start_phrase} {end_phrase or ''}".strip()
+    combined = f"{start_norm} {end_norm}".strip()
     day = _resolve_day(phrase=combined, anchor_iso=anchor_iso, tz_name=tz_name)
     if day is None:
-        day = _resolve_day(phrase=start_phrase or "", anchor_iso=anchor_iso, tz_name=tz_name)
+        day = _resolve_day(phrase=start_norm, anchor_iso=anchor_iso, tz_name=tz_name)
     if day is None:
         return None
-    start = _time_from_phrase(start_phrase or combined, day=day, tz=tz)
+    start = _time_from_phrase(start_norm or combined, day=day, tz=tz)
     if start is None:
         start = _time_from_phrase(combined, day=day, tz=tz)
     if start is None:
         return None
-    end = _end_from_phrase(end_phrase or start_phrase or combined, day=day, tz=tz, start=start)
+    end = _end_from_phrase(end_norm or start_norm or combined, day=day, tz=tz, start=start)
     if end is None:
         end = start + timedelta(hours=1)
     return ResolvedRange(start=start, end=end, day=day)

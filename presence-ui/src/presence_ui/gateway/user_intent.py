@@ -169,7 +169,9 @@ def merge_intent_with_plan(
     if calendar_confirm_pending:
         notes.append(
             "[Action] Gateway has a pending calendar confirm in [calendar_confirm_pending]. "
-            "Ask まー to confirm or clarify; do NOT write until a later OK turn."
+            "Ask まー to confirm or clarify; do NOT write until gateway returns "
+            "[calendar_write_result] with status=ok on a later turn. "
+            "Do NOT say 入れた/入れといた/入れとく/変更した/ずらした/登録した without that block."
         )
 
     if remember_saved:

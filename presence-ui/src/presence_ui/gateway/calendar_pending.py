@@ -10,16 +10,64 @@ from pathlib import Path
 from presence_ui.gateway.calendar_resolve import format_confirm_summary_ja
 from presence_ui.gateway.calendar_stage import CalendarResolvedDraft, CalendarStageExtract
 
-_AFFIRM = re.compile(
-    r"^(?:"
-    r"OK|Ok|ok|オーケー|おっけー|おっけ|うん|はい|ええ|いいよ|いいわ|それで|"
-    r"大丈夫|よろしく|進めて|入れて|お願い|いこう|やって"
-    r")[。!！]?$",
-    re.I,
+_FILLER_PREFIX = re.compile(r"^(?:えっと|えーと|まあ|まー|あの|あ、?|うーん|ん、?)+", re.I)
+_TRAILING_PUNCT = re.compile(r"[。!！？、,]+$")
+_SOFT_SUFFIXES = (
+    "だよ",
+    "です",
+    "でね",
+    "だね",
+    "だな",
+    "だわ",
+    "っす",
+    "かな",
+    "ね",
+    "な",
+    "わ",
+    "よ",
+    "で",
 )
-_DENY = re.compile(
-    r"^(?:やめ|キャンセル|違う|ちがう|いい|だめ|しない)[。!！？]?$",
-    re.I,
+_AFFIRM_EXACT = frozenset(
+    {
+        "ok",
+        "オーケー",
+        "おっけー",
+        "おっけ",
+        "うん",
+        "はい",
+        "ええ",
+        "えー",
+        "いいよ",
+        "いいわ",
+        "それで",
+        "大丈夫",
+        "よろしく",
+        "進めて",
+        "入れて",
+        "お願い",
+        "いこう",
+        "やって",
+        "お願いします",
+    }
+)
+_DENY_EXACT = frozenset(
+    {
+        "やめ",
+        "やめて",
+        "キャンセル",
+        "違う",
+        "ちがう",
+        "だめ",
+        "しない",
+        "いい",
+    }
+)
+_MAX_CONFIRM_REPLY_LEN = 32
+
+CALENDAR_CONFIRM_HONESTY_DIRECTIVE = (
+    "Do NOT say you already added, moved, or registered the event "
+    "(入れた/入れといた/入れとく/変更した/ずらした/登録した) unless this turn includes "
+    "[calendar_write_result] with status=ok."
 )
 
 
@@ -32,6 +80,66 @@ def calendar_confirm_enabled() -> bool:
         return False
     raw = os.getenv("PRESENCE_GAPI_CALENDAR_CONFIRM", "1").strip().lower()
     return raw not in ("0", "false", "no", "off")
+
+
+def normalize_confirm_reply(text: str) -> str:
+    """Strip fillers, punctuation, and soft sentence endings for yes/no detection."""
+    line = (text or "").strip()
+    if not line:
+        return ""
+    line = _FILLER_PREFIX.sub("", line).strip()
+    line = re.sub(r"^[、,\s]+", "", line).strip()
+    line = _TRAILING_PUNCT.sub("", line).strip()
+    changed = True
+    while changed and line:
+        changed = False
+        for suffix in _SOFT_SUFFIXES:
+            if line.endswith(suffix) and len(line) > len(suffix):
+                line = line[: -len(suffix)].strip()
+                changed = True
+                break
+    return line
+
+
+def _confirm_segments(normalized: str) -> list[str]:
+    parts = re.split(r"[、,]+", normalized)
+    return [part.strip() for part in parts if part.strip()]
+
+
+def _is_affirm_core(normalized: str) -> bool:
+    if not normalized:
+        return False
+    low = normalized.lower()
+    return low in _AFFIRM_EXACT
+
+
+def _is_deny_core(normalized: str) -> bool:
+    if not normalized:
+        return False
+    low = normalized.lower()
+    if low in {"いいよ", "いいわ"}:
+        return False
+    return low in _DENY_EXACT
+
+
+def is_calendar_affirmation(text: str) -> bool:
+    normalized = normalize_confirm_reply(text)
+    if not normalized or len(normalized) > _MAX_CONFIRM_REPLY_LEN:
+        return False
+    segments = _confirm_segments(normalized)
+    if len(segments) > 1:
+        return all(_is_affirm_core(segment) for segment in segments)
+    return _is_affirm_core(normalized)
+
+
+def is_calendar_denial(text: str) -> bool:
+    normalized = normalize_confirm_reply(text)
+    if not normalized or len(normalized) > _MAX_CONFIRM_REPLY_LEN:
+        return False
+    segments = _confirm_segments(normalized)
+    if len(segments) > 1:
+        return all(_is_deny_core(segment) for segment in segments)
+    return _is_deny_core(normalized)
 
 
 def _pending_path() -> Path:
@@ -57,16 +165,6 @@ class CalendarPendingRecord:
     source_utterance: str
     confirm_summary_ja: str
     created_at: str
-
-
-def is_calendar_affirmation(text: str) -> bool:
-    line = (text or "").strip()
-    return bool(line and _AFFIRM.match(line))
-
-
-def is_calendar_denial(text: str) -> bool:
-    line = (text or "").strip()
-    return bool(line and _DENY.match(line))
 
 
 def load_pending(*, person_id: str) -> CalendarPendingRecord | None:
@@ -217,23 +315,24 @@ def format_calendar_confirm_block(record: CalendarPendingRecord) -> str:
         directive = (
             f"Calendar write needs more info from まー: {missing}.\n"
             "Ask a short clarifying question in こより voice. "
-            "Do NOT write to Google Calendar yet."
+            "Do NOT write to Google Calendar yet.\n"
+            f"{CALENDAR_CONFIRM_HONESTY_DIRECTIVE}"
         )
     elif record.action == "update":
         directive = (
             f"Gateway parsed a calendar UPDATE: {record.confirm_summary_ja}.\n"
             "Ask まー to confirm this is the right event and new time "
             "(例: 「この予定でいい？」). "
-            "Do NOT claim you already changed it. "
-            "Gateway writes only after まー says OK on a later turn."
+            "Gateway writes only after まー affirms on a later turn.\n"
+            f"{CALENDAR_CONFIRM_HONESTY_DIRECTIVE}"
         )
     else:
         directive = (
             f"Gateway parsed a calendar CREATE: {record.confirm_summary_ja}.\n"
             "Ask まー to confirm before writing "
             "(例: 「この内容でカレンダーに入れていい？」). "
-            "Do NOT claim you already added it. "
-            "Gateway writes only after まー says OK on a later turn."
+            "Gateway writes only after まー affirms on a later turn.\n"
+            f"{CALENDAR_CONFIRM_HONESTY_DIRECTIVE}"
         )
     lines.append(directive)
     return "\n".join(lines)
@@ -247,3 +346,27 @@ def format_calendar_cancel_block() -> str:
         "[Gateway directive — not for the user]\n"
         "まー cancelled the pending calendar operation. Acknowledge briefly; do not write."
     )
+
+
+def format_calendar_ingest_failed_block(*, utterance: str) -> str:
+    preview = (utterance or "").strip().replace("\n", " ")[:120]
+    return (
+        "[calendar_confirm_pending]\n"
+        "status=ingest_failed\n"
+        f"source_utterance={preview}\n"
+        "[/calendar_confirm_pending]\n\n"
+        "[Gateway directive — not for the user]\n"
+        "Gateway could NOT parse this calendar request into a pending draft "
+        "(Stage2 extract or date resolution failed).\n"
+        "Tell まー honestly that the calendar draft is not ready; ask to repeat "
+        "date/time/title clearly (例: 9月8日10時〜17時).\n"
+        f"{CALENDAR_CONFIRM_HONESTY_DIRECTIVE}\n"
+        "Do NOT reuse an older pending draft from a previous request."
+    )
+
+
+def pending_matches_utterance(
+    pending: CalendarPendingRecord,
+    utterance: str,
+) -> bool:
+    return pending.source_utterance.strip() == (utterance or "").strip()

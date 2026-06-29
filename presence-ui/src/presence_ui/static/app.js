@@ -18,8 +18,12 @@ const KIOSK_LAYOUT_STORAGE_KEY = "koyori-kiosk-layout";
 const KIOSK_AUDIO_VOLUME_KEY = "koyori-kiosk-audio-volume";
 const KIOSK_AUDIO_VOLUME_DEFAULT = 1;
 const KOYORI_AUDIO_OVERLAY_PORT = 18791;
+const KOYORI_SCREEN_IDLE_PORT = 18790;
 const KOYORI_AUDIO_OVERLAY_POLL_MS = 350;
 const KOYORI_AUDIO_OVERLAY_SHOW_MS = 2500;
+const KIOSK_LOCAL_HELPER_FAIL_THRESHOLD = 3;
+const KIOSK_LOCAL_HELPER_QUIET_MS = 60_000;
+const KIOSK_SCREEN_ON_THROTTLE_MS = 5000;
 const KIOSK_SLEEP_MINUTES_KEY = "koyori-kiosk-sleep-minutes";
 const KIOSK_SLEEP_MINUTES_DEFAULT = 10;
 const KIOSK_SLEEP_WAKE_ON_NOTIFY_KEY = "koyori-kiosk-sleep-wake-on-notify";
@@ -2584,6 +2588,52 @@ function setupKioskAudio() {
 
 let kioskVolumeOverlayHideTimer = null;
 let kioskVolumeOverlayPollTimer = null;
+let kioskVolumeOverlayPollActive = false;
+let kioskLocalHelperFailStreak = 0;
+let kioskLocalHelperQuietUntil = 0;
+let kioskScreenOnLastAt = 0;
+
+function kioskLocalHelpersInQuietPeriod() {
+  return Date.now() < kioskLocalHelperQuietUntil;
+}
+
+function recordKioskLocalHelperFailure() {
+  kioskLocalHelperFailStreak += 1;
+  if (kioskLocalHelperFailStreak >= KIOSK_LOCAL_HELPER_FAIL_THRESHOLD) {
+    kioskLocalHelperQuietUntil = Date.now() + KIOSK_LOCAL_HELPER_QUIET_MS;
+    kioskLocalHelperFailStreak = 0;
+  }
+}
+
+function recordKioskLocalHelperSuccess() {
+  kioskLocalHelperFailStreak = 0;
+  kioskLocalHelperQuietUntil = 0;
+}
+
+async function probeKioskLocalHelper(url) {
+  try {
+    const res = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(800),
+    });
+    return res.ok || res.status === 204;
+  } catch {
+    return false;
+  }
+}
+
+async function warmKioskLocalHelpers() {
+  if (!isKioskLayout()) return;
+  const [screenOk, audioOk] = await Promise.all([
+    probeKioskLocalHelper(kioskScreenIdleUrl("/health")),
+    probeKioskLocalHelper(kioskAudioHelperUrl("/health")),
+  ]);
+  if (!screenOk && !audioOk) {
+    kioskLocalHelperQuietUntil = Date.now() + KIOSK_LOCAL_HELPER_QUIET_MS;
+    return;
+  }
+  recordKioskLocalHelperSuccess();
+}
 
 function kioskAudioHelperUrl(path) {
   return `http://127.0.0.1:${KOYORI_AUDIO_OVERLAY_PORT}${path}`;
@@ -2609,25 +2659,43 @@ function showKioskVolumeOverlay(percent, muted = false) {
 }
 
 async function pollKioskVolumeOverlay() {
-  if (!isKioskLayout()) return;
+  if (!isKioskLayout() || kioskLocalHelpersInQuietPeriod()) return;
   try {
-    const res = await fetch(kioskAudioHelperUrl("/volume-overlay"), { cache: "no-store" });
-    if (!res.ok) return;
+    const res = await fetch(kioskAudioHelperUrl("/volume-overlay"), {
+      cache: "no-store",
+      signal: AbortSignal.timeout(800),
+    });
+    if (!res.ok) {
+      recordKioskLocalHelperFailure();
+      return;
+    }
+    recordKioskLocalHelperSuccess();
     const data = await res.json();
     if (!data?.visible) return;
     showKioskVolumeOverlay(data.percent, Boolean(data.muted));
   } catch {
-    /* koyori-audio-server not running (PC layout / dev) */
+    recordKioskLocalHelperFailure();
   }
 }
 
-function setupKioskVolumeOverlay() {
+function scheduleKioskVolumeOverlayPoll() {
   if (!isKioskLayout()) return;
-  if (kioskVolumeOverlayPollTimer) return;
-  void pollKioskVolumeOverlay();
-  kioskVolumeOverlayPollTimer = setInterval(() => {
-    void pollKioskVolumeOverlay();
-  }, KOYORI_AUDIO_OVERLAY_POLL_MS);
+  if (kioskVolumeOverlayPollTimer) clearTimeout(kioskVolumeOverlayPollTimer);
+  const delay = kioskLocalHelpersInQuietPeriod()
+    ? KIOSK_LOCAL_HELPER_QUIET_MS
+    : KOYORI_AUDIO_OVERLAY_POLL_MS;
+  kioskVolumeOverlayPollTimer = setTimeout(async () => {
+    await pollKioskVolumeOverlay();
+    scheduleKioskVolumeOverlayPoll();
+  }, delay);
+}
+
+function setupKioskVolumeOverlay() {
+  if (!isKioskLayout() || kioskVolumeOverlayPollActive) return;
+  kioskVolumeOverlayPollActive = true;
+  void pollKioskVolumeOverlay().finally(() => {
+    scheduleKioskVolumeOverlayPoll();
+  });
 }
 
 // ── C11g スリープ / 画面消灯 ──────────────────────────────────────
@@ -2671,18 +2739,25 @@ function setKioskSleepWakeOnNotify(enabled) {
 }
 
 function kioskScreenIdleUrl(path) {
-  return `http://127.0.0.1:18790${path}`;
+  return `http://127.0.0.1:${KOYORI_SCREEN_IDLE_PORT}${path}`;
 }
 
 function kioskScreenOff() {
-  if (!isKioskLayout()) return;
+  if (!isKioskLayout() || kioskLocalHelpersInQuietPeriod()) return;
   releaseWakeLock();
-  fetch(kioskScreenIdleUrl("/screen-off"), { mode: "no-cors", keepalive: true }).catch(() => {});
+  fetch(kioskScreenIdleUrl("/screen-off"), { mode: "no-cors", keepalive: true }).catch(() => {
+    recordKioskLocalHelperFailure();
+  });
 }
 
 function kioskScreenOn() {
-  if (!isKioskLayout()) return;
-  fetch(kioskScreenIdleUrl("/screen-on"), { mode: "no-cors", keepalive: true }).catch(() => {});
+  if (!isKioskLayout() || kioskLocalHelpersInQuietPeriod()) return;
+  const now = Date.now();
+  if (now - kioskScreenOnLastAt < KIOSK_SCREEN_ON_THROTTLE_MS) return;
+  kioskScreenOnLastAt = now;
+  fetch(kioskScreenIdleUrl("/screen-on"), { mode: "no-cors", keepalive: true }).catch(() => {
+    recordKioskLocalHelperFailure();
+  });
 }
 
 async function acquireWakeLock() {
@@ -3328,8 +3403,12 @@ function setupKioskLayout() {
   setupRoomDrawer();
   setupContextRail();
   setupKioskAudio();
-  setupKioskVolumeOverlay();
-  setupKioskSleep();
+  if (isKioskLayout()) {
+    void warmKioskLocalHelpers().finally(() => {
+      setupKioskVolumeOverlay();
+      setupKioskSleep();
+    });
+  }
   setupOutboundPoll();
 }
 

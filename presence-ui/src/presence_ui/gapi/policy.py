@@ -35,6 +35,20 @@ class GooglePolicy:
             if cal.enabled and cal.read_events and cal.id.strip()
         ]
 
+    def creatable_calendars(self) -> list[CalendarPolicy]:
+        return [
+            cal
+            for cal in self.calendars
+            if cal.enabled and cal.allow_create and cal.id.strip()
+        ]
+
+    def updatable_calendars(self) -> list[CalendarPolicy]:
+        return [
+            cal
+            for cal in self.calendars
+            if cal.enabled and cal.allow_update and cal.id.strip()
+        ]
+
 
 def get_policy_path(path: str | Path | None = None) -> Path:
     if path is not None:

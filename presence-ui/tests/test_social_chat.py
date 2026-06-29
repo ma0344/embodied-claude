@@ -7,6 +7,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from interaction_orchestrator_mcp.schemas import InteractionContext, ResponseContract, ResponsePlan
+from relationship_mcp.schemas import DismissOutcome
+
 from presence_ui.gateway import social_chat
 from presence_ui.services.llm import build_gateway_stable_append
 
@@ -48,6 +50,13 @@ def mock_stores(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     stores.policy_timezone = "Asia/Tokyo"
     stores.social_state.ingest_social_event.return_value = {"event_id": "evt-1"}
     monkeypatch.setattr(social_chat, "get_stores", lambda: stores)
+    monkeypatch.setattr("presence_ui.deps.get_stores", lambda: stores)
+    monkeypatch.setattr("presence_ui.gateway.room_ingest.get_stores", lambda: stores)
+    monkeypatch.setattr(
+        social_chat,
+        "_ingest_human_sync",
+        lambda **kwargs: DismissOutcome(),
+    )
     monkeypatch.setattr(
         social_chat,
         "compose_interaction_context",

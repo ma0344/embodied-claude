@@ -102,6 +102,84 @@ def list_events_in_prefetch_window(
     return events
 
 
+def parse_calendar_datetime(value: str, tz: ZoneInfo) -> datetime:
+    """Parse Google Calendar ISO start/end into local tz."""
+    raw = (value or "").strip()
+    if not raw:
+        raise ValueError("empty datetime")
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    if "T" not in raw and len(raw) == 10:
+        day = date.fromisoformat(raw)
+        return datetime.combine(day, time.min, tzinfo=tz)
+    dt = datetime.fromisoformat(raw)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=tz)
+    return dt.astimezone(tz)
+
+
+def list_events_for_day(
+    service: Resource,
+    policy: GooglePolicy,
+    *,
+    day: date,
+) -> list[CalendarEvent]:
+    """Events on a single local calendar day across readable calendars."""
+    tz = ZoneInfo(policy.timezone)
+    time_min = datetime.combine(day, time.min, tzinfo=tz)
+    time_max = datetime.combine(day + timedelta(days=1), time.min, tzinfo=tz)
+    events: list[CalendarEvent] = []
+    for calendar in policy.readable_calendars():
+        result = (
+            service.events()
+            .list(
+                calendarId=calendar.id,
+                timeMin=time_min.isoformat(),
+                timeMax=time_max.isoformat(),
+                singleEvents=True,
+                orderBy="startTime",
+                maxResults=250,
+            )
+            .execute()
+        )
+        for item in result.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            row = _event_row(calendar=calendar, item=item)
+            if row is not None:
+                events.append(row)
+    events.sort(key=lambda e: (e.start, e.calendar_id))
+    return events
+
+
+def match_event_by_local_start(
+    events: list[CalendarEvent],
+    *,
+    target_day: date,
+    hour: int,
+    minute: int,
+    tz: ZoneInfo,
+    tolerance_minutes: int = 45,
+) -> CalendarEvent | None:
+    """Pick the event whose local start is closest to hour:minute on target_day."""
+    best: tuple[int, CalendarEvent] | None = None
+    for event in events:
+        if not event.start:
+            continue
+        try:
+            start = parse_calendar_datetime(event.start, tz)
+        except ValueError:
+            continue
+        if start.date() != target_day:
+            continue
+        target_mins = hour * 60 + minute
+        start_mins = start.hour * 60 + start.minute
+        diff = abs(start_mins - target_mins)
+        if diff <= tolerance_minutes and (best is None or diff < best[0]):
+            best = (diff, event)
+    return best[1] if best else None
+
+
 def format_calendar_prefetch_block(
     policy: GooglePolicy,
     events: list[CalendarEvent],

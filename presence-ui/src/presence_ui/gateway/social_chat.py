@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator
 
@@ -20,6 +19,22 @@ from interaction_orchestrator_mcp.schemas import (
 from social_core import utc_now
 
 from presence_ui.deps import get_stores
+from presence_ui.gateway.calendar_prefetch import (
+    calendar_honesty_directive,
+    calendar_prefetch_enabled,
+    looks_like_calendar_query,
+)
+from presence_ui.gateway.calendar_write import (
+    calendar_write_enabled,
+    calendar_write_honesty_directive,
+    looks_like_calendar_create,
+    looks_like_calendar_update,
+)
+from presence_ui.gateway.context_limits import (
+    full_compose_max_chars,
+    lite_append_max_chars,
+    lite_compose_max_chars,
+)
 from presence_ui.gateway.deterministic_memory import (
     RememberOutcome,
     detect_memory_list_request,
@@ -36,13 +51,7 @@ from presence_ui.gateway.direct_actions import (
 )
 from presence_ui.gateway.hybrid_intent import HybridBodyIntent, resolve_hybrid_intent
 from presence_ui.gateway.open_loop_dismiss import dismiss_note, dismiss_progress_label
-from presence_ui.gateway.context_limits import (
-    enrich_max_chars,
-    full_compose_max_chars,
-    lite_append_max_chars,
-    lite_compose_max_chars,
-)
-from presence_ui.gateway.prompt_block_safe import truncate_lite_turn_delta, truncate_prompt_text
+from presence_ui.gateway.prompt_block_safe import truncate_lite_turn_delta
 from presence_ui.gateway.prompt_injection import apply_gateway_prompt_injection
 from presence_ui.gateway.room_events import progress_event
 from presence_ui.gateway.room_ingest import ingest_human_turn_async
@@ -162,25 +171,15 @@ def intercept_chat_request(
     vision_prefetch: str | None = None,
     web_search_prefetch: str | None = None,
     url_prefetch: str | None = None,
+    calendar_prefetch: str | None = None,
+    calendar_write: str | None = None,
+    calendar_confirm: str | None = None,
+    extra_gateway_events: list[dict[str, Any]] | None = None,
     hybrid: HybridBodyIntent | None = None,
 ) -> ChatInterceptResult:
     """Sync wrapper (tests / thread offload). Native chat uses async variant."""
     import asyncio
 
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(
-            intercept_chat_request_async(
-                payload=payload,
-                person_id=person_id,
-                lite=lite,
-                vision_prefetch=vision_prefetch,
-                web_search_prefetch=web_search_prefetch,
-                url_prefetch=url_prefetch,
-                hybrid=hybrid,
-            )
-        )
     message = str(payload.get("message") or "").strip()
     if not message:
         raise ValueError("message must not be empty")
@@ -189,6 +188,23 @@ def intercept_chat_request(
     dismiss_outcome = _ingest_human_sync(
         person_id=person_id, session_id=session_key, text=message
     )
+
+    write_block = calendar_write
+    confirm_block = calendar_confirm
+    cal_events = list(extra_gateway_events or [])
+    if write_block is None and confirm_block is None:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            from presence_ui.gateway.calendar_write_flow import process_calendar_turn
+
+            cal_outcome = asyncio.run(
+                process_calendar_turn(person_id=person_id, message=message)
+            )
+            write_block = cal_outcome.write_block
+            confirm_block = cal_outcome.confirm_block
+            cal_events.extend(cal_outcome.progress_events)
+
     return _finish_intercept_chat_request(
         payload=payload,
         person_id=person_id,
@@ -196,6 +212,10 @@ def intercept_chat_request(
         vision_prefetch=vision_prefetch,
         web_search_prefetch=web_search_prefetch,
         url_prefetch=url_prefetch,
+        calendar_prefetch=calendar_prefetch,
+        calendar_write=write_block,
+        calendar_confirm=confirm_block,
+        extra_gateway_events=cal_events or None,
         message=message,
         session_key=session_key,
         dismiss_outcome=dismiss_outcome,
@@ -211,6 +231,10 @@ async def intercept_chat_request_async(
     vision_prefetch: str | None = None,
     web_search_prefetch: str | None = None,
     url_prefetch: str | None = None,
+    calendar_prefetch: str | None = None,
+    calendar_write: str | None = None,
+    calendar_confirm: str | None = None,
+    extra_gateway_events: list[dict[str, Any]] | None = None,
     hybrid: HybridBodyIntent | None = None,
 ) -> ChatInterceptResult:
     """Run compose/plan; enrich message or block forward on silent moves."""
@@ -225,6 +249,18 @@ async def intercept_chat_request_async(
             person_id=person_id, session_id=session_key, text=message
         )
     )[1]
+
+    write_block = calendar_write
+    confirm_block = calendar_confirm
+    cal_gateway_events = list(extra_gateway_events or [])
+    if write_block is None and confirm_block is None:
+        from presence_ui.gateway.calendar_write_flow import process_calendar_turn
+
+        cal_outcome = await process_calendar_turn(person_id=person_id, message=message)
+        write_block = cal_outcome.write_block
+        confirm_block = cal_outcome.confirm_block
+        cal_gateway_events.extend(cal_outcome.progress_events)
+
     return _finish_intercept_chat_request(
         payload=payload,
         person_id=person_id,
@@ -232,6 +268,10 @@ async def intercept_chat_request_async(
         vision_prefetch=vision_prefetch,
         web_search_prefetch=web_search_prefetch,
         url_prefetch=url_prefetch,
+        calendar_prefetch=calendar_prefetch,
+        calendar_write=write_block,
+        calendar_confirm=confirm_block,
+        extra_gateway_events=cal_gateway_events,
         message=message,
         session_key=session_key,
         dismiss_outcome=dismiss_outcome,
@@ -247,6 +287,10 @@ def _finish_intercept_chat_request(
     vision_prefetch: str | None,
     web_search_prefetch: str | None,
     url_prefetch: str | None,
+    calendar_prefetch: str | None,
+    calendar_write: str | None,
+    calendar_confirm: str | None,
+    extra_gateway_events: list[dict[str, Any]] | None,
     message: str,
     session_key: str | None,
     dismiss_outcome,
@@ -254,7 +298,7 @@ def _finish_intercept_chat_request(
 ) -> ChatInterceptResult:
     compose_max_chars = lite_compose_max_chars() if lite else full_compose_max_chars()
 
-    gateway_events: list[dict[str, Any]] = []
+    gateway_events: list[dict[str, Any]] = list(extra_gateway_events or [])
     memory_notes: list[str] = []
     archive_closed_loops: list[str] = []
     resolved = hybrid or resolve_hybrid_intent(message)
@@ -489,6 +533,9 @@ def _finish_intercept_chat_request(
         vision_prefetch_done=bool(vision_prefetch),
         web_search_prefetch_done=bool(web_search_prefetch),
         url_prefetch_done=bool(url_prefetch),
+        calendar_prefetch_done=bool(calendar_prefetch),
+        calendar_write_done=bool(calendar_write),
+        calendar_confirm_pending=bool(calendar_confirm),
         remember_saved=remember_saved,
     )
     gateway_speak = ibf_gateway_speak_enabled() and effective.gateway_speak_after_reply
@@ -508,6 +555,21 @@ def _finish_intercept_chat_request(
         and not url_prefetch
     ):
         honesty = web_search_honesty_directive()
+        turn_delta = f"{turn_delta}\n\n{honesty}" if turn_delta else honesty
+    if (
+        calendar_prefetch_enabled()
+        and looks_like_calendar_query(message)
+        and not calendar_prefetch
+        and not calendar_write
+    ):
+        honesty = calendar_honesty_directive()
+        turn_delta = f"{turn_delta}\n\n{honesty}" if turn_delta else honesty
+    if (
+        calendar_write_enabled()
+        and (looks_like_calendar_create(message) or looks_like_calendar_update(message))
+        and not calendar_write
+    ):
+        honesty = calendar_write_honesty_directive()
         turn_delta = f"{turn_delta}\n\n{honesty}" if turn_delta else honesty
     inbound_delta = _inbound_reply_dialogue_delta(payload, user_reply=message)
     if inbound_delta:
@@ -532,6 +594,12 @@ def _finish_intercept_chat_request(
         enriched_message = f"{enriched_message.rstrip()}\n\n{web_search_prefetch.strip()}"
     if url_prefetch:
         enriched_message = f"{enriched_message.rstrip()}\n\n{url_prefetch.strip()}"
+    if calendar_prefetch:
+        enriched_message = f"{enriched_message.rstrip()}\n\n{calendar_prefetch.strip()}"
+    if calendar_write:
+        enriched_message = f"{enriched_message.rstrip()}\n\n{calendar_write.strip()}"
+    if calendar_confirm:
+        enriched_message = f"{enriched_message.rstrip()}\n\n{calendar_confirm.strip()}"
     enriched = payload.copy()
     enriched["message"] = enriched_message
     if append_prompt:

@@ -39,6 +39,7 @@ class SocialDB:
             connection.execute("PRAGMA journal_mode=WAL")
             connection.execute("PRAGMA foreign_keys=ON")
             connection.execute("PRAGMA synchronous=NORMAL")
+            connection.execute("PRAGMA busy_timeout=10000")
             apply_migrations(connection)
             self._connection = connection
         return self._connection

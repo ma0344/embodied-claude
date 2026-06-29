@@ -361,6 +361,24 @@ async def try_ol_gate_after_ingest(
         return None
     tz = timezone or stores.policy_timezone
 
+    from presence_ui.gateway.calendar_pending import calendar_confirm_enabled
+    from presence_ui.gateway.calendar_write import (
+        looks_like_calendar_create,
+        looks_like_calendar_update,
+    )
+    from presence_ui.gateway.calendar_write_flow import process_calendar_staged_ingest
+
+    if calendar_confirm_enabled() and (
+        looks_like_calendar_create(text) or looks_like_calendar_update(text)
+    ):
+        await asyncio.to_thread(
+            process_calendar_staged_ingest,
+            person_id=person_id,
+            utterance=text,
+            ts=ts,
+        )
+        return None
+
     from presence_ui.gateway.temp_c_staged import (
         apply_staged_decisions,
         gw_s2_staged_enabled,

@@ -71,6 +71,36 @@ phase=chat
     assert strip_enriched_user_prompt(raw) == "こんばんは"
 
 
+def test_strip_enriched_user_prompt_with_tail_calendar_prefetch_crlf() -> None:
+    """Regression: CRLF + calendar_prefetch tail must not hide まー's line (Windows JSONL)."""
+    raw = (
+        "[gateway_turn_context — not for the user]\r\n"
+        "[interaction_context]\r\n"
+        "phase=chat\r\n"
+        "\r\n"
+        "[Social move: answer_directly] reply\r\n"
+        "\r\n"
+        "[Action] Gateway already ran calendar_prefetch. "
+        "Use [calendar_prefetch] events as authoritative.\r\n"
+        "\r\n"
+        "そうだね。ゆっくりしてる。\r\n"
+        "ところで、明日の予定って何かある？\r\n"
+        "\r\n"
+        "[calendar_prefetch]\r\n"
+        "range=today,tomorrow\r\n"
+        "status=ok\r\n"
+        "--- events ---\r\n"
+        "2026-06-30T07:30:00+09:00 | プラごみ\r\n"
+        "[/calendar_prefetch]\r\n"
+        "\r\n"
+        "[Gateway directive — not for the user]\r\n"
+        "Gateway fetched Google Calendar."
+    )
+    assert strip_enriched_user_prompt(raw) == (
+        "そうだね。ゆっくりしてる。\nところで、明日の予定って何かある？"
+    )
+
+
 def test_strip_enriched_user_prompt_with_tail_web_search_prefetch() -> None:
     """Regression: tail prefetch after utterance must not hide まー's line in UI."""
     raw = """[gateway_turn_context — not for the user]

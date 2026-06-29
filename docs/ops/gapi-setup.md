@@ -1,7 +1,7 @@
 # GAPI — OAuth セットアップ（ma-home）
 
 **対象**: GAPI-1 · OAuth（まー個人）  
-**トラック**: [tracks/gapi.md](../tracks/gapi.md)（**prep-1/2 ✅ · prep-3 実線待ち**）  
+**トラック**: [tracks/gapi.md](../tracks/gapi.md)（**prep-1/2/3 ✅**）  
 **ポリシー例**: [examples/configs/gapi-policy.example.toml](../../examples/configs/gapi-policy.example.toml)
 
 ---
@@ -142,13 +142,21 @@ GOOGLE_OAUTH_TOKEN_PATH=C:/Users/ma/.claude/google/oauth-token.json
 # ポリシー（任意 — 未設定時は socialPolicy walk-up）
 # GAPI_POLICY_PATH=C:/Users/ma/src/embodied-claude/examples/configs/gapi-policy.example.toml
 
-PRESENCE_GAPI_ENABLED=0
+PRESENCE_GAPI_ENABLED=1
 PRESENCE_GAPI_CALENDAR_PREFETCH=1
-# Phase 1.5 以降
-PRESENCE_GAPI_CALENDAR_WRITE=0
+# GAPI-7 — 明示の「入れておいて」「ずらして」で events.insert/patch
+PRESENCE_GAPI_CALENDAR_WRITE=1
+# GAPI-7b — Stage2 抽出 + 確認後に書込（既定 ON）
+PRESENCE_GAPI_CALENDAR_CONFIRM=1
+PRESENCE_GAPI_CALENDAR_STAGED=1
 ```
 
-`PRESENCE_GAPI_ENABLED=1` は **prep-3**（router 実線）後。それまでは CLI smoke のみ。
+`PRESENCE_GAPI_ENABLED=1` で router が L0 calendar intent 時に `[calendar_prefetch]` を注入する（`おはよ` だけでは API を叩かない）。
+
+**7b（既定）** `PRESENCE_GAPI_CALENDAR_CONFIRM=1`  
+e4b Stage2 で日時・タイトル抽出 → 不足なら質問 → 揃ったら「この内容で入れていい？」→ まーが `OK` → gateway 書込 → 「入れたで」。
+
+**7a 即時** `PRESENCE_GAPI_CALENDAR_CONFIRM=0` — regex 直書き（確認なし）。
 
 ---
 
@@ -158,7 +166,9 @@ PRESENCE_GAPI_CALENDAR_WRITE=0
 |------|-----|---------|--------|
 | **prep-1** | `gapi-calendar-smoke` / `--prefetch` | ✅ | — |
 | **prep-2** | `gapi-calendar-write-smoke` | ✅ | — |
-| **prep-3** | — | — | 📋 router 実線 · [配線要検討](../tracks/gapi.md#配線--要検討2026-06-27) 後 |
+| **prep-3** | — | — | ✅ `calendar_prefetch` · native_chat_router |
+| **GAPI-7** | — | — | ✅ `calendar_write` · create + patch（`PRESENCE_GAPI_CALENDAR_WRITE=1`） |
+| **GAPI-7b** | — | — | ✅ Stage2 抽出 + 確認フロー（`PRESENCE_GAPI_CALENDAR_CONFIRM=1` 既定） |
 
 ---
 
@@ -212,7 +222,7 @@ primary は `id = "primary"` のまま。
 
 - [ ] primary + 共有カレンダー ID 一覧（共有は必要時）
 - [ ] Drive フォルダ ID（Phase 2a）
-- [ ] **prep-3**: router 実線（[配線要検討](../tracks/gapi.md#配線--要検討2026-06-27) を先に詰める）
-- [ ] GAPI-2 E2E: 会話「今日の予定は？」
+- [x] **prep-3**: router 実線（`calendar_prefetch` · L0 intent）
+- [ ] GAPI-2 E2E: 会話「今日の予定は？」（`PRESENCE_GAPI_ENABLED=1`）
 - [ ] GAPI-7 E2E: 会話「来週火曜15時に〇〇、カレンダー入れといて」
 - [ ] 共有カレンダーで `allow_create` が効くこと（書込先をポリシーで限定）

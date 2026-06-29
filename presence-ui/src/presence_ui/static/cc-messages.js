@@ -12,6 +12,12 @@ const SYSTEM_BLOCK_RES = [
   /^\[vision_prefetch\]\s*$/i,
   /^\[web_search_prefetch\]\s*$/i,
   /^\[\/web_search_prefetch\]/i,
+  /^\[calendar_prefetch\]\s*$/i,
+  /^\[\/calendar_prefetch\]/i,
+  /^\[calendar_write_result\]\s*$/i,
+  /^\[\/calendar_write_result\]/i,
+  /^\[calendar_confirm_pending\]\s*$/i,
+  /^\[\/calendar_confirm_pending\]/i,
   /^\[url_prefetch\]\s*$/i,
   /^\[\/url_prefetch\]/i,
   /^\[Gateway directive\b/i,
@@ -45,6 +51,9 @@ const PAIRED_BLOCK_OPENERS = {
   "[dream_digest]": "[/dream_digest]",
   "[overnight_inner_voice]": "[/overnight_inner_voice]",
   "[web_search_prefetch]": "[/web_search_prefetch]",
+  "[calendar_prefetch]": "[/calendar_prefetch]",
+  "[calendar_write_result]": "[/calendar_write_result]",
+  "[calendar_confirm_pending]": "[/calendar_confirm_pending]",
   "[url_prefetch]": "[/url_prefetch]",
 };
 
@@ -194,8 +203,12 @@ function blockIndices(lines, headerIndex, nextHeader) {
 }
 
 /** Phase 1 fallback for history JSONL until sociality leaves user text (Phase 2). */
+function normalizeNewlines(text) {
+  return String(text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
 function stripEnrichedUserPromptOnce(text) {
-  const raw = String(text ?? "");
+  const raw = normalizeNewlines(text);
   if (!raw.trim()) return "";
 
   const lines = raw.split("\n");
@@ -239,6 +252,9 @@ function stripOneTrailingTailPrefetch(remainder) {
   const patterns = [
     /\n\[url_prefetch\][\s\S]*$/i,
     /\n\[web_search_prefetch\][\s\S]*$/i,
+    /\n\[calendar_confirm_pending\][\s\S]*$/i,
+    /\n\[calendar_write_result\][\s\S]*$/i,
+    /\n\[calendar_prefetch\][\s\S]*$/i,
     /\n\[vision_prefetch\][\s\S]*$/i,
   ];
   for (const pattern of patterns) {
@@ -261,7 +277,7 @@ function stripTrailingTailPrefetch(remainder) {
 }
 
 function stripGatewayWrapperTail(text) {
-  const raw = String(text ?? "");
+  const raw = normalizeNewlines(text);
   if (!raw.trim()) return "";
   const lines = raw.split("\n");
   if (!lines.length || !/^\[gateway_turn_context\b/i.test(lines[0].trim())) return null;
@@ -278,7 +294,7 @@ function stripGatewayWrapperTail(text) {
 }
 
 function stripEnrichedUserPrompt(text) {
-  const raw = String(text ?? "");
+  const raw = normalizeNewlines(text);
   if (!raw.trim()) return "";
 
   const firstLine = raw.split("\n", 1)[0].trim();

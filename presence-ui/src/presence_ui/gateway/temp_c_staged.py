@@ -10,19 +10,19 @@ from presence_ui.deps import PresenceStores
 from presence_ui.gateway.correction_routing import (
     CorrectionParsed,
     correction_routing_enabled,
+    promote_correction_kind_if_cued,
     route_correction,
     run_correction_stage2,
     should_run_correction_stage2,
-    promote_correction_kind_if_cued,
 )
 from presence_ui.gateway.gw_silent import run_classifier_turn
 from presence_ui.gateway.llm_intent import _extract_json_object
+from presence_ui.gateway.ol5_completion_verbs import enrich_decision_completion_verbs
 from presence_ui.gateway.ol_gate import (
     OlGateGatewayDecision,
     OlGateParsed,
     merge_ol_gate_gateway,
 )
-from presence_ui.gateway.ol5_completion_verbs import enrich_decision_completion_verbs
 from presence_ui.gateway.ol_gate_prompts import (
     TEMP_C_STAGE1_SYSTEM,
     TEMP_C_STAGE2_SYSTEM,
@@ -39,6 +39,7 @@ STAGE1_KINDS = frozenset(
         "past_report",
         "greeting",
         "correction",
+        "calendar_operation",
         "other",
     }
 )
@@ -299,6 +300,14 @@ def run_staged_classify(*, utterance: str) -> StagedClassifyResult | None:
             correction=correction,
         )
 
+    if stage1.utterance_kind == "calendar_operation":
+        return StagedClassifyResult(
+            utterance=utterance,
+            stage1=stage1,
+            commitment_strength=None,
+            events=(),
+        )
+
     if not should_run_stage2(stage1):
         return StagedClassifyResult(
             utterance=utterance,
@@ -399,6 +408,15 @@ def apply_staged_decisions(
     result: StagedClassifyResult,
     timezone: str,
 ) -> list[OlGateGatewayDecision]:
+    if result.stage1.utterance_kind == "calendar_operation":
+        from presence_ui.gateway.calendar_write_flow import process_calendar_staged_ingest
+
+        process_calendar_staged_ingest(
+            person_id=person_id,
+            utterance=text,
+            ts=ts,
+        )
+        return []
     if (
         correction_routing_enabled()
         and result.stage1.utterance_kind == "correction"

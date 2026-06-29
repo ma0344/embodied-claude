@@ -120,6 +120,9 @@ def merge_intent_with_plan(
     vision_prefetch_done: bool = False,
     web_search_prefetch_done: bool = False,
     url_prefetch_done: bool = False,
+    calendar_prefetch_done: bool = False,
+    calendar_write_done: bool = False,
+    calendar_confirm_pending: bool = False,
     remember_saved: bool = False,
 ) -> EffectiveTurnBody:
     """Combine まーの要求 with plan/boundary — plan can veto gateway body actions."""
@@ -148,6 +151,25 @@ def merge_intent_with_plan(
         notes.append(
             "[Action] Gateway already ran url_prefetch. "
             "Describe page contents ONLY from excerpt; do NOT infer from snippets or training data."
+        )
+
+    if calendar_prefetch_done:
+        notes.append(
+            "[Action] Gateway already ran calendar_prefetch. "
+            "Use [calendar_prefetch] events as authoritative for schedule; do NOT invent events."
+        )
+
+    if calendar_write_done:
+        notes.append(
+            "[Action] Gateway already ran calendar_write. "
+            "Use [calendar_write_result] as authoritative for create/update; "
+            "do NOT claim success without status=ok in that block."
+        )
+
+    if calendar_confirm_pending:
+        notes.append(
+            "[Action] Gateway has a pending calendar confirm in [calendar_confirm_pending]. "
+            "Ask まー to confirm or clarify; do NOT write until a later OK turn."
         )
 
     if remember_saved:

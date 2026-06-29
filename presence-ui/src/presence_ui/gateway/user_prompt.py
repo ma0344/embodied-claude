@@ -4,6 +4,12 @@ from __future__ import annotations
 
 import re
 
+
+def _normalize_newlines(text: str) -> str:
+    """CRLF/CR → LF so ``\\n\\n`` utterance anchors work on Windows JSONL."""
+    return (text or "").replace("\r\n", "\n").replace("\r", "\n")
+
+
 # Phase 1 fallback for history JSONL where sociality was prepended to user text.
 _SYSTEM_BLOCK_RES = (
     re.compile(r"^\[Social context\]\s*$", re.I),
@@ -20,6 +26,12 @@ _SYSTEM_BLOCK_RES = (
     re.compile(r"^\[vision_prefetch\]\s*$", re.I),
     re.compile(r"^\[web_search_prefetch\]\s*$", re.I),
     re.compile(r"^\[/web_search_prefetch\]", re.I),
+    re.compile(r"^\[calendar_prefetch\]\s*$", re.I),
+    re.compile(r"^\[/calendar_prefetch\]", re.I),
+    re.compile(r"^\[calendar_write_result\]\s*$", re.I),
+    re.compile(r"^\[/calendar_write_result\]", re.I),
+    re.compile(r"^\[calendar_confirm_pending\]\s*$", re.I),
+    re.compile(r"^\[/calendar_confirm_pending\]", re.I),
     re.compile(r"^\[url_prefetch\]\s*$", re.I),
     re.compile(r"^\[/url_prefetch\]", re.I),
     re.compile(r"^\[Gateway directive\b", re.I),
@@ -45,6 +57,12 @@ _DIRECTIVE_BLOCK_RES = (
     re.compile(r"^\[vision_prefetch\]\s*$", re.I),
     re.compile(r"^\[web_search_prefetch\]\s*$", re.I),
     re.compile(r"^\[/web_search_prefetch\]", re.I),
+    re.compile(r"^\[calendar_prefetch\]\s*$", re.I),
+    re.compile(r"^\[/calendar_prefetch\]", re.I),
+    re.compile(r"^\[calendar_write_result\]\s*$", re.I),
+    re.compile(r"^\[/calendar_write_result\]", re.I),
+    re.compile(r"^\[calendar_confirm_pending\]\s*$", re.I),
+    re.compile(r"^\[/calendar_confirm_pending\]", re.I),
     re.compile(r"^\[url_prefetch\]\s*$", re.I),
     re.compile(r"^\[/url_prefetch\]", re.I),
     re.compile(r"^\[Gateway directive\b", re.I),
@@ -69,6 +87,9 @@ _GATEWAY_WRAPPER_RE = re.compile(r"^\[gateway_turn_context\b", re.I)
 _TAIL_PREFETCH_RES = (
     re.compile(r"\n\[url_prefetch\][\s\S]*$", re.I),
     re.compile(r"\n\[web_search_prefetch\][\s\S]*$", re.I),
+    re.compile(r"\n\[calendar_prefetch\][\s\S]*$", re.I),
+    re.compile(r"\n\[calendar_write_result\][\s\S]*$", re.I),
+    re.compile(r"\n\[calendar_confirm_pending\][\s\S]*$", re.I),
     re.compile(r"\n\[vision_prefetch\][\s\S]*$", re.I),
 )
 
@@ -221,7 +242,7 @@ def _strip_gateway_wrapper_tail(text: str) -> str | None:
     The body may contain blank lines, unclosed [stm_recent], and nested headers;
     the reliable anchor is the final ``\\n\\n`` before the user's words.
     """
-    raw = text or ""
+    raw = _normalize_newlines(text)
     if not raw.strip():
         return ""
     lines = raw.split("\n")
@@ -283,7 +304,7 @@ def _strip_leading_orphan_injection_lines(text: str) -> str:
 
 def strip_enriched_user_prompt(text: str) -> str:
     """Remove prepended sociality blocks from stored user prompts (Phase 1 only)."""
-    raw = text or ""
+    raw = _normalize_newlines(text)
     if not raw.strip():
         return ""
 

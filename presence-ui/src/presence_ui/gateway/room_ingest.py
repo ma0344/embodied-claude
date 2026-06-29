@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sqlite3
+import time
 
 from relationship_mcp.schemas import DismissOutcome
 from social_core import utc_now
@@ -12,6 +14,25 @@ from presence_ui.deps import get_stores
 from presence_ui.services.room_events import ROOM_WRITE_SOURCE
 
 logger = logging.getLogger(__name__)
+
+_INGEST_LOCK_RETRIES = 5
+
+
+def _ingest_social_event_with_retry(stores, event: dict) -> dict:
+    """Retry transient SQLITE_BUSY while kiosk/chat contend on social.db."""
+    last_exc: sqlite3.OperationalError | None = None
+    for attempt in range(_INGEST_LOCK_RETRIES):
+        try:
+            return stores.social_state.ingest_social_event(event)
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc).lower():
+                raise
+            last_exc = exc
+            if attempt + 1 >= _INGEST_LOCK_RETRIES:
+                break
+            time.sleep(0.05 * (2**attempt))
+    assert last_exc is not None
+    raise last_exc
 
 
 def ingest_human_turn(
@@ -60,7 +81,8 @@ async def _ingest_human_core_async(
 ) -> tuple[str, DismissOutcome]:
     stores = get_stores()
     when = ts or utc_now()
-    result = stores.social_state.ingest_social_event(
+    result = _ingest_social_event_with_retry(
+        stores,
         {
             "ts": when,
             "source": ROOM_WRITE_SOURCE,
@@ -69,7 +91,7 @@ async def _ingest_human_core_async(
             "session_id": session_id,
             "confidence": 1.0,
             "payload": {"text": text, "channel": "chat"},
-        }
+        },
     )
     event_id = str(result.get("event_id") or "")
     outcome = DismissOutcome()
@@ -124,7 +146,8 @@ def ingest_agent_turn(
 
     stores = get_stores()
     when = ts or utc_now()
-    result = stores.social_state.ingest_social_event(
+    result = _ingest_social_event_with_retry(
+        stores,
         {
             "ts": when,
             "source": ROOM_WRITE_SOURCE,
@@ -133,6 +156,6 @@ def ingest_agent_turn(
             "session_id": session_id,
             "confidence": 1.0,
             "payload": {"text": text, "channel": "chat"},
-        }
+        },
     )
     return str(result.get("event_id") or "")

@@ -14,6 +14,8 @@ from claude_code_server.models import LoginRequest
 from fastapi import APIRouter, Depends, HTTPException, Request
 from starlette.responses import StreamingResponse
 
+from presence_ui.gateway.calendar_prefetch import prefetch_calendar_for_message
+from presence_ui.gateway.calendar_write import execute_calendar_write_for_message
 from presence_ui.gateway.ccs_integration import (
     agent_config_from_intercept,
     default_agent_config,
@@ -27,9 +29,9 @@ from presence_ui.gateway.deterministic_memory import (
 )
 from presence_ui.gateway.hybrid_intent import resolve_hybrid_intent
 from presence_ui.gateway.search_prefetch import prefetch_web_search_for_message
-from presence_ui.gateway.url_prefetch import prefetch_urls_for_turn
 from presence_ui.gateway.see_prefetch import prefetch_camera_for_message
 from presence_ui.gateway.social_chat import ChatInterceptResult, intercept_chat_request_async
+from presence_ui.gateway.url_prefetch import prefetch_urls_for_turn
 
 logger = logging.getLogger(__name__)
 
@@ -228,8 +230,28 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
         vision_note: str | None = None
         web_search_note: str | None = None
         url_note: str | None = None
+        calendar_note: str | None = None
+        calendar_write_note: str | None = None
         search_hits = []
         search_query = ""
+        try:
+            calendar_write_note, _write_events = await execute_calendar_write_for_message(
+                req.prompt
+            )
+            if calendar_write_note:
+                logger.info(
+                    "native chat calendar write ok (%d chars)", len(calendar_write_note)
+                )
+        except Exception as exc:
+            logger.warning("native chat calendar write failed: %s", exc)
+            calendar_write_note = None
+        try:
+            calendar_note, _cal_events = await prefetch_calendar_for_message(req.prompt)
+            if calendar_note:
+                logger.info("native chat calendar prefetch ok (%d chars)", len(calendar_note))
+        except Exception as exc:
+            logger.warning("native chat calendar prefetch failed: %s", exc)
+            calendar_note = None
         try:
             web_search_note, _web_events, search_hits, search_query = (
                 await prefetch_web_search_for_message(req.prompt)
@@ -284,6 +306,8 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
             vision_prefetch=vision_note,
             web_search_prefetch=web_search_note,
             url_prefetch=url_note,
+            calendar_prefetch=calendar_note,
+            calendar_write=calendar_write_note,
             hybrid=hybrid,
         )
         if not intercept.forward:

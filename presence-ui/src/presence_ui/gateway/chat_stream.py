@@ -7,6 +7,14 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 
+from presence_ui.gateway.calendar_prefetch import (
+    detect_calendar_intent,
+    prefetch_calendar_for_message,
+)
+from presence_ui.gateway.calendar_write import (
+    detect_calendar_write_intent,
+    execute_calendar_write_for_message,
+)
 from presence_ui.gateway.hybrid_intent import resolve_hybrid_intent
 from presence_ui.gateway.room_events import activity_event, encode_event, progress_event
 from presence_ui.gateway.room_ingest import ingest_agent_turn
@@ -14,7 +22,6 @@ from presence_ui.gateway.search_prefetch import (
     detect_web_search_intent,
     prefetch_web_search_for_message,
 )
-from presence_ui.gateway.url_prefetch import prefetch_urls_for_turn
 from presence_ui.gateway.see_intent import SEE_PROGRESS_LABELS, detect_see_intent
 from presence_ui.gateway.see_prefetch import prefetch_camera_for_message
 from presence_ui.gateway.social_chat import (
@@ -24,6 +31,7 @@ from presence_ui.gateway.social_chat import (
     stream_silent_response,
 )
 from presence_ui.gateway.stream_sanitize import extract_assistant_speech, stream_passthrough_chat
+from presence_ui.gateway.url_prefetch import prefetch_urls_for_turn
 from presence_ui.services.vision_capture import vision_prefetch_enabled
 
 
@@ -38,10 +46,46 @@ async def stream_gateway_chat(
     vision_note: str | None = None
     web_search_note: str | None = None
     url_note: str | None = None
+    calendar_note: str | None = None
+    calendar_write_note: str | None = None
     search_hits = []
     search_query = ""
     gateway_events: list[dict[str, Any]] = []
     hybrid = resolve_hybrid_intent(message) if message else None
+
+    if message:
+        if detect_calendar_write_intent(message):
+            yield encode_event(progress_event(phase="calendar", label="カレンダーに書いてる…"))
+        try:
+            calendar_write_note, write_events = await execute_calendar_write_for_message(message)
+            gateway_events.extend(write_events)
+        except Exception as exc:  # noqa: BLE001
+            calendar_write_note = None
+            gateway_events.append(
+                activity_event(
+                    kind="calendar",
+                    label="カレンダー書込みに失敗",
+                    detail=str(exc)[:120],
+                    ok=False,
+                )
+            )
+
+    if message:
+        if detect_calendar_intent(message):
+            yield encode_event(progress_event(phase="calendar", label="カレンダーを見てる…"))
+        try:
+            calendar_note, cal_events = await prefetch_calendar_for_message(message)
+            gateway_events.extend(cal_events)
+        except Exception as exc:  # noqa: BLE001
+            calendar_note = None
+            gateway_events.append(
+                activity_event(
+                    kind="calendar",
+                    label="カレンダー取得に失敗",
+                    detail=str(exc)[:120],
+                    ok=False,
+                )
+            )
 
     if message:
         if detect_web_search_intent(message):
@@ -113,6 +157,8 @@ async def stream_gateway_chat(
             vision_prefetch=vision_note,
             web_search_prefetch=web_search_note,
             url_prefetch=url_note,
+            calendar_prefetch=calendar_note,
+            calendar_write=calendar_write_note,
             hybrid=hybrid,
         )
     except ValueError as exc:

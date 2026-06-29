@@ -128,7 +128,7 @@
 | **TEMP-3** | inject 用 **relativize_for_as_of**（具体日 → 今日/明日/…）— 表層向け | ✅ `prepare_shifts_for_inject` |
 | **TEMP-4** | `plan.must_include` — shift 全文 hold 廃止 · **幽霊経路**禁止 · open_loops は挨拶可 | ✅ `append_shift_plan_constraints` · **TEMP-4b ✅** `append_bare_greeting_plan_constraints` |
 | **TEMP-5** | dream_digest · relevant_memories inject — `reexpress_deixis_for_inject` + stale schedule demote | ✅ |
-| **TEMP-6** | GAPI prefetch と役割分担（「今日」= calendar · past = anchored memory） | 💤 GAPI prep-3 後 |
+| **TEMP-6** | GAPI prefetch と役割分担（「今日」= calendar · past = anchored memory） | ✅ prep-3（L0 read · open_loops 併用） |
 | **TEMP-C1** | **段階分類 Stage 1** — `utterance_kind` ゲート（greeting → 停止） | 🔧 POC · [prottypemarkdown.md](../../prottypemarkdown.md) |
 | **TEMP-C2** | **段階分類 Stage 2** — 複合予定 `events[]` 分解 | ✅ POC 合格（入浴角煮 · 2026-06-28） |
 | **TEMP-C3** | gateway — Stage1→2 パイプ · events → OL · G1 ガード | ✅ `PRESENCE_GW_S2_STAGED=1` |

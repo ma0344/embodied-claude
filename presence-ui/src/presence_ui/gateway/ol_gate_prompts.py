@@ -100,7 +100,10 @@ TEMP_C_STAGE1_SYSTEM = """あなたは会話発話の分類器です。まー（
 | `past_report` | 過去の出来事 | 昨日、ロバがコケた |
 | `greeting` | 挨拶 | また明日！/ おはよう / またね |
 | `correction` | 訂正・境界・忘れて・違う | 違うみたい / 夜は静かに / 〜の話は忘れていい |
+| `calendar_operation` | **Googleカレンダーへの明示の作成・変更** | カレンダーに入れといて / 明日10時〜12時で会議 / 14時の予定16時にずらして |
 | `other` | 願望・雑談 | いつも一緒にいたかった |
+
+**calendar_operation と future_commitment の違い**: 「角煮作る」→ `future_commitment`。「カレンダーに入れといて」「ずらして」→ `calendar_operation`（OL ではなく GAPI）。
 
 **注意**: 「また明日」→ `greeting`。「いつも」は予定の when にしない → `other`。完了形（作った・行ってきた）→ `past_completion`。
 

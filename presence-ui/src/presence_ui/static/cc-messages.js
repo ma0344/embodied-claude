@@ -32,6 +32,7 @@ const SYSTEM_BLOCK_RES = [
   /^\[\/overnight_inner_voice\]/i,
   /^\[inbound_nudge\b/i,
   /^\[inbound_reply\b/i,
+  /^\[gateway_internal\b/i,
   /^\[somatic_state\]\s*$/i,
   /^\[relevant_memories\]\s*$/i,
   /^\[commitments_due\]\s*$/i,
@@ -339,6 +340,62 @@ function looksLikeAgentSlashCommand(text) {
   return raw.startsWith("---") && /^#\s*\/\w+/m.test(raw);
 }
 
+function isGatewayInternalUserText(text) {
+  const raw = String(text ?? "");
+  return /\[gateway_internal\b/i.test(raw);
+}
+
+function extractJsonObject(text) {
+  const raw = String(text ?? "").trim();
+  if (!raw) return null;
+  try {
+    const data = JSON.parse(raw);
+    return data && typeof data === "object" && !Array.isArray(data) ? data : null;
+  } catch {
+    // fall through
+  }
+  let body = raw;
+  if (body.startsWith("```")) {
+    body = body.replace(/^```(?:json)?\s*\n?/i, "").trim();
+    if (body.endsWith("```")) {
+      body = body.slice(0, body.lastIndexOf("```")).trim();
+    }
+  }
+  const start = body.indexOf("{");
+  const end = body.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    const data = JSON.parse(body.slice(start, end + 1));
+    return data && typeof data === "object" && !Array.isArray(data) ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+function isGatewayInternalAssistantJson(text) {
+  const data = extractJsonObject(text);
+  if (!data) return false;
+  const moves = new Set(["advance", "reread_same", "close_book"]);
+  const nextMove = String(data.next_move ?? "").trim();
+  return (
+    typeof data.hook === "string"
+    && data.hook.trim()
+    && typeof data.felt === "string"
+    && data.felt.trim()
+    && moves.has(nextMove)
+  );
+}
+
+function filterRoomVisibleMessages(messages) {
+  return (messages || []).filter((msg) => {
+    const sender = String(msg?.sender ?? "");
+    const body = String(msg?.message ?? "");
+    if (sender === "ma" && isGatewayInternalUserText(body)) return false;
+    if (sender === "koyori" && isGatewayInternalAssistantJson(body)) return false;
+    return true;
+  });
+}
+
 function flattenHistoryMessages(messages) {
   const rows = [];
   for (const msg of messages || []) {
@@ -348,11 +405,13 @@ function flattenHistoryMessages(messages) {
     const userText = extractUserText(msg);
     if (userText) {
       if (looksLikeAgentSlashCommand(userText)) continue;
+      if (isGatewayInternalUserText(userText)) continue;
       rows.push({ sender: "ma", message: userText, timestamp: ts });
       continue;
     }
     const assistantText = extractAssistantText(msg);
     if (assistantText) {
+      if (isGatewayInternalAssistantJson(assistantText)) continue;
       rows.push({ sender: "koyori", message: assistantText, timestamp: ts });
     }
   }
@@ -396,6 +455,9 @@ function msgLooksInjected(text) {
 
 window.CcMessages = {
   flattenHistoryMessages,
+  filterRoomVisibleMessages,
+  isGatewayInternalAssistantJson,
+  isGatewayInternalUserText,
   extractStreamText,
   extractStreamSessionId,
   sanitizeDisplayText,

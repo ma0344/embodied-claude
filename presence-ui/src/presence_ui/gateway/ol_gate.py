@@ -16,6 +16,7 @@ from relationship_mcp.inference import (
     is_dismiss_utterance,
     is_recall_utterance,
 )
+from social_core.ol_stale import infer_stale_policy_for_loop
 
 from presence_ui.deps import PresenceStores
 from presence_ui.gateway.gw_silent import run_classifier_turn
@@ -293,6 +294,18 @@ def merge_ol_gate_gateway(
         detail["resolved_date"] = resolved.isoformat()
     if anchored_result.text != loop_topic:
         detail["original_topic"] = loop_topic[:200]
+
+    if create:
+        policy, stale_after = infer_stale_policy_for_loop(
+            utterance=parsed.utterance,
+            loop_topic=anchored_result.text,
+            resolved_date=resolved,
+            needs_date_confirmation=anchored_result.needs_date_confirmation,
+            temporal_phrase=temporal,
+        )
+        detail["stale_policy"] = policy
+        if stale_after:
+            detail["stale_after"] = stale_after
 
     return OlGateGatewayDecision(
         utterance=parsed.utterance,

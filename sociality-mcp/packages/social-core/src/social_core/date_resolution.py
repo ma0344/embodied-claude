@@ -350,11 +350,24 @@ def stale_from_detail_json(
     include_today: bool = False,
 ) -> date | None:
     """Return resolved_date from loop detail when it is stale, else None."""
+    from social_core.ol_stale import evaluate_stale_close
+
+    passed = evaluate_stale_close(
+        detail_json,
+        as_of=as_of,
+        include_today=include_today,
+    )
+    if passed is not None:
+        return passed
     if not detail_json:
         return None
     try:
         detail = json.loads(detail_json)
     except json.JSONDecodeError:
+        return None
+    from social_core.ol_stale import stale_policy_from_detail
+
+    if stale_policy_from_detail(detail) != "default":
         return None
     raw = detail.get("resolved_date")
     if not raw:

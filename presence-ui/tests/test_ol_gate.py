@@ -74,6 +74,27 @@ def test_merge_future_commitment_creates_loop() -> None:
     assert decision.create_open_loop is True
     assert "角煮" in decision.loop_topic or "2026" in decision.loop_topic
     assert decision.action_terms == ("角煮",)
+    assert decision.detail.get("stale_policy") == "default"
+
+
+def test_merge_future_commitment_without_date_gets_until_completed() -> None:
+    parsed = OlGateParsed(
+        utterance="県に提出する書類を作る",
+        utterance_kind="future_commitment",
+        temporal_phrase=None,
+        inferred_temporal_phrase=None,
+        temporal_source=None,
+        object_phrase="書類を",
+        action_phrase="作る",
+        action_terms=("書類",),
+        completion_verbs=(),
+        ineligibility_reason=None,
+    )
+    decision = merge_ol_gate_gateway(
+        parsed, ts="2026-06-29T10:00:00+09:00", timezone="Asia/Tokyo"
+    )
+    assert decision.create_open_loop is True
+    assert decision.detail.get("stale_policy") == "until_completed"
 
 
 def test_seed_completion_verbs_for_作る() -> None:

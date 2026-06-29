@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import logging
 import os
 from dataclasses import dataclass
@@ -24,6 +26,16 @@ VALID_NEXT_MOVES = frozenset({"advance", "reread_same", "close_book"})
 _INTERNAL_RULES = """[Gateway internal — not for まー]
 This turn is private inner processing. Reply with JSON only as instructed.
 No user-visible chat, no tool calls, no markdown fences."""
+
+
+def gw_s1_claude_enabled() -> bool:
+    flag = os.environ.get("PRESENCE_GW_S1_CLAUDE", "0").strip().lower()
+    return flag not in {"0", "false", "no", "off"}
+
+
+def gw_after_chat_enabled() -> bool:
+    flag = os.environ.get("PRESENCE_GW_AFTER_CHAT", "0").strip().lower()
+    return flag not in {"0", "false", "no", "off"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,12 +140,96 @@ def run_silent_internal_turn(
     temperature: float = 0.55,
     timeout: float | None = None,
 ) -> str | None:
-    """Run one gateway internal turn via LM Studio (forward=False semantics).
+    """Run one gateway internal turn (Claude --resume or LM Studio fallback)."""
+    coro = run_silent_internal_turn_async(
+        task=task,
+        session_id=session_id,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        timeout=timeout,
+    )
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        wait_timeout = timeout or float(os.environ.get("PRESENCE_GW_S1_TIMEOUT", "90"))
+        return pool.submit(asyncio.run, coro).result(timeout=wait_timeout + 15)
 
-    ``session_id`` is reserved for future Claude ``--resume`` wiring; v1 uses a
-    stateless LM Studio completion with stable system append (autonomous tick).
-    """
-    del session_id
+
+def _internal_claude_config(*, max_turns: int | None = None):
+    from presence_ui.gateway.ccs_integration import default_agent_config
+
+    stable = build_gateway_stable_append()
+    append = f"{stable}\n\n{_INTERNAL_RULES}"
+    turns = max_turns
+    if turns is None:
+        turns = int(os.environ.get("PRESENCE_GW_INTERNAL_MAX_TURNS", "1"))
+    base = default_agent_config()
+    return base.model_copy(
+        update={
+            "append_system_prompt": append,
+            "max_turns": max(1, turns),
+        }
+    )
+
+
+async def _run_claude_resume_internal(
+    *,
+    session_id: str,
+    task: str,
+    timeout: float | None,
+) -> str | None:
+    from claude_code_server.agent import ClaudeAgent
+
+    sid = session_id.strip()
+    if not sid:
+        return None
+    cfg = _internal_claude_config()
+    agent = ClaudeAgent()
+    parts: list[str] = []
+    try:
+        async for event in agent.chat(
+            prompt=task.strip(),
+            session_id=sid,
+            config=cfg,
+            is_new=False,
+        ):
+            if event.get("event") == "text":
+                content = event.get("data", {}).get("content")
+                if content:
+                    parts.append(str(content))
+    except Exception as exc:
+        logger.warning("GW Claude resume failed: %s", exc)
+        return None
+    finally:
+        await agent.cancel()
+    text = "".join(parts).strip()
+    return text or None
+
+
+async def run_silent_internal_turn_async(
+    *,
+    task: str,
+    session_id: str | None = None,
+    max_tokens: int = 480,
+    temperature: float = 0.55,
+    timeout: float | None = None,
+) -> str | None:
+    """Async internal turn — Claude --resume when session_id + flag, else LM Studio."""
+    del max_tokens  # Claude CLI uses max_turns; LM path uses max_tokens below
+    if session_id and gw_s1_claude_enabled():
+        if timeout is None:
+            timeout = float(os.environ.get("PRESENCE_GW_S1_TIMEOUT", "90"))
+        text = await _run_claude_resume_internal(
+            session_id=session_id,
+            task=task,
+            timeout=timeout,
+        )
+        if text:
+            return text
+        logger.warning("GW Claude resume empty/failed; falling back to LM Studio")
+
     if not lm_studio_available(timeout=2.0):
         logger.warning("GW-S1: LM Studio unavailable")
         return None
@@ -144,7 +240,7 @@ def run_silent_internal_turn(
     return run_classifier_turn(
         system=f"{stable}\n\n{_INTERNAL_RULES}",
         user=task.strip(),
-        max_tokens=max_tokens,
+        max_tokens=480,
         temperature=temperature,
         timeout=timeout,
         log_label="GW-S1",

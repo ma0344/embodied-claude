@@ -468,11 +468,13 @@ async function loadNativeMessagesFromServer(sessionId, { fullRebuild = false } =
   const data = await fetchJson(path);
   const fresh = mergeInboundSeedMessages(
     sessionId,
-    (data.messages || []).map((msg) => ({
-      sender: msg.sender,
-      message: msg.message,
-      timestamp: msg.timestamp || "",
-    })),
+    CcMessages.filterRoomVisibleMessages(
+      (data.messages || []).map((msg) => ({
+        sender: msg.sender,
+        message: msg.message,
+        timestamp: msg.timestamp || "",
+      })),
+    ),
   );
   if (!fresh.length && !fullRebuild) return;
   applyChatMessages(fresh, { fullRebuild, forceScroll: fullRebuild });
@@ -714,6 +716,7 @@ function applyNativeSessionEvent(payload, userPreview) {
 function appendAssistantMessage(text) {
   const body = String(text || "").trim();
   if (!body) return;
+  if (CcMessages.isGatewayInternalAssistantJson(body)) return;
   const msg = {
     sender: "koyori",
     message: body,

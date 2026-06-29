@@ -107,6 +107,7 @@ async def _stream_agent_chat(
     # Tell the browser the session id immediately (CLI init can arrive much later).
     yield _sse("session", {"session_id": sid, "claude_session": True})
     agent = ClaudeAgent()
+    reply = ""
     async with _session_chat_lock(sid):
         try:
             async for event in agent.chat(
@@ -132,22 +133,34 @@ async def _stream_agent_chat(
             _CLAUDE_SESSIONS.clear_in_flight(sid)
             await agent.cancel()
 
-    if reply_parts:
-        _CLAUDE_SESSIONS.mark_created(sid)
+        if reply_parts:
+            _CLAUDE_SESSIONS.mark_created(sid)
 
-    reply = "".join(reply_parts).strip()
+        reply = "".join(reply_parts).strip()
+        if reply and intercept.plan and intercept.ctx:
+            from presence_ui.gateway.gw_resume import run_post_chat_internal_turn
+
+            await run_post_chat_internal_turn(
+                session_id=sid,
+                person_id=person_id,
+                ctx=intercept.ctx,
+                plan=intercept.plan,
+                reply_text=reply,
+            )
+
     if intercept.plan and intercept.ctx:
         from presence_ui.heartbeat.record import finalize_chat_turn
 
         await asyncio.to_thread(
             finalize_chat_turn,
             person_id=person_id,
-            session_id=req.session_id or intercept.session_id,
+            session_id=sid,
             user_text=req.prompt,
             reply_text=reply,
             plan=intercept.plan,
             ctx=intercept.ctx,
         )
+
     if intercept.gateway_speak_after_reply and reply:
         from presence_ui.gateway.gateway_speak import deliver_gateway_speak_after_reply
 

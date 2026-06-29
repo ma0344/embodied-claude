@@ -15,7 +15,7 @@
 - **OL2（temporal）（2026-06-19）**: `次の{曜}` / `今度の{曜}`（同義・次に来るその曜日）、`来週中` 等の曖昧スパンはアンカーせず `needs_date_confirmation` → compose `[date_confirmation_needed]` / plan `must_include` でまーに聞く。`social_core.ja_timex_bridge`（任意・PoC/ベンチ用）
 - 期限切れ loop は ingest / 自律 tick 前の `close_stale_open_loops` で `status=closed`（アンカー後は `resolved_date` でも判定）
 - **OL5-a/b**: 予定消化（作った/できた）でも loop close — [tracks/ol5.md](../tracks/ol5.md) ✅
-- **OL5-c / OL6 / OL-STALE**: 📋 計画済 — 同 doc
+- **OL5-c / OL6 / OL-STALE**: ✅ — [tracks/ol5.md](../tracks/ol5.md)
 - 手動掃除: `scripts/purge-stale-open-loops.py`（共有ロジックは `social_core.date_resolution`）
 
 **横断（2026-06-28）**: open loop 以外の inject（interpretation_shift · dream_digest · memory recall）でも **uttered_at + resolved_date + as_of** が必要 → [tracks/utterance-anchoring.md](../tracks/utterance-anchoring.md)（TEMP）。OL2 の `resolved_date` / stale パターンがテンプレート。
@@ -128,7 +128,7 @@ Gateway: `create_open_loop = utterance_kind == future_commitment && object && ac
 
 ## OL-STALE — 日跨ぎで閉じない loop
 
-**状態**: 📋 計画（2026-06-29 合意）  
+**状態**: 📋 計画（2026-06-29 合意）· ✅ **v1 実装**（2026-06-29）  
 **関連**: [ol5.md § OL-STALE](../tracks/ol5.md#ol-stale--日跨ぎで閉じない-loop計画) · [utterance-anchoring.md § TEMP-C4](../tracks/utterance-anchoring.md#temp-c4--open-loop-アンカー計画)
 
 ### 現状

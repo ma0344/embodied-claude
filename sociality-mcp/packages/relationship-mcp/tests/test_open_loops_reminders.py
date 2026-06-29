@@ -583,3 +583,53 @@ def test_ol6_pending_clear_on_denial(store):
     detail = store.list_open_loops(person_id="ma")[0].detail
     assert "pending_check" not in detail
     assert detail.get("check_asked_at")
+
+
+def test_close_stale_skips_until_completed_policy(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.db.execute(
+        """
+        INSERT INTO open_loops(
+            loop_id, person_id, topic, status, source_event_id, updated_at, detail_json
+        )
+        VALUES (?, ?, ?, 'open', ?, ?, ?)
+        """,
+        (
+            "loop_doc",
+            "ma",
+            "県に提出する書類を作る",
+            "evt1",
+            "2026-06-28T10:00:00+09:00",
+            json.dumps(
+                {
+                    "kind": "future_task_or_question",
+                    "resolved_date": "2026-06-28",
+                    "stale_policy": "until_completed",
+                }
+            ),
+        ),
+    )
+    closed = store.close_stale_open_loops(
+        person_id="ma",
+        as_of="2026-06-30T10:00:00+09:00",
+    )
+    assert closed == []
+    assert store.list_open_loops(person_id="ma")[0].status == "open"
+
+
+def test_apply_ol_gate_sets_until_completed_without_resolved_date(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-29T10:00:00+09:00",
+        source_event_id="evt-doc",
+        source_text="県に提出する書類を作る",
+        create_open_loop=True,
+        try_ol5_close=False,
+        loop_topic="県に提出する書類を作る",
+        action_terms=["書類"],
+        completion_verbs=["提出した"],
+        detail={"utterance": "県に提出する書類を作る"},
+    )
+    loop = store.list_open_loops(person_id="ma")[0]
+    assert loop.detail.get("stale_policy") == "until_completed"

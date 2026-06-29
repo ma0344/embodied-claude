@@ -8,6 +8,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from presence_ui.gateway.gw_internal_filter import (
+    is_gateway_internal_assistant_reply,
+    is_gateway_internal_user_text,
+)
 from presence_ui.gateway.user_prompt import (
     looks_like_agent_slash_command,
     plain_user_first_line,
@@ -64,11 +68,17 @@ def _content_blocks(content: Any) -> list[tuple[str, str]]:
 def _should_skip_user_text(text: str) -> bool:
     if not text.strip():
         return True
+    if is_gateway_internal_user_text(text):
+        return True
     if looks_like_agent_slash_command(text):
         return True
     if text.startswith("[Tool"):
         return True
     return any(text.startswith(prefix) for prefix in _KOYORI_SKIP_PREFIXES)
+
+
+def _should_skip_assistant_text(text: str) -> bool:
+    return is_gateway_internal_assistant_reply(text)
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -114,8 +124,11 @@ def _messages_from_jsonl(path: Path, *, strip_user_injection: bool = True) -> li
             replies = [text for kind, text in parts if kind == "prompt"]
             if not replies:
                 continue
+            reply_text = "\n".join(replies)
+            if _should_skip_assistant_text(reply_text):
+                continue
             messages.append(
-                ChatMessage(sender="koyori", message="\n".join(replies), timestamp=ts)
+                ChatMessage(sender="koyori", message=reply_text, timestamp=ts)
             )
     return messages
 

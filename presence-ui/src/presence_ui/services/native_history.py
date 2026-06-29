@@ -95,8 +95,24 @@ def fetch_native_session_messages(
     project_path: str | None = None,
 ) -> NativeSessionMessagesResponse | None:
     """Load filtered user/assistant messages for one session."""
+    from presence_ui.gateway.gw_internal_filter import filter_room_visible_messages
+
     path = resolve_session_jsonl_path(session_id, project_path=project_path)
     if path is None:
         return None
     messages: list[ChatMessage] = _messages_from_jsonl(path, strip_user_injection=False)
-    return NativeSessionMessagesResponse(session_id=session_id, messages=messages)
+    filtered = filter_room_visible_messages(
+        [
+            {"sender": msg.sender, "message": msg.message, "timestamp": msg.timestamp}
+            for msg in messages
+        ]
+    )
+    out = [
+        ChatMessage(
+            sender=str(row["sender"]),
+            message=str(row["message"]),
+            timestamp=str(row.get("timestamp") or ""),
+        )
+        for row in filtered
+    ]
+    return NativeSessionMessagesResponse(session_id=session_id, messages=out)

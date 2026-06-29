@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ（ダッシュボード）
 
-**最終更新**: 2026-06-29（OL5-c ✅ · TEMP-C4 ✅ · 朝挨拶=幽霊禁止のみ）  
+**最終更新**: 2026-06-29（OL-STALE v1 ✅ · OL6 ma-home ✅ · GW resume ✅）  
 **詳細の正（アーカイブ）**: [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md)  
 **完了一覧**: [backlog-archive-ma-home.md](./backlog-archive-ma-home.md)
 
@@ -37,16 +37,15 @@
 |----|---------|------|------|
 | **★** | **ALIVE / LW** | 生きてる感の第一シーン（青空読書） | 🔥 v1 GW-S1 運用 → **LW-7** |
 | **1** | **BIO** | Heartbeat ループ骨格（pulse・somatic・tick） | ✅ 基盤済 — interpret 一部閉（PAUSE） |
-| **2** | **GW** | 黙考ルート（shared interpret） | ✅ S1 · ✅ S2（`PRESENCE_GW_S2_ENABLED=1`）· 📋 Claude resume |
-| **3** | **OL5** | 予定消化で loop close | ✅ a/b/c/6 · 📋 OL-STALE |
+| **2** | **GW** | 黙考ルート（shared interpret） | ✅ S1 · ✅ S2 · ✅ Claude resume（opt-in） |
+| **3** | **OL5** | 予定消化で loop close | ✅ a/b/c/6/STALE |
 | **—** | **K** | こより自身のコード | 💤 **GW + BIO ループが閉じてから** |
 
 ---
 
 ## 次の 3 手
 
-1. **OL-STALE** — 日跨ぎ exempt → [ol5.md](./tracks/ol5.md) · [open-loops-reminders.md](./architecture/open-loops-reminders.md#ol-stale--日跨ぎで閉じない-loop)
-2. **TEMP-5** — dream_digest / memories anchor（幽霊除去 · inject 側）
+1. **TEMP-5** — dream_digest / memories anchor（幽霊除去 · inject 側）
 
 （並行）**LW-7** — `PRESENCE_LW7_ENABLED=1` → [tracks/alive-lw-read.md](./tracks/alive-lw-read.md)
 
@@ -60,8 +59,8 @@
 |---------|------|------|------|
 | **ALIVE / LW** | 生きてる感・青空読書 | 🔥 LW-7 下準備済 | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md) |
 | **BIO** | ループ骨格（pulse・somatic・経験→wake） | ✅ 基盤済 · PAUSE interpret 閉 | [architecture/heartbeat-loop.md](./architecture/heartbeat-loop.md) |
-| **GW** | 黙考ルート（**interpret** 層） | ✅ S1 · ✅ S2（opt-in）· 📋 resume | [tracks/gw-silent.md](./tracks/gw-silent.md) |
-| **OL5** | 予定消化 loop close · **OL-STALE** | ✅ a/b/c/6 · 📋 STALE | [tracks/ol5.md](./tracks/ol5.md) |
+| **GW** | 黙考ルート（**interpret** 層） | ✅ S1 · ✅ S2 · ✅ resume（opt-in） | [tracks/gw-silent.md](./tracks/gw-silent.md) |
+| **OL5** | 予定消化 loop close | ✅ a/b/c/6/STALE | [tracks/ol5.md](./tracks/ol5.md) |
 
 ---
 

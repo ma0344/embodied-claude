@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -17,12 +17,13 @@ from social_core import (
     parse_timestamp,
 )
 
+from social_core.ol_stale import evaluate_stale_close, infer_stale_policy_for_loop
+
 from .date_resolution import (
     DEFAULT_TIMEZONE,
     anchor_temporal_in_text,
     as_of_date,
     is_stale,
-    stale_from_detail_json,
 )
 from .inference import (
     FUTURE_MARKERS,
@@ -52,6 +53,26 @@ from .schemas import (
     RitualRecord,
     SuggestionRecord,
 )
+
+
+def _loop_detail_blocks_topic_stale(detail_json: str) -> bool:
+    """True when topic-based stale fallback must not override detail policy."""
+    if not detail_json.strip():
+        return False
+    try:
+        detail = json.loads(detail_json)
+    except json.JSONDecodeError:
+        return False
+    from social_core.ol_stale import (
+        STALE_POLICY_UNTIL_COMPLETED,
+        STALE_POLICY_UNTIL_DATE,
+        stale_policy_from_detail,
+    )
+
+    return stale_policy_from_detail(detail) in {
+        STALE_POLICY_UNTIL_COMPLETED,
+        STALE_POLICY_UNTIL_DATE,
+    }
 
 
 class RelationshipStore:
@@ -187,12 +208,13 @@ class RelationshipStore:
         )
         closed_topics: list[str] = []
         for loop_id, topic, updated_at, detail_json in rows:
-            passed = stale_from_detail_json(
-                str(detail_json or ""),
+            detail_text = str(detail_json or "")
+            passed = evaluate_stale_close(
+                detail_text,
                 as_of=as_of_day,
                 include_today=include_today,
             )
-            if passed is None:
+            if passed is None and not _loop_detail_blocks_topic_stale(detail_text):
                 passed = is_stale(
                     topic=str(topic),
                     updated_at=str(updated_at),
@@ -497,6 +519,28 @@ class RelationshipStore:
                         detail_payload.setdefault("original_topic", topic)
                         topic = anchored.text
                     detail_payload["resolved_date"] = anchored.resolved_date.isoformat()
+
+        if not detail_payload.get("stale_policy"):
+            resolved_raw = detail_payload.get("resolved_date")
+            resolved_day = None
+            if resolved_raw:
+                try:
+                    resolved_day = date.fromisoformat(str(resolved_raw))
+                except ValueError:
+                    resolved_day = None
+            utterance_for_policy = source_text
+            if isinstance(detail, dict):
+                utterance_for_policy = str(detail.get("utterance") or source_text)
+            policy, stale_after = infer_stale_policy_for_loop(
+                utterance=utterance_for_policy,
+                loop_topic=topic,
+                resolved_date=resolved_day,
+                needs_date_confirmation=bool(detail_payload.get("needs_date_confirmation")),
+                temporal_phrase=str(detail_payload.get("temporal_phrase") or "") or None,
+            )
+            detail_payload["stale_policy"] = policy
+            if stale_after:
+                detail_payload["stale_after"] = stale_after
 
         today = as_of_date(as_of_ts=ts, tz_name=timezone)
         stale_day = is_stale(topic=topic, updated_at=ts, tz_name=timezone, as_of=today)
@@ -963,6 +1007,8 @@ class RelationshipStore:
         "completion_verbs",
         "resolved_date",
         "until_phrase",
+        "stale_policy",
+        "stale_after",
         "check_asked_at",
         "needs_date_confirmation",
         "ambiguous_phrases",

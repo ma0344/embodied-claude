@@ -109,11 +109,15 @@ def compose_interaction_context(
             )
             if not _is_noise_open_loop(str(item.get("topic") or ""))
         ]
-        loops_due_for_check = _collect_loops_due_for_check(
+        ol6_due = _collect_loops_due_for_check(
             _optional_list(relationship_store, "list_open_loops", person_id=payload.person_id),
             as_of_ts=ts,
             tz_name=policy_timezone,
         )
+        ol7_due = _collect_loops_ol7_confirm(
+            _optional_list(relationship_store, "list_open_loops", person_id=payload.person_id),
+        )
+        loops_due_for_check = ol7_due[:1] or ol6_due[:1]
         commitments = [
             CommitmentSummary(
                 commitment_id=item.get("commitment_id") or item.get("id", ""),
@@ -771,6 +775,40 @@ def _collect_loops_due_for_check(
     return due[:1]
 
 
+def _collect_loops_ol7_confirm(
+    items: list[dict[str, Any]],
+) -> list[LoopDueForCheck]:
+    """OL7 — pending_check candidate awaiting Koyori's confirm question."""
+    from social_core.ol6_check import PENDING_TRIGGER_OL7
+
+    due: list[LoopDueForCheck] = []
+    for item in items:
+        topic = str(item.get("topic") or "")
+        if _is_noise_open_loop(topic):
+            continue
+        detail = _open_loop_detail(item)
+        pending = detail.get("pending_check")
+        if not isinstance(pending, dict):
+            continue
+        if str(pending.get("trigger") or "") != PENDING_TRIGGER_OL7:
+            continue
+        if pending.get("asked_at"):
+            continue
+        loop_id = str(item.get("loop_id") or item.get("id") or "")
+        if not loop_id:
+            continue
+        due.append(
+            LoopDueForCheck(
+                loop_id=loop_id,
+                topic=topic,
+                trigger="ol7_return_signal",
+                source_utterance=str(pending.get("source_utterance") or "") or None,
+                completion_summary=str(pending.get("completion_summary") or "") or None,
+            )
+        )
+    return due[:1]
+
+
 def _format_loops_due_for_check_section(
     loops: list[LoopDueForCheck], *, max_items: int = 1
 ) -> list[str]:
@@ -778,6 +816,14 @@ def _format_loops_due_for_check_section(
         return []
     lines = ["[loops_due_for_check]"]
     for loop in loops[:max_items]:
+        if loop.trigger == "ol7_return_signal":
+            cue = loop.source_utterance or "return signal"
+            lines.append(
+                f"- loop_id={loop.loop_id} | {loop.topic[:100]} | "
+                f"まー said 「{cue[:40]}」 — gently confirm if this task is done "
+                "(one short natural question)"
+            )
+            continue
         until = loop.until_phrase or "deadline passed"
         lines.append(
             f"- loop_id={loop.loop_id} | {loop.topic[:100]} | until {until} "

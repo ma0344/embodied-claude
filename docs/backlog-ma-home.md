@@ -38,7 +38,7 @@
 | **★** | **ALIVE / LW** | 生きてる感の第一シーン（青空読書） | 🔥 LW-7 運用確認 |
 | **1** | **BIO** | Heartbeat ループ骨格（pulse・somatic・tick） | ✅ 基盤済 — interpret 一部閉（PAUSE） |
 | **2** | **GW** | 黙考ルート（shared interpret） | ✅ S1 · ✅ S2 · ✅ Claude resume（opt-in） |
-| **3** | **OL5** | 予定消化で loop close | ✅ a/b/c/6/STALE |
+| **3** | **OL5** | 予定消化で loop close | ✅ a/b/c/6/STALE/d · 📋 **OL7** |
 | **—** | **K** | こより自身のコード | 💤 **GW + BIO ループが閉じてから** |
 
 ---
@@ -60,7 +60,7 @@
 | **ALIVE / LW** | 生きてる感・青空読書 | 🔥 LW-7 ON（運用確認） | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md) |
 | **BIO** | ループ骨格（pulse・somatic・経験→wake） | ✅ 基盤済 · PAUSE interpret 閉 | [architecture/heartbeat-loop.md](./architecture/heartbeat-loop.md) |
 | **GW** | 黙考ルート（**interpret** 層） | ✅ S1 · ✅ S2 · ✅ resume（opt-in） | [tracks/gw-silent.md](./tracks/gw-silent.md) |
-| **OL5** | 予定消化 loop close | ✅ a/b/c/6/STALE | [tracks/ol5.md](./tracks/ol5.md) |
+| **OL5** | 予定消化 loop close | ✅ a/b/c/6/STALE/d · 📋 OL7 return-signal | [tracks/ol5.md](./tracks/ol5.md) |
 
 ---
 
@@ -94,7 +94,7 @@
 | **VIS** | VL health · vision **e4b** | ✅ 切替済（2026-06-29） | [vis-health.md](./tracks/vis-health.md) |
 | **V** | Surface UI 残（V4 等） | 部分済 | [tracks/surface-vision.md](./tracks/surface-vision.md) |
 | **GAPI** | Google Calendar / Drive | ✅ prep-1/2/3 · 7a/7b · 📋 **7c** 複数件 · **7d** e4b確認 | [tracks/gapi.md](./tracks/gapi.md) · [gapi-setup.md](./ops/gapi-setup.md) |
-| **TEMP** | TEMP-1〜5 ✅ · TEMP-C3/b/c4 ✅ · SHIFT-R1/R2/R3 ✅ | [utterance-anchoring.md](./tracks/utterance-anchoring.md) · [interpretation-shift-routing.md](./tracks/interpretation-shift-routing.md) |
+| **TEMP** | TEMP-1〜5 ✅ · TEMP-C3/b/c4 ✅ · **C5 📋** clock/e4b · SHIFT-R1/R2/R3 ✅ | [utterance-anchoring.md](./tracks/utterance-anchoring.md) · [interpretation-shift-routing.md](./tracks/interpretation-shift-routing.md) |
 | **WS** | 会話 Web 検索 | ✅ WS-1〜2c · 📋 WS-5（[北極星: 地震例](./ops/ws-5-spontaneous-search.md#北極星シナリオ--会話中の興味疑問2026-06-27)） | [ws-2](./ops/ws-2-conversation-web-search.md) · [ws-5](./ops/ws-5-spontaneous-search.md) |
 
 トピック索引: [backlog-koyori.md](./backlog-koyori.md)

@@ -233,6 +233,22 @@ class TestRecord:
         assert plan.followup_action["kind"] == "loop_check_asked"
         assert plan.followup_action["loop_id"] == "loop_test"
 
+    def test_ol7_plan_return_signal_confirm(self, stores):
+        ctx = _compose(stores, user_text="ただいま")
+        due = LoopDueForCheck(
+            loop_id="loop_walk",
+            topic="散歩に行く",
+            trigger="ol7_return_signal",
+            source_utterance="ただいま",
+            completion_summary="散歩から帰宅",
+        )
+        ctx = ctx.model_copy(update={"loops_due_for_check": [due]})
+        plan = plan_response(PlanResponseInput(interaction_context=ctx, user_text="ただいま"))
+        joined = " ".join(plan.must_include)
+        assert "OL7 return-signal" in joined
+        assert plan.followup_action is not None
+        assert plan.followup_action["trigger"] == "ol7_return_signal"
+
     def test_record_interpretation_shift_anchors_today(self, stores):
         stores["orchestrator"].record_interpretation_shift(
             RecordInterpretationShiftInput(

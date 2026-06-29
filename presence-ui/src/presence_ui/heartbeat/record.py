@@ -137,6 +137,7 @@ def finalize_chat_turn(
                     ts=ts,
                     topic=str(followup.get("topic") or ""),
                     ask_snippet=reply[:120],
+                    trigger=str(followup.get("trigger") or "post_deadline_first_turn"),
                 )
             except Exception as exc:
                 logger.warning("mark_loop_check_asked failed: %s", exc)

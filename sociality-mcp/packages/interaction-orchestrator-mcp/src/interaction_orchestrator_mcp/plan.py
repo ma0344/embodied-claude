@@ -540,11 +540,19 @@ def _pick_must_lists(
         and primary_move in {"answer_directly", "answer_with_empathy"}
     ):
         due = ctx.loops_due_for_check[0]
-        until = due.until_phrase or "deadline passed"
-        prompt = (
-            "OL6 post-deadline loop — naturally ask if this task is done "
-            f"(one short question): {due.topic[:100]} (until {until})"
-        )
+        if due.trigger == "ol7_return_signal":
+            cue = due.source_utterance or "戻り"
+            prompt = (
+                "OL7 return-signal — naturally confirm if this task is done "
+                f"(one short question): {due.topic[:100]} "
+                f"(まー's cue: {cue[:40]})"
+            )
+        else:
+            until = due.until_phrase or "deadline passed"
+            prompt = (
+                "OL6 post-deadline loop — naturally ask if this task is done "
+                f"(one short question): {due.topic[:100]} (until {until})"
+            )
         if bare_greeting:
             must_include.append(
                 f"{prompt} — weave into the greeting; do not skip the check"
@@ -571,6 +579,8 @@ def _pick_followup(
             "loop_id": due.loop_id,
             "topic": due.topic[:120],
             "until_phrase": due.until_phrase,
+            "trigger": due.trigger,
+            "source_utterance": due.source_utterance,
         }
     if primary_move == "act_autonomously" and ctx.agent_state.dominant_desire:
         return {

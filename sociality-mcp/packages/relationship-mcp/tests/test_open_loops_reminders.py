@@ -504,6 +504,42 @@ def test_apply_ol_gate_ol5_closes_only_matching_loop_when_multiple_open(store):
     assert open_topics == ["2026年6月28日、肉じゃがを作る"]
 
 
+def test_apply_ol_gate_ol5_closes_sanpo_with_short_object_in_utterance(store):
+    """散歩に行く loop must close on 「散歩、行ってきた」— not only full phrase match."""
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-28T12:13:47+09:00",
+        source_event_id="evt-sanpo",
+        source_text="明日 散歩に行く 終わったら すぐ 行く",
+        create_open_loop=True,
+        try_ol5_close=False,
+        loop_topic="2026年6月29日 散歩に行く 終わったら すぐ 行く",
+        action_terms=["散歩に行く"],
+        completion_verbs=["行ってきた", "行った", "出かけてきた"],
+        detail={
+            "kind": "ol_gate",
+            "object_phrase": "散歩に行く",
+            "action_terms": ["散歩に行く"],
+            "completion_verbs": ["行ってきた", "行った", "出かけてきた"],
+        },
+    )
+    closed = store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-29T12:00:00+09:00",
+        source_event_id="evt-sanpo-done",
+        source_text="散歩、行ってきた",
+        create_open_loop=False,
+        try_ol5_close=True,
+        loop_topic="",
+        action_terms=["散歩"],
+        completion_verbs=["行ってきた"],
+        detail={"kind": "ol_gate", "utterance_kind": "past_completion"},
+    )
+    assert closed == ["2026年6月29日 散歩に行く 終わったら すぐ 行く"]
+    assert store.list_open_loops(person_id="ma") == []
+
+
 def test_note_human_utterance_skips_rule_loops_when_disabled(store):
     store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
     store.note_human_utterance_for_loops(
@@ -583,6 +619,77 @@ def test_ol6_pending_clear_on_denial(store):
     detail = store.list_open_loops(person_id="ma")[0].detail
     assert "pending_check" not in detail
     assert detail.get("check_asked_at")
+
+
+def test_ol7_pending_candidate_then_confirm_close(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-29T08:00:00+09:00",
+        source_event_id="evt-walk",
+        source_text="散歩に行く",
+        create_open_loop=True,
+        try_ol5_close=False,
+        loop_topic="散歩に行く",
+        action_terms=["散歩"],
+        completion_verbs=["行ってきた"],
+        detail={"utterance": "散歩に行く"},
+    )
+    loop_id = store.list_open_loops(person_id="ma")[0].id
+    store.set_ol7_pending_candidate(
+        loop_id=loop_id,
+        person_id="ma",
+        ts="2026-06-29T09:00:00+09:00",
+        source_utterance="ただいま",
+        completion_summary="散歩から帰宅",
+    )
+    detail = store.list_open_loops(person_id="ma")[0].detail
+    pending = detail.get("pending_check")
+    assert pending["trigger"] == "ol7_return_signal"
+    assert not pending.get("asked_at")
+    store.mark_loop_check_asked(
+        loop_id=loop_id,
+        person_id="ma",
+        ts="2026-06-29T09:00:05+09:00",
+        topic="散歩に行く",
+        ask_snippet="散歩行ってきたん？",
+        trigger="ol7_return_signal",
+    )
+    closed = store.try_ol6_pending_close(
+        person_id="ma",
+        text="うん、気持ちよかった～",
+        ts="2026-06-29T09:01:00+09:00",
+        source_event_id="evt-affirm",
+    )
+    assert closed
+    assert store.list_open_loops(person_id="ma") == []
+
+
+def test_ol7_immediate_close_by_ids(store):
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-29T08:00:00+09:00",
+        source_event_id="evt-nap",
+        source_text="お昼寝する",
+        create_open_loop=True,
+        try_ol5_close=False,
+        loop_topic="お昼寝する",
+        action_terms=["お昼寝"],
+        completion_verbs=["終わった"],
+        detail={},
+    )
+    loop_id = store.list_open_loops(person_id="ma")[0].id
+    closed = store.close_open_loops_by_ids(
+        person_id="ma",
+        loop_ids=[loop_id],
+        ts="2026-06-29T09:30:00+09:00",
+        source_event_id="evt-done",
+        source_text="昼寝終わった",
+        close_kind="ol7_completion",
+    )
+    assert closed == ["お昼寝する"]
+    assert store.list_open_loops(person_id="ma") == []
 
 
 def test_close_stale_skips_until_completed_policy(store):

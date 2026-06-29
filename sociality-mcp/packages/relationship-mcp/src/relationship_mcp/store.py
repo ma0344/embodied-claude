@@ -55,6 +55,17 @@ from .schemas import (
 )
 
 
+_OL5_TERM_HEAD_SUFFIXES = (
+    "に行く",
+    "に行った",
+    "へ行く",
+    "を作る",
+    "をした",
+    "作成",
+    "に出かける",
+)
+
+
 def _loop_detail_blocks_topic_stale(detail_json: str) -> bool:
     """True when topic-based stale fallback must not override detail policy."""
     if not detail_json.strip():
@@ -314,8 +325,12 @@ class RelationshipStore:
         ts: str,
         source_event_id: str,
     ) -> list[str]:
-        """Close loop when pending OL6 check exists and human confirms completion."""
-        from social_core.ol6_check import is_ol6_completion_confirm, is_ol6_completion_denial
+        """Close loop when pending_check exists and human confirms completion (OL6/OL7)."""
+        from social_core.ol6_check import (
+            PENDING_TRIGGER_OL7,
+            is_ol6_completion_denial,
+            is_pending_completion_confirm,
+        )
 
         utterance = (text or "").strip()
         if not utterance:
@@ -338,11 +353,15 @@ class RelationshipStore:
                 continue
             loop_id = str(row["loop_id"])
             topic = str(row["topic"])
+            trigger = str(pending.get("trigger") or "post_deadline_first_turn")
             if is_ol6_completion_denial(utterance):
                 self._clear_loop_pending_check(loop_id=loop_id, person_id=person_id)
                 return closed
-            if not is_ol6_completion_confirm(utterance):
+            if not is_pending_completion_confirm(utterance, trigger=trigger):
                 continue
+            close_kind = (
+                "ol7_completion" if trigger == PENDING_TRIGGER_OL7 else "ol6_completion"
+            )
             self._close_open_loop(
                 loop_id=loop_id,
                 person_id=person_id,
@@ -350,10 +369,85 @@ class RelationshipStore:
                 ts=ts,
                 source_event_id=source_event_id,
                 source_text=utterance,
-                close_kind="ol6_completion",
+                close_kind=close_kind,
             )
             closed.append(topic)
             return closed
+        return closed
+
+    def set_ol7_pending_candidate(
+        self,
+        *,
+        loop_id: str,
+        person_id: str,
+        ts: str,
+        source_utterance: str,
+        completion_summary: str = "",
+    ) -> None:
+        """OL7 — stash return-signal match; compose will prompt Koyori to confirm."""
+        rows = self.db.fetchall(
+            """
+            SELECT detail_json FROM open_loops
+            WHERE loop_id = ? AND person_id = ? AND status = 'open'
+            LIMIT 1
+            """,
+            (loop_id, person_id),
+        )
+        if not rows:
+            return
+        detail = self._parse_loop_detail(str(rows[0]["detail_json"] or ""))
+        detail["pending_check"] = {
+            "trigger": "ol7_return_signal",
+            "candidate_at": ts,
+            "source_utterance": source_utterance.strip()[:120],
+            "completion_summary": completion_summary.strip()[:120],
+            "loop_id": loop_id,
+            "expires_after_sec": 3600,
+        }
+        with self.db.transaction() as connection:
+            connection.execute(
+                """
+                UPDATE open_loops
+                SET detail_json = ?, updated_at = ?
+                WHERE loop_id = ? AND person_id = ? AND status = 'open'
+                """,
+                (json.dumps(detail, ensure_ascii=False), ts, loop_id, person_id),
+            )
+
+    def close_open_loops_by_ids(
+        self,
+        *,
+        person_id: str,
+        loop_ids: list[str],
+        ts: str,
+        source_event_id: str,
+        source_text: str,
+        close_kind: str = "ol7_completion",
+    ) -> list[str]:
+        """Close explicit loop ids (OL7 immediate path)."""
+        closed: list[str] = []
+        for loop_id in loop_ids:
+            rows = self.db.fetchall(
+                """
+                SELECT topic FROM open_loops
+                WHERE loop_id = ? AND person_id = ? AND status = 'open'
+                LIMIT 1
+                """,
+                (loop_id, person_id),
+            )
+            if not rows:
+                continue
+            topic = str(rows[0]["topic"])
+            self._close_open_loop(
+                loop_id=loop_id,
+                person_id=person_id,
+                topic=topic,
+                ts=ts,
+                source_event_id=source_event_id,
+                source_text=source_text,
+                close_kind=close_kind,
+            )
+            closed.append(topic)
         return closed
 
     def mark_loop_check_asked(
@@ -364,8 +458,9 @@ class RelationshipStore:
         ts: str,
         topic: str = "",
         ask_snippet: str = "",
+        trigger: str = "post_deadline_first_turn",
     ) -> None:
-        """Record that Koyori asked about loop completion (OL6 pending)."""
+        """Record that Koyori asked about loop completion (OL6/OL7 pending)."""
         rows = self.db.fetchall(
             """
             SELECT detail_json FROM open_loops
@@ -378,14 +473,23 @@ class RelationshipStore:
             return
         detail = self._parse_loop_detail(str(rows[0]["detail_json"] or ""))
         snippet = (ask_snippet or topic or "").strip()[:120]
-        detail["check_asked_at"] = ts
-        detail["pending_check"] = {
+        existing_pending = detail.get("pending_check")
+        pending_trigger = trigger
+        if isinstance(existing_pending, dict) and existing_pending.get("trigger"):
+            pending_trigger = str(existing_pending["trigger"])
+        pending: dict[str, object] = {
             "asked_at": ts,
             "loop_id": loop_id,
             "topic_snippet": snippet,
-            "trigger": "post_deadline_first_turn",
+            "trigger": pending_trigger,
             "expires_after_sec": 3600,
         }
+        if isinstance(existing_pending, dict):
+            for key in ("source_utterance", "completion_summary", "candidate_at"):
+                if existing_pending.get(key):
+                    pending[key] = existing_pending[key]
+        detail["check_asked_at"] = ts
+        detail["pending_check"] = pending
         with self.db.transaction() as connection:
             connection.execute(
                 """
@@ -1010,6 +1114,7 @@ class RelationshipStore:
         "stale_policy",
         "stale_after",
         "check_asked_at",
+        "pending_check",
         "needs_date_confirmation",
         "ambiguous_phrases",
         "original_topic",
@@ -1745,9 +1850,27 @@ class RelationshipStore:
         return list(dict.fromkeys(terms))
 
     @staticmethod
+    def _ol5_term_match_variants(term: str) -> list[str]:
+        """Head noun / activity core for phrases like 散歩に行く → also match 散歩."""
+        token = str(term or "").strip()
+        if not token:
+            return []
+        variants = [token]
+        for suffix in _OL5_TERM_HEAD_SUFFIXES:
+            if token.endswith(suffix) and len(token) > len(suffix) + 1:
+                head = token[: -len(suffix)].strip()
+                if len(head) >= 2:
+                    variants.append(head)
+        return list(dict.fromkeys(variants))
+
+    @staticmethod
     def _ol5_loop_term_hits(*, text: str, loop_topic: str, loop_terms: list[str]) -> bool:
         if loop_terms:
-            return any(term and term in text for term in loop_terms)
+            for term in loop_terms:
+                for variant in RelationshipStore._ol5_term_match_variants(term):
+                    if variant and variant in text:
+                        return True
+            return False
         topic = loop_topic.strip()
         if topic and topic in text:
             return True

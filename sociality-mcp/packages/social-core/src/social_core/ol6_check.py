@@ -32,6 +32,14 @@ _OL6_DENY_RE = re.compile(
     re.I,
 )
 
+PENDING_TRIGGER_OL6 = "post_deadline_first_turn"
+PENDING_TRIGGER_OL7 = "ol7_return_signal"
+
+_OL7_AFFIRM_RE = re.compile(
+    r"^(?:うん|はい|ええ|そう|まあね)(?:[,、]?\s*.+)?[!！?？。.…~\s]*$",
+    re.I,
+)
+
 
 def extract_until_phrase(*, detail: dict, topic: str) -> str | None:
     """Return until phrase from loop detail or embedded topic text."""
@@ -127,6 +135,18 @@ def is_ol6_completion_confirm(text: str) -> bool:
     if not stripped or len(stripped) > 80:
         return False
     return bool(_OL6_CONFIRM_RE.match(stripped))
+
+
+def is_pending_completion_confirm(text: str, *, trigger: str | None = None) -> bool:
+    """OL6/OL7 shared pending_check — confirm or deny routing."""
+    if is_ol6_completion_confirm(text):
+        return True
+    if trigger != PENDING_TRIGGER_OL7:
+        return False
+    stripped = (text or "").strip()
+    if not stripped or len(stripped) > 80:
+        return False
+    return bool(_OL7_AFFIRM_RE.match(stripped))
 
 
 def is_ol6_completion_denial(text: str) -> bool:

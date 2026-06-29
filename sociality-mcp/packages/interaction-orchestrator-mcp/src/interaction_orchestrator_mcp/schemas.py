@@ -90,12 +90,17 @@ class OpenLoopSummary(BaseModel):
 
 
 class LoopDueForCheck(BaseModel):
-    """Open loop past until deadline — OL6 first-conversation check-in."""
+    """Open loop needing a natural completion check-in (OL6 post-deadline or OL7 return-signal)."""
 
     loop_id: str
     topic: str
     until_phrase: str | None = None
     resolved_date: str | None = None
+    trigger: Literal["post_deadline_first_turn", "ol7_return_signal"] = (
+        "post_deadline_first_turn"
+    )
+    source_utterance: str | None = None
+    completion_summary: str | None = None
 
 
 class CommitmentSummary(BaseModel):

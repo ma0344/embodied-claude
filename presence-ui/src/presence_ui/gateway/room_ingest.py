@@ -122,6 +122,28 @@ async def _ingest_human_core_async(
         except Exception:
             logger.exception("GW-S2 OL-GATE failed")
         try:
+            from presence_ui.gateway.ol7_flow import ol7_enabled, try_ol7_after_ingest
+
+            if ol7_enabled():
+                ol7_result = await try_ol7_after_ingest(
+                    stores,
+                    person_id=person_id,
+                    text=text,
+                    ts=when,
+                    source_event_id=event_id,
+                )
+                if ol7_result.closed_topics:
+                    outcome = outcome.model_copy(
+                        update={
+                            "closed_loops": [
+                                *outcome.closed_loops,
+                                *ol7_result.closed_topics,
+                            ]
+                        }
+                    )
+        except Exception:
+            logger.exception("OL7 return-signal failed")
+        try:
             from presence_ui.gateway.reminder_spec import try_create_llm_reminder_commitment
 
             await try_create_llm_reminder_commitment(

@@ -12,9 +12,11 @@ from interaction_orchestrator_mcp.schemas import InterpretationShiftSummary
 from interaction_orchestrator_mcp.shift_temporal import (
     append_bare_greeting_plan_constraints,
     append_shift_plan_constraints,
+    effective_shift_domain,
     effective_shift_resolved_date,
     filter_injectable_shifts,
     is_schedule_like_shift,
+    is_shift_domain_injectable,
     is_shift_temporally_stale,
     parse_first_jp_date,
     prepare_shifts_for_inject,
@@ -88,6 +90,57 @@ def test_filter_injectable_shifts_drops_stale() -> None:
         tz_name="Asia/Tokyo",
     )
     assert kept == [fresh]
+
+
+def test_world_fact_shift_not_injectable() -> None:
+    shift = _shift(
+        domain="world_fact",
+        topic="Matsumoto city HP",
+        new_interpretation="Info is on the city website, not prefecture",
+        resolved_date=None,
+    )
+    assert not is_shift_domain_injectable(shift)
+
+
+def test_legacy_user_correction_trigger_inferred_world_fact() -> None:
+    shift = _shift(
+        domain=None,
+        trigger="gateway post-reply hook (user_correction)",
+        topic="違うみたい。松本市のHP",
+    )
+    assert effective_shift_domain(shift) == "world_fact"
+    assert not is_shift_domain_injectable(shift)
+
+
+def test_boundary_shift_injectable() -> None:
+    shift = _shift(
+        domain="boundary",
+        new_interpretation="Do not speak after quiet hours unless asked",
+        resolved_date=None,
+        topic="quiet hours",
+    )
+    assert is_shift_domain_injectable(shift)
+
+
+def test_filter_injectable_shifts_drops_world_fact() -> None:
+    behavioral = _shift(
+        domain="rule",
+        topic="quiet hours",
+        new_interpretation="policy purpose is the rule, not sample wording",
+        resolved_date=None,
+    )
+    world = _shift(
+        domain="world_fact",
+        topic="Matsumoto HP",
+        new_interpretation="Check city website",
+        resolved_date=None,
+    )
+    kept = filter_injectable_shifts(
+        [world, behavioral],
+        as_of_ts="2026-06-28T08:00:00+09:00",
+        tz_name="Asia/Tokyo",
+    )
+    assert kept == [behavioral]
 
 
 def test_relativize_shift_for_inject() -> None:

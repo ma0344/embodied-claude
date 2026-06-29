@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 
+from presence_ui.training.cheerleader_strip import strip_trailing_cheerleader_closings
 from presence_ui.training.persona_export import (
     PersonaTrainingExample,
     _normalize_pair_text,
@@ -194,11 +195,12 @@ def apply_persona_curation(
     dst.parent.mkdir(parents=True, exist_ok=True)
     with dst.open("w", encoding="utf-8") as handle:
         for ex in kept:
+            assistant = strip_trailing_cheerleader_closings(ex.assistant)
             record = {
                 "messages": [
                     {"role": "system", "content": ex.system},
                     {"role": "user", "content": ex.user},
-                    {"role": "assistant", "content": ex.assistant},
+                    {"role": "assistant", "content": assistant},
                 ]
             }
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")

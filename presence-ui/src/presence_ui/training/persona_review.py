@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from presence_ui.training.cheerleader_strip import strip_trailing_cheerleader_closings
 from presence_ui.training.persona_curation import (
     PersonaCurationStats,
     apply_persona_curation,
@@ -121,7 +122,7 @@ def fetch_persona_training_review(
             line_no=example.line_no,
             fingerprint=pair_fingerprint(example.user, example.assistant),
             user=example.user,
-            assistant=example.assistant,
+            assistant=strip_trailing_cheerleader_closings(example.assistant),
             rejected=pair_fingerprint(example.user, example.assistant) in rejected_set,
         )
         for idx, example in enumerate(slice_)

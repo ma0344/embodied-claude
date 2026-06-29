@@ -437,6 +437,81 @@ def relativize_for_as_of(text: str, *, as_of: date) -> str:
     return _EXPLICIT_JP_DATE_IN_TEXT.sub(_replacer, raw)
 
 
+_BARE_DEIXIS_SHIFT_PAST: dict[int, tuple[tuple[str, str], ...]] = {
+    1: (
+        ("明後日", "明日"),
+        ("明日", "今日"),
+        ("あす", "今日"),
+        ("今日", "昨日"),
+        ("きょう", "きのう"),
+        ("昨日", "一昨日"),
+    ),
+    2: (
+        ("明後日", "今日"),
+        ("明日", "昨日"),
+        ("今日", "一昨日"),
+    ),
+}
+
+_SCHEDULE_DEIXIS_MARKERS = re.compile(
+    r"今日|きょう|明日|あす|明後日|予定|スケジュール|午前|午後|\d{1,2}[:：]\d{2}"
+)
+
+
+def _shift_bare_deixis_past(text: str, *, day_gap: int) -> str:
+    """Re-express bare 今日/明日 from *uttered* day when injecting on a later day."""
+    if day_gap <= 0:
+        return text
+    pairs = _BARE_DEIXIS_SHIFT_PAST.get(day_gap)
+    if not pairs:
+        return text
+    result = text
+    for old, new in pairs:
+        result = result.replace(old, new)
+    return result
+
+
+def reexpress_deixis_for_inject(
+    text: str,
+    *,
+    uttered_day: date,
+    as_of: date,
+    uttered_at_iso: str | None = None,
+    tz_name: str = DEFAULT_TIMEZONE,
+) -> str:
+    """TEMP-5 — anchor overnight/recall text to uttered day, surface relative to compose *as_of*."""
+    raw = str(text or "")
+    if not raw:
+        return raw
+    ts = (uttered_at_iso or "").strip() or f"{uttered_day.isoformat()}T12:00:00+09:00"
+    anchored, _ = anchor_relative_dates_in_text(raw, updated_at=ts, tz_name=tz_name)
+    result = relativize_for_as_of(anchored, as_of=as_of)
+    day_gap = (as_of - uttered_day).days
+    if day_gap > 0:
+        result = _shift_bare_deixis_past(result, day_gap=day_gap)
+    return result
+
+
+def is_stale_schedule_memory(
+    content: str,
+    *,
+    updated_at: str,
+    tz_name: str,
+    as_of: date,
+) -> bool:
+    """True when memory text anchors a calendar day strictly before *as_of*."""
+    text = str(content or "").strip()
+    if not text or not _SCHEDULE_DEIXIS_MARKERS.search(text):
+        return False
+    stale = is_stale(
+        topic=text,
+        updated_at=updated_at,
+        tz_name=tz_name,
+        as_of=as_of,
+    )
+    return stale is not None
+
+
 def calendar_anchor_line(*, ts: str, tz_name: str = DEFAULT_TIMEZONE) -> str:
     """One-line compose anchor: concrete calendar day for the model."""
     day = as_of_date(as_of_ts=ts, tz_name=tz_name)

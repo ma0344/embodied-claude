@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Literal
 
 from boundary_mcp.store import BoundaryStore
 from joint_attention_mcp.store import JointAttentionStore
@@ -11,7 +11,12 @@ from relationship_mcp.inference import is_archive_remember_utterance
 from relationship_mcp.store import RelationshipStore
 from self_narrative_mcp.store import SelfNarrativeStore
 from social_core import DEFAULT_POLICY_TIMEZONE, local_view, utc_now
-from social_core.date_resolution import calendar_anchor_line
+from social_core.date_resolution import (
+    as_of_date,
+    calendar_anchor_line,
+    is_stale_schedule_memory,
+    reexpress_deixis_for_inject,
+)
 from social_state_mcp.store import SocialStateStore
 
 from .desire_source import load_desire_snapshot
@@ -151,23 +156,48 @@ def compose_interaction_context(
 
     memory = memory_adapter or make_default_memory_adapter()
     profile_gists = list((person_model or {}).get("profile_gists") or [])
-    relevant_memories = [
-        RelevantMemoryRef(
-            memory_id=hit.memory_id,
-            content=hit.content,
-            relevance=hit.relevance,
-            use_policy=hit.use_policy,
-            reason=hit.reason,
+    compose_as_of = as_of_date(as_of_ts=ts, tz_name=policy_timezone)
+    relevant_memories = []
+    for hit in memory.recall_for_response(
+        user_text=payload.user_text,
+        person_id=payload.person_id,
+        max_results=6,
+        include_private=payload.include_private,
+        purpose="compose",
+        profile_gists=profile_gists,
+    ):
+        uttered_day = compose_as_of
+        if hit.timestamp:
+            try:
+                uttered_day = as_of_date(as_of_ts=hit.timestamp, tz_name=policy_timezone)
+            except ValueError:
+                uttered_day = compose_as_of
+        content = reexpress_deixis_for_inject(
+            hit.content,
+            uttered_day=uttered_day,
+            as_of=compose_as_of,
+            uttered_at_iso=hit.timestamp or None,
+            tz_name=policy_timezone,
         )
-        for hit in memory.recall_for_response(
-            user_text=payload.user_text,
-            person_id=payload.person_id,
-            max_results=6,
-            include_private=payload.include_private,
-            purpose="compose",
-            profile_gists=profile_gists,
+        use_policy = hit.use_policy
+        reason = hit.reason
+        if is_stale_schedule_memory(
+            hit.content,
+            updated_at=hit.timestamp or ts,
+            tz_name=policy_timezone,
+            as_of=compose_as_of,
+        ):
+            use_policy = "background_only"
+            reason = "stale schedule memory — do not treat as today's plan"
+        relevant_memories.append(
+            RelevantMemoryRef(
+                memory_id=hit.memory_id,
+                content=content,
+                relevance=hit.relevance,
+                use_policy=use_policy,
+                reason=reason,
+            )
         )
-    ]
 
     joint_focus = _optional_dict(
         joint_attention_store,
@@ -681,7 +711,7 @@ def _commitment_speak_line(item: dict[str, Any]) -> str | None:
     return str(speak_line).strip() or None
 
 
-def _commitment_delivery(item: dict[str, Any]) -> str:
+def _commitment_delivery(item: dict[str, Any]) -> Literal["say", "nudge_only"]:
     metadata = item.get("metadata") or {}
     delivery = metadata.get("delivery") or item.get("delivery") or "say"
     return "nudge_only" if delivery == "nudge_only" else "say"
@@ -1005,7 +1035,7 @@ def _compact_block(
         pin_len = 2 + len(pinned_schedule) if pinned_schedule else len(sections)
         pinned_prefix = "\n".join(sections[:pin_len])
         if pinned_schedule and len(pinned_prefix) < max_chars:
-            rest = "\n".join(sections[2 + len(pinned_schedule) :])
+            rest = "\n".join(sections[2 + len(pinned_schedule):])
             budget = max_chars - len(pinned_prefix) - 1
             if budget > 80 and rest:
                 trimmed_rest = rest[:budget].rsplit("\n", 1)[0].rstrip()

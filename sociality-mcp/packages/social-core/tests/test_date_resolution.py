@@ -11,7 +11,9 @@ from social_core.date_resolution import (
     deixis_for_day,
     format_jp_date,
     is_resolved_date_stale,
+    is_stale_schedule_memory,
     relativize_for_as_of,
+    reexpress_deixis_for_inject,
     resolve_relative_date,
     resolve_this_weekend,
     stale_from_detail_json,
@@ -209,3 +211,44 @@ def test_same_weekday_on_sunday_needs_confirmation() -> None:
     assert "日曜" in result.ambiguous_phrases[0]
 
 
+def test_reexpress_deixis_for_inject_shifts_yesterday_today() -> None:
+    text = "- (episode_close) 今日は入浴介助で15時まで"
+    surfaced = reexpress_deixis_for_inject(
+        text,
+        uttered_day=date(2026, 6, 27),
+        as_of=date(2026, 6, 28),
+        uttered_at_iso="2026-06-27T20:00:00+09:00",
+        tz_name="Asia/Tokyo",
+    )
+    assert "昨日" in surfaced
+    assert "今日は入浴" not in surfaced
+
+
+def test_reexpress_deixis_for_inject_same_day_unchanged_today() -> None:
+    text = "今日は散歩に行く"
+    surfaced = reexpress_deixis_for_inject(
+        text,
+        uttered_day=date(2026, 6, 29),
+        as_of=date(2026, 6, 29),
+        uttered_at_iso="2026-06-29T08:00:00+09:00",
+        tz_name="Asia/Tokyo",
+    )
+    assert surfaced.startswith("今日")
+
+
+def test_is_stale_schedule_memory_detects_old_plan() -> None:
+    assert is_stale_schedule_memory(
+        "今日は入浴介助で15時まで",
+        updated_at="2026-06-27T20:00:00+09:00",
+        tz_name="Asia/Tokyo",
+        as_of=date(2026, 6, 28),
+    )
+
+
+def test_is_stale_schedule_memory_ignores_non_schedule() -> None:
+    assert not is_stale_schedule_memory(
+        "松本市の天気を調べた",
+        updated_at="2026-06-27T20:00:00+09:00",
+        tz_name="Asia/Tokyo",
+        as_of=date(2026, 6, 28),
+    )

@@ -92,6 +92,7 @@ def test_route_boundary_writes_boundary_and_shift() -> None:
     stores.orchestrator.record_interpretation_shift.assert_called_once()
     shift_payload = stores.orchestrator.record_interpretation_shift.call_args[0][0]
     assert shift_payload.topic == "quiet hours and presence"
+    assert shift_payload.domain == "boundary"
 
 
 def test_route_dismiss_closes_loops() -> None:

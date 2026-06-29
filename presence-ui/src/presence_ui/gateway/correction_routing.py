@@ -254,6 +254,7 @@ def route_correction(
                 trigger=f"SHIFT-R2 ingest ({target})",
                 confidence=parsed.confidence,
                 ts=ts,
+                domain=target,
             )
         )
         shift_id = stored.experience_id

@@ -421,6 +421,14 @@ MIGRATIONS = [
         ALTER TABLE interpretation_shifts ADD COLUMN resolved_date TEXT;
         """,
     ),
+    Migration(
+        name="009_interpretation_shift_domain",
+        sql="""
+        ALTER TABLE interpretation_shifts ADD COLUMN domain TEXT;
+        CREATE INDEX IF NOT EXISTS idx_interpretation_shifts_domain
+            ON interpretation_shifts(domain, ts DESC);
+        """,
+    ),
 ]
 
 

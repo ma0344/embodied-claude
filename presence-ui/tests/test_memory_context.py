@@ -32,6 +32,24 @@ def _ctx(*, local_time: str = "2026-06-18T08:00:00+09:00") -> InteractionContext
     )
 
 
+def test_dream_digest_block_reanchors_yesterday_today(tmp_path, monkeypatch):
+    monkeypatch.setenv("PRESENCE_DREAM_DIGEST_PATH", str(tmp_path / "dream.json"))
+    save_dream_digest(
+        DreamDigestRecord(
+            dreamed_at="2026-06-18T03:00:00+09:00",
+            local_day="2026-06-17",
+            summary="[dream_digest]\n- (open_loop_progress) 今日は入浴介助\n[/dream_digest]",
+            stm_entry_ids=["stm_1"],
+        )
+    )
+    morning = build_dream_digest_block(
+        local_time="2026-06-18T08:00:00+09:00",
+        timezone="Asia/Tokyo",
+    )
+    assert "昨日" in morning
+    assert "今日は入浴" not in morning
+
+
 def test_dream_digest_block_only_in_morning(tmp_path, monkeypatch):
     monkeypatch.setenv("PRESENCE_DREAM_DIGEST_PATH", str(tmp_path / "dream.json"))
     save_dream_digest(

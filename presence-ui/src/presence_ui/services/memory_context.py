@@ -6,6 +6,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from interaction_orchestrator_mcp.schemas import InteractionContext
+from social_core.date_resolution import reexpress_deixis_for_inject
 from social_core.stm import StmStore, build_stm_prompt_block
 
 from presence_ui.deps import get_stores
@@ -40,6 +41,33 @@ def _morning_temporal_fence(*, source_day: str, today: str, kind: str) -> str:
     )
 
 
+def _prepare_overnight_inject_body(
+    body: str,
+    *,
+    source_day: str,
+    today: str,
+    dreamed_at: str,
+    timezone: str,
+) -> str:
+    """TEMP-5 — re-anchor dream/inner-voice deixis for compose *today*."""
+    from datetime import date
+
+    if not body.strip() or not source_day or not today:
+        return body
+    try:
+        uttered = date.fromisoformat(source_day)
+        as_of = date.fromisoformat(today)
+    except ValueError:
+        return body
+    return reexpress_deixis_for_inject(
+        body,
+        uttered_day=uttered,
+        as_of=as_of,
+        uttered_at_iso=dreamed_at,
+        tz_name=timezone,
+    )
+
+
 def build_dream_digest_block(*, local_time: str, timezone: str) -> str:
     """Surface overnight dream summary during morning compose (MEM-4)."""
     if not is_morning_digest_window(local_time=local_time, timezone=timezone):
@@ -55,8 +83,14 @@ def build_dream_digest_block(*, local_time: str, timezone: str) -> str:
         return ""
     if (now - dreamed).total_seconds() > 36 * 3600:
         return ""
-    body = record.summary.strip()
     today = _local_date_iso(local_time, timezone) or ""
+    body = _prepare_overnight_inject_body(
+        record.summary.strip(),
+        source_day=record.local_day,
+        today=today,
+        dreamed_at=record.dreamed_at,
+        timezone=timezone,
+    )
     fence = _morning_temporal_fence(
         source_day=record.local_day,
         today=today,
@@ -82,8 +116,14 @@ def build_overnight_inner_voice_block(*, local_time: str, timezone: str) -> str:
         return ""
     if (now - dreamed).total_seconds() > 36 * 3600:
         return ""
-    body = (record.inner_voice_summary or "").strip()
     today = _local_date_iso(local_time, timezone) or ""
+    body = _prepare_overnight_inject_body(
+        (record.inner_voice_summary or "").strip(),
+        source_day=record.local_day,
+        today=today,
+        dreamed_at=record.dreamed_at,
+        timezone=timezone,
+    )
     fence = _morning_temporal_fence(
         source_day=record.local_day,
         today=today,

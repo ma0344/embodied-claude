@@ -275,6 +275,43 @@ class TestRecord:
         assert "今日は入浴介助" not in joined
         assert "入浴介助" not in joined
 
+    def test_world_fact_shift_suppressed_from_compose(self, stores, monkeypatch):
+        stores["orchestrator"].record_interpretation_shift(
+            RecordInterpretationShiftInput(
+                person_id="ma",
+                topic="Matsumoto city HP",
+                old_interpretation="Prefecture site",
+                new_interpretation="Check Matsumoto city website instead",
+                trigger="SHIFT-R2 ingest (world_fact)",
+                confidence=0.85,
+                ts="2026-06-28T08:00:00+09:00",
+                domain="world_fact",
+            )
+        )
+        monkeypatch.setattr(
+            "interaction_orchestrator_mcp.compose.utc_now",
+            lambda: "2026-06-28T09:00:00+09:00",
+        )
+        ctx = _compose(stores, user_text="松本のHPどこ？")
+        assert "Matsumoto" not in ctx.compact_prompt_block
+        assert "[interpretation_shifts]" not in ctx.compact_prompt_block
+        assert ctx.agent_state.recent_interpretation_shifts == []
+
+    def test_record_interpretation_shift_stores_domain(self, stores):
+        stores["orchestrator"].record_interpretation_shift(
+            RecordInterpretationShiftInput(
+                person_id="ma",
+                topic="quiet hours",
+                old_interpretation="May nudge late evening",
+                new_interpretation="Stay silent after quiet hours",
+                trigger="SHIFT-R2 ingest (boundary)",
+                confidence=0.9,
+                domain="boundary",
+            )
+        )
+        shift = stores["orchestrator"].recent_interpretation_shifts(limit=1)[0]
+        assert shift.domain == "boundary"
+
     def test_stale_shift_suppressed_on_non_greeting_turn(self, stores, monkeypatch):
         stores["orchestrator"].record_interpretation_shift(
             RecordInterpretationShiftInput(

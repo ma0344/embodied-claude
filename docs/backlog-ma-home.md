@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ（ダッシュボード）
 
-**最終更新**: 2026-06-29（OL-STALE v1 ✅ · OL6 ma-home ✅ · GW resume ✅）  
+**最終更新**: 2026-06-29（TEMP-5 ✅ · LW-7 example ON · SHIFT-R3 ✅）  
 **詳細の正（アーカイブ）**: [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md)  
 **完了一覧**: [backlog-archive-ma-home.md](./backlog-archive-ma-home.md)
 
@@ -35,7 +35,7 @@
 
 | 順 | トラック | 内容 | 状態 |
 |----|---------|------|------|
-| **★** | **ALIVE / LW** | 生きてる感の第一シーン（青空読書） | 🔥 v1 GW-S1 運用 → **LW-7** |
+| **★** | **ALIVE / LW** | 生きてる感の第一シーン（青空読書） | 🔥 LW-7 運用確認 |
 | **1** | **BIO** | Heartbeat ループ骨格（pulse・somatic・tick） | ✅ 基盤済 — interpret 一部閉（PAUSE） |
 | **2** | **GW** | 黙考ルート（shared interpret） | ✅ S1 · ✅ S2 · ✅ Claude resume（opt-in） |
 | **3** | **OL5** | 予定消化で loop close | ✅ a/b/c/6/STALE |
@@ -45,9 +45,9 @@
 
 ## 次の 3 手
 
-1. **TEMP-5** — dream_digest / memories anchor（幽霊除去 · inject 側）
+1. **（運用確認）LW-7** — `PRESENCE_LW7_ENABLED=1`（example 既定 ON · 実機で PAUSE→Web）→ [tracks/alive-lw-read.md](./tracks/alive-lw-read.md)
 
-（並行）**LW-7** — `PRESENCE_LW7_ENABLED=1` → [tracks/alive-lw-read.md](./tracks/alive-lw-read.md)
+（完了）**SHIFT-R3** — `interpretation_shifts.domain` + inject filter → [interpretation-shift-routing.md](./tracks/interpretation-shift-routing.md)
 
 デプロイ: `cd presence-ui` → `uv pip install --reinstall "relationship-mcp @ file:///…/relationship-mcp"` → `.\scripts\restart-presence-ui.ps1`
 
@@ -57,7 +57,7 @@
 
 | トラック | 内容 | 状態 | 詳細 |
 |---------|------|------|------|
-| **ALIVE / LW** | 生きてる感・青空読書 | 🔥 LW-7 下準備済 | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md) |
+| **ALIVE / LW** | 生きてる感・青空読書 | 🔥 LW-7 ON（運用確認） | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md) |
 | **BIO** | ループ骨格（pulse・somatic・経験→wake） | ✅ 基盤済 · PAUSE interpret 閉 | [architecture/heartbeat-loop.md](./architecture/heartbeat-loop.md) |
 | **GW** | 黙考ルート（**interpret** 層） | ✅ S1 · ✅ S2 · ✅ resume（opt-in） | [tracks/gw-silent.md](./tracks/gw-silent.md) |
 | **OL5** | 予定消化 loop close | ✅ a/b/c/6/STALE | [tracks/ol5.md](./tracks/ol5.md) |
@@ -94,7 +94,7 @@
 | **VIS** | VL health · **Qwen→e4b vision POC**（事前テスト必須） | 💤 POC 待ち | [tracks/vis-health.md](./tracks/vis-health.md) |
 | **V** | Surface UI 残（V4 等） | 部分済 | [tracks/surface-vision.md](./tracks/surface-vision.md) |
 | **GAPI** | Google Calendar / Drive | ✅ prep-1/2 CLI · 📋 配線要検討 → prep-3 | [tracks/gapi.md](./tracks/gapi.md) · [gapi-setup.md](./ops/gapi-setup.md) |
-| **TEMP** | TEMP-1〜4/b ✅ · TEMP-C3/b/c4 ✅ · SHIFT-R1/R2 ✅ · **TEMP-5 📋** | [utterance-anchoring.md](./tracks/utterance-anchoring.md) · [interpretation-shift-routing.md](./tracks/interpretation-shift-routing.md) |
+| **TEMP** | TEMP-1〜5 ✅ · TEMP-C3/b/c4 ✅ · SHIFT-R1/R2/R3 ✅ | [utterance-anchoring.md](./tracks/utterance-anchoring.md) · [interpretation-shift-routing.md](./tracks/interpretation-shift-routing.md) |
 | **WS** | 会話 Web 検索 | ✅ WS-1〜2c · 📋 WS-5（[北極星: 地震例](./ops/ws-5-spontaneous-search.md#北極星シナリオ--会話中の興味疑問2026-06-27)） | [ws-2](./ops/ws-2-conversation-web-search.md) · [ws-5](./ops/ws-5-spontaneous-search.md) |
 
 トピック索引: [backlog-koyori.md](./backlog-koyori.md)

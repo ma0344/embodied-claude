@@ -235,9 +235,9 @@ class InteractionOrchestratorStore:
                 INSERT INTO interpretation_shifts(
                     shift_id, ts, person_id, topic,
                     old_interpretation, new_interpretation, trigger,
-                    confidence, implications_json, created_at, resolved_date
+                    confidence, implications_json, created_at, resolved_date, domain
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     shift_id,
@@ -251,6 +251,7 @@ class InteractionOrchestratorStore:
                     json.dumps(payload.implications, ensure_ascii=False),
                     ts,
                     resolved_date,
+                    payload.domain,
                 ),
             )
         return StoredExperience(experience_id=shift_id, ts=ts)
@@ -274,7 +275,7 @@ class InteractionOrchestratorStore:
         rows = self.db.fetchall(
             f"""
             SELECT shift_id, ts, topic, old_interpretation, new_interpretation,
-                   trigger, confidence, resolved_date
+                   trigger, confidence, resolved_date, domain
             FROM interpretation_shifts
             {clause}
             ORDER BY ts DESC, created_at DESC
@@ -292,6 +293,7 @@ class InteractionOrchestratorStore:
                 trigger=row[5],
                 confidence=float(row[6]),
                 resolved_date=row[7],
+                domain=row[8],
             )
             for row in rows
         ]

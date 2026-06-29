@@ -15,6 +15,18 @@ from social_core.date_resolution import (
 
 from .schemas import InterpretationShiftSummary, PrimaryMove
 
+INJECTABLE_SHIFT_DOMAINS = frozenset(
+    {"boundary", "agent_behavior", "relationship", "rule", "self_model"}
+)
+NON_INJECTABLE_SHIFT_DOMAINS = frozenset({"world_fact", "schedule", "dismiss_topic"})
+
+_LEGACY_TRIGGER_DOMAIN = (
+    ("user_correction", "world_fact"),
+    ("boundary", "boundary"),
+    ("relationship", "relationship"),
+    ("policy", "rule"),
+)
+
 _EXPLICIT_JP_DATE = re.compile(r"(\d{4})年(\d{1,2})月(\d{1,2})日")
 
 
@@ -27,6 +39,33 @@ def parse_first_jp_date(text: str) -> date | None:
         return date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
     except ValueError:
         return None
+
+
+def effective_shift_domain(shift: InterpretationShiftSummary) -> str | None:
+    """Stored domain, or legacy trigger hint before SHIFT-R3 backfill."""
+    if shift.domain:
+        return shift.domain
+    trigger = (shift.trigger or "").lower()
+    for token, domain in _LEGACY_TRIGGER_DOMAIN:
+        if token in trigger:
+            return domain
+    return None
+
+
+def is_shift_domain_injectable(shift: InterpretationShiftSummary) -> bool:
+    """SHIFT-R3 — only behavioral / relational shifts reach compose inject."""
+    domain = effective_shift_domain(shift)
+    if domain in NON_INJECTABLE_SHIFT_DOMAINS:
+        return False
+    if domain in INJECTABLE_SHIFT_DOMAINS:
+        return True
+    return True
+
+
+def filter_shifts_by_domain(
+    shifts: list[InterpretationShiftSummary],
+) -> list[InterpretationShiftSummary]:
+    return [shift for shift in shifts if is_shift_domain_injectable(shift)]
 
 
 def effective_shift_resolved_date(
@@ -71,10 +110,11 @@ def filter_injectable_shifts(
     tz_name: str,
     limit: int = 3,
 ) -> list[InterpretationShiftSummary]:
-    """Drop stale schedule shifts before compose / plan inject."""
+    """Drop non-injectable domains and stale schedule shifts before compose / plan."""
+    domain_ok = filter_shifts_by_domain(shifts)
     active = [
         shift
-        for shift in shifts
+        for shift in domain_ok
         if not is_shift_temporally_stale(shift, as_of_ts=as_of_ts, tz_name=tz_name)
     ]
     return active[: max(1, min(limit, 10))]

@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from presence_ui.training.cheerleader_strip import strip_trailing_cheerleader_closings
 from presence_ui.gateway.user_prompt import (
     looks_like_agent_slash_command,
     looks_like_injected_prompt,
@@ -232,7 +233,9 @@ def pairs_from_session_jsonl(path: Path) -> list[tuple[str, str]]:
         if msg.sender == "ma":
             pending_user = msg.message.strip()
         elif msg.sender == "koyori" and pending_user:
-            pairs.append((pending_user, msg.message.strip()))
+            pairs.append(
+                (pending_user, strip_trailing_cheerleader_closings(msg.message.strip()))
+            )
             pending_user = None
     return pairs
 

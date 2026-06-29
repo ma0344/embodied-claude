@@ -131,6 +131,15 @@ _TOPIC_RULES: list[tuple[ShiftKind, re.Pattern[str], str]] = [
 ]
 
 
+def _kind_to_domain(kind: ShiftKind) -> str:
+    return {
+        "user_correction": "world_fact",
+        "boundary": "boundary",
+        "relationship": "relationship",
+        "policy": "rule",
+    }[kind]
+
+
 def _topic_for(user_text: str) -> tuple[ShiftKind, str]:
     for kind, pattern, label in _TOPIC_RULES:
         if pattern.search(user_text):
@@ -199,6 +208,7 @@ def infer_interpretation_shifts(
             trigger=f"gateway post-reply hook ({kind})",
             confidence=confidence,
             implications=implications,
+            domain=_kind_to_domain(kind),
         )
     ]
 

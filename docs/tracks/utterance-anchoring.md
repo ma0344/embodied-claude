@@ -397,6 +397,8 @@ PRESENCE_GW_S2_STAGED=1
 
 **原則**: 日付は C4（regex）· **時刻・日時混合は C5（e4b + as_of 注入）**。GAPI-7d / OL7 と同型の **stateless 分類器**。
 
+**横断**: [Propose → Confirm → Execute](../architecture/llm-propose-confirm-execute.md) — C5 も低 confidence なら確認ターン可。
+
 #### e4b 手動 POC（2026-06-29）
 
 プロンプトに **日本時間 as_of** を明示:

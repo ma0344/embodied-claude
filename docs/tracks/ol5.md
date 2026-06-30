@@ -271,6 +271,8 @@ close（ol6_completion）| 維持 | dismiss
 
 **絶対原則（カレンダー GAPI-7b と同型）**: e4b は **どの loop を閉じるか**を返すだけ。**`status=closed` の実行は gateway**（`apply_ol_gate_decision` / 専用 close 経路）。表層の完了文は `completion_summary` 用で、DB close の根拠にしない。
 
+横断原則: [Propose → Confirm → Execute](../architecture/llm-propose-confirm-execute.md) — **確認ステップを当たり前**に（一発 e4b 任せにしない）。
+
 ### 設計の芯 — 「Open Loop を閉じる機構」
 
 OL7 の本体は **会話の1ターンで閉じる分類器**ではない。**open loop を DB で closed にする経路**である。

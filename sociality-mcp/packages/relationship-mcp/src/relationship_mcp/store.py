@@ -18,6 +18,12 @@ from social_core import (
 )
 
 from social_core.ol_stale import evaluate_stale_close, infer_stale_policy_for_loop
+from social_core.activity_frame import (
+    build_activity_frame_from_detail,
+    build_completion_frame,
+    frames_match_completion,
+    ensure_activity_frame_in_detail,
+)
 
 from .date_resolution import (
     DEFAULT_TIMEZONE,
@@ -349,14 +355,36 @@ class RelationshipStore:
         for row in rows:
             detail = self._parse_loop_detail(str(row["detail_json"] or ""))
             pending = detail.get("pending_check")
-            if not isinstance(pending, dict) or not pending.get("asked_at"):
+            if not isinstance(pending, dict):
                 continue
             loop_id = str(row["loop_id"])
             topic = str(row["topic"])
             trigger = str(pending.get("trigger") or "post_deadline_first_turn")
+            asked = pending.get("asked_at")
+            candidate = pending.get("candidate_at")
+
             if is_ol6_completion_denial(utterance):
-                self._clear_loop_pending_check(loop_id=loop_id, person_id=person_id)
+                if asked or (trigger == PENDING_TRIGGER_OL7 and candidate):
+                    self._clear_loop_pending_check(loop_id=loop_id, person_id=person_id)
                 return closed
+
+            if trigger == PENDING_TRIGGER_OL7 and candidate and not asked:
+                if is_pending_completion_confirm(utterance, trigger=trigger):
+                    self._close_open_loop(
+                        loop_id=loop_id,
+                        person_id=person_id,
+                        topic=topic,
+                        ts=ts,
+                        source_event_id=source_event_id,
+                        source_text=utterance,
+                        close_kind="ol7_completion",
+                    )
+                    closed.append(topic)
+                    return closed
+                continue
+
+            if not asked:
+                continue
             if not is_pending_completion_confirm(utterance, trigger=trigger):
                 continue
             close_kind = (
@@ -582,7 +610,9 @@ class RelationshipStore:
             return closed_topics
 
         topic = loop_topic.strip()
-        detail_payload: dict[str, object] = {"kind": "future_task_or_question", **(detail or {})}
+        detail_payload: dict[str, object] = ensure_activity_frame_in_detail(
+            {"kind": "future_task_or_question", **(detail or {})}
+        )
         detail_payload["ol_gate"] = True
         event_block = detail.get("event") if isinstance(detail, dict) else None
         if isinstance(event_block, dict):
@@ -1817,7 +1847,24 @@ class RelationshipStore:
         text = utterance.strip()
         if not text:
             return False
-        if not self._ol5_loop_term_hits(text=text, loop_topic=loop_topic, loop_terms=loop_terms):
+        loop_frame = build_activity_frame_from_detail(detail)
+        if loop_frame is not None and (action_terms or ingest_verbs):
+            close_frame = build_completion_frame(
+                object_phrase=action_terms[0]
+                if action_terms
+                else str(detail.get("object_phrase") or "") or None,
+                action_phrase=ingest_verbs[0] if ingest_verbs else None,
+                utterance=text,
+                action_terms=action_terms,
+            )
+            if frames_match_completion(loop_frame, close_frame, utterance=text, close_action_phrase=ingest_verbs[0] if ingest_verbs else None):
+                return any(v in text for v in ingest_verbs) or any(v in text for v in stored_verbs)
+        if not self._ol5_loop_term_hits(
+            text=text,
+            loop_topic=loop_topic,
+            loop_terms=loop_terms,
+            ingest_terms=action_terms,
+        ):
             return False
         return any(v in text for v in ingest_verbs) or any(v in text for v in stored_verbs)
 
@@ -1864,7 +1911,23 @@ class RelationshipStore:
         return list(dict.fromkeys(variants))
 
     @staticmethod
-    def _ol5_loop_term_hits(*, text: str, loop_topic: str, loop_terms: list[str]) -> bool:
+    def _ol5_loop_term_hits(
+        *,
+        text: str,
+        loop_topic: str,
+        loop_terms: list[str],
+        ingest_terms: list[str] | None = None,
+    ) -> bool:
+        """Match loop activity to utterance — including ingest object vs longer loop label."""
+        ingest = [t for t in (ingest_terms or []) if t and len(t.strip()) >= 2]
+        if ingest and loop_terms:
+            for it in ingest:
+                if it not in text:
+                    continue
+                for lt in loop_terms:
+                    if it in lt or lt.startswith(it) or lt in it:
+                        return True
+            return False
         if loop_terms:
             for term in loop_terms:
                 for variant in RelationshipStore._ol5_term_match_variants(term):

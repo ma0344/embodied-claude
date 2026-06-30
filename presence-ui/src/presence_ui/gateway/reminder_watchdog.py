@@ -9,10 +9,10 @@ import os
 from interaction_orchestrator_mcp.compose import compose_interaction_context
 from interaction_orchestrator_mcp.plan import plan_response
 from interaction_orchestrator_mcp.schemas import ComposeInteractionContextInput, PlanResponseInput
+from social_core import utc_now
 
 from presence_ui.deps import get_stores
 from presence_ui.gateway.direct_actions import direct_actions_enabled, remind_commitment_direct
-from social_core import utc_now
 
 logger = logging.getLogger(__name__)
 

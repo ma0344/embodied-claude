@@ -540,6 +540,48 @@ def test_apply_ol_gate_ol5_closes_sanpo_with_short_object_in_utterance(store):
     assert store.list_open_loops(person_id="ma") == []
 
 
+def test_apply_ol_gate_ol5_closes_dish_wash_with_shorter_object(store):
+    """お皿洗い loop closes on 「お皿洗ったよ」— ingest object お皿 matches loop label."""
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-30T12:15:00+09:00",
+        source_event_id="evt-dishes-open",
+        source_text="お皿洗いもしてくる",
+        create_open_loop=True,
+        try_ol5_close=False,
+        loop_topic="2026年6月30日 お皿洗い してくる",
+        action_terms=["お皿洗い"],
+        completion_verbs=["洗った", "終わった"],
+        detail={
+            "kind": "ol_gate",
+            "action_terms": ["お皿洗い"],
+            "event": {"what": "お皿洗い", "action_phrase": "してくる"},
+            "activity_frame": {
+                "label": "お皿洗い",
+                "object_phrase": None,
+                "action_stem": "し",
+                "mode": "departure",
+                "gloss": "お皿洗い",
+            },
+        },
+    )
+    closed = store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-30T12:18:45+09:00",
+        source_event_id="evt-dishes-done",
+        source_text="お皿洗ったよ",
+        create_open_loop=False,
+        try_ol5_close=True,
+        loop_topic="",
+        action_terms=["お皿"],
+        completion_verbs=["洗った"],
+        detail={"kind": "ol_gate", "utterance_kind": "past_completion"},
+    )
+    assert closed == ["2026年6月30日 お皿洗い してくる"]
+    assert store.list_open_loops(person_id="ma") == []
+
+
 def test_note_human_utterance_skips_rule_loops_when_disabled(store):
     store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
     store.note_human_utterance_for_loops(
@@ -659,6 +701,39 @@ def test_ol7_pending_candidate_then_confirm_close(store):
         person_id="ma",
         text="うん、気持ちよかった～",
         ts="2026-06-29T09:01:00+09:00",
+        source_event_id="evt-affirm",
+    )
+    assert closed
+    assert store.list_open_loops(person_id="ma") == []
+
+
+def test_ol7_pending_candidate_without_asked_at_confirm_close(store):
+    """Organic Koyori confirm without mark_loop_check_asked still closes."""
+    store.upsert_person(person_id="ma", canonical_name="まー", aliases=[], role="companion")
+    store.apply_ol_gate_decision(
+        person_id="ma",
+        ts="2026-06-29T08:00:00+09:00",
+        source_event_id="evt-walk",
+        source_text="散歩に行く",
+        create_open_loop=True,
+        try_ol5_close=False,
+        loop_topic="これから 散歩 行ってくる",
+        action_terms=["散歩"],
+        completion_verbs=["行ってきた"],
+        detail={"utterance": "これから 散歩 行ってくる"},
+    )
+    loop_id = store.list_open_loops(person_id="ma")[0].id
+    store.set_ol7_pending_candidate(
+        loop_id=loop_id,
+        person_id="ma",
+        ts="2026-06-29T09:00:00+09:00",
+        source_utterance="ただいま",
+        completion_summary="散歩から帰宅",
+    )
+    closed = store.try_ol6_pending_close(
+        person_id="ma",
+        text="できたよ！",
+        ts="2026-06-29T09:05:00+09:00",
         source_event_id="evt-affirm",
     )
     assert closed

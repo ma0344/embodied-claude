@@ -21,7 +21,10 @@ def tts_health_poll_sec() -> int:
 
 
 async def check_tts_health_once() -> bool:
-    from presence_ui.services.tts_surface import surface_tts_enabled, surface_tts_ready, surface_tts_status
+    from presence_ui.services.tts_surface import (
+        surface_tts_enabled,
+        surface_tts_ready,
+    )
 
     if not surface_tts_enabled():
         return True

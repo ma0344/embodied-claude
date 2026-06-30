@@ -22,27 +22,20 @@ from presence_ui.gateway.ol_gate import (
     OlGateGatewayDecision,
     OlGateParsed,
     merge_ol_gate_gateway,
+    parse_ol_gate_response,
+    promote_contextual_wake_greeting_if_cued,
+    promote_future_departure_if_cued,
 )
 from presence_ui.gateway.ol_gate_prompts import (
     TEMP_C_STAGE1_SYSTEM,
-    TEMP_C_STAGE2_SYSTEM,
     build_temp_c_stage1_task,
+    build_temp_c_stage2_system,
     build_temp_c_stage2_task,
 )
+from presence_ui.gateway.stage1_context import Stage1DepartureHint
 
 logger = logging.getLogger(__name__)
 
-STAGE1_KINDS = frozenset(
-    {
-        "future_commitment",
-        "past_completion",
-        "past_report",
-        "greeting",
-        "correction",
-        "calendar_operation",
-        "other",
-    }
-)
 STAGE2_EVENTS_KINDS = frozenset({"future_commitment", "past_completion", "past_report"})
 MAX_EVENTS = 4
 
@@ -93,38 +86,7 @@ class StagedClassifyResult:
 
 
 def parse_stage1_response(text: str, *, fallback_utterance: str = "") -> OlGateParsed | None:
-    data = _extract_json_object(text)
-    if not data:
-        return None
-    kind = str(data.get("utterance_kind") or "other").strip()
-    if kind not in STAGE1_KINDS:
-        kind = "other"
-    raw_utterance = str(data.get("utterance") or fallback_utterance).strip()
-    utterance = raw_utterance or fallback_utterance.strip()
-    if not utterance:
-        return None
-    temporal = _nullable_field(data.get("temporal_phrase"))
-    inferred = _nullable_field(data.get("inferred_temporal_phrase"))
-    action_terms: tuple[str, ...] = ()
-    raw_terms = data.get("action_terms")
-    if isinstance(raw_terms, list):
-        action_terms = tuple(str(t).strip() for t in raw_terms if str(t).strip())[:5]
-    completion_verbs: tuple[str, ...] = ()
-    raw_verbs = data.get("completion_verbs")
-    if isinstance(raw_verbs, list):
-        completion_verbs = tuple(str(v).strip() for v in raw_verbs if str(v).strip())[:5]
-    return OlGateParsed(
-        utterance=utterance,
-        utterance_kind=kind,
-        temporal_phrase=temporal,
-        inferred_temporal_phrase=inferred,
-        temporal_source=_nullable_field(data.get("temporal_source")),
-        object_phrase=_nullable_field(data.get("object_phrase")),
-        action_phrase=_nullable_field(data.get("action_phrase")),
-        action_terms=action_terms,
-        completion_verbs=completion_verbs,
-        ineligibility_reason=_nullable_field(data.get("ineligibility_reason")),
-    )
+    return parse_ol_gate_response(text, fallback_utterance=fallback_utterance)
 
 
 def _parse_event(raw: object, *, fallback_index: int) -> StagedEvent | None:
@@ -174,10 +136,20 @@ def parse_stage2_response(
     if not isinstance(events_raw, list):
         return strength, ()
     events: list[StagedEvent] = []
+    dropped = 0
     for idx, item in enumerate(events_raw[:MAX_EVENTS]):
         event = _parse_event(item, fallback_index=idx)
         if event is not None:
             events.append(event)
+        else:
+            dropped += 1
+    if dropped and not events:
+        logger.warning(
+            "TEMP-C Stage2: %d event(s) dropped (what empty) kind=%s raw=%r",
+            dropped,
+            utterance_kind,
+            (text or "")[:240],
+        )
     return strength, tuple(inherit_when_phrases(events))
 
 
@@ -216,6 +188,24 @@ def inherit_when_phrases(
 def should_run_stage2(stage1: OlGateParsed) -> bool:
     """G1 — greeting / other / correction must not call events Stage 2."""
     return stage1.utterance_kind in STAGE2_EVENTS_KINDS
+
+
+def stage1_fallback_events(stage1: OlGateParsed) -> tuple[StagedEvent, ...]:
+    """Synthesize one event when Stage 2 returns empty but Stage 1 has slots."""
+    if stage1.utterance_kind not in STAGE2_EVENTS_KINDS:
+        return ()
+    what = (stage1.object_phrase or "").strip()
+    if not what:
+        return ()
+    return (
+        StagedEvent(
+            index=0,
+            what=what,
+            when_phrase=stage1.temporal_phrase,
+            action_phrase=stage1.action_phrase,
+            certainty="firm",
+        ),
+    )
 
 
 def event_to_topic(event: StagedEvent) -> str:
@@ -274,11 +264,18 @@ def should_create_loop_for_event(
     return bool(event.action_phrase or event.until_phrase)
 
 
-def run_staged_classify(*, utterance: str) -> StagedClassifyResult | None:
+def run_staged_classify(
+    *,
+    utterance: str,
+    open_departure_loops: tuple[Stage1DepartureHint, ...] | list[Stage1DepartureHint] = (),
+) -> StagedClassifyResult | None:
     """Stage 1 → optional Stage 2 with guards (G1–G4)."""
     raw1 = run_classifier_turn(
         system=TEMP_C_STAGE1_SYSTEM,
-        user=build_temp_c_stage1_task(utterance=utterance),
+        user=build_temp_c_stage1_task(
+            utterance=utterance,
+            open_departure_loops=open_departure_loops,
+        ),
         max_tokens=_stage1_max_tokens(),
         log_label="TEMP-C Stage1",
     )
@@ -286,6 +283,12 @@ def run_staged_classify(*, utterance: str) -> StagedClassifyResult | None:
     if stage1 is None:
         return None
     stage1 = promote_correction_kind_if_cued(stage1, utterance=utterance)
+    stage1 = promote_future_departure_if_cued(stage1, utterance=utterance)
+    stage1 = promote_contextual_wake_greeting_if_cued(
+        stage1,
+        utterance=utterance,
+        open_departure_loops=tuple(open_departure_loops),
+    )
 
     correction: CorrectionParsed | None = None
     if correction_routing_enabled() and should_run_correction_stage2(
@@ -317,9 +320,15 @@ def run_staged_classify(*, utterance: str) -> StagedClassifyResult | None:
         )
 
     raw2 = run_classifier_turn(
-        system=TEMP_C_STAGE2_SYSTEM,
-        user=build_temp_c_stage2_task(utterance=utterance, utterance_kind=stage1.utterance_kind),
+        system=build_temp_c_stage2_system(utterance_kind=stage1.utterance_kind),
+        user=build_temp_c_stage2_task(
+            utterance=utterance,
+            utterance_kind=stage1.utterance_kind,
+            object_phrase=stage1.object_phrase,
+            action_phrase=stage1.action_phrase,
+        ),
         max_tokens=_stage2_max_tokens(),
+        temperature=0.2,
         log_label="TEMP-C Stage2",
     )
     strength, events = parse_stage2_response(
@@ -327,6 +336,22 @@ def run_staged_classify(*, utterance: str) -> StagedClassifyResult | None:
         fallback_utterance=utterance,
         utterance_kind=stage1.utterance_kind,
     )
+    if not events:
+        fallback = stage1_fallback_events(stage1)
+        if fallback:
+            logger.warning(
+                "TEMP-C Stage2 returned no events; Stage1 fallback what=%r action=%r",
+                stage1.object_phrase,
+                stage1.action_phrase,
+            )
+            events = tuple(
+                inherit_when_phrases(
+                    list(fallback),
+                    utterance_fallback_when=(
+                        stage1.temporal_phrase or stage1.inferred_temporal_phrase
+                    ),
+                )
+            )
     if not events:
         return StagedClassifyResult(
             utterance=utterance,
@@ -435,6 +460,14 @@ def apply_staged_decisions(
     decisions = staged_to_gateway_decisions(result, ts=ts, timezone=timezone)
     for decision in decisions:
         decision = enrich_decision_completion_verbs(decision)
+        logger.info(
+            "GW-S2 apply: create=%s kind=%s close_shape=%s try_ol5_close=%s topic=%r",
+            decision.create_open_loop,
+            decision.utterance_kind,
+            (decision.detail or {}).get("close_shape"),
+            decision.try_ol5_close,
+            (decision.loop_topic or "")[:100],
+        )
         stores.relationship.apply_ol_gate_decision(
             person_id=person_id,
             ts=ts,

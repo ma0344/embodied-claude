@@ -15,7 +15,6 @@ from presence_ui.gateway.context_limits import (
     lite_compose_max_chars,
 )
 from presence_ui.gateway.prompt_block_safe import truncate_prompt_text
-
 from presence_ui.gateway.social_chat import ChatInterceptResult, intercept_chat_request
 
 _DEFAULT_PERMISSION_MODE = "acceptEdits"
@@ -94,7 +93,10 @@ def default_agent_config(*, working_dir: Path | None = None) -> AgentConfig:
 
     mcp_config_path: str | None = None
     strict_mcp = False
-    from presence_ui.gateway.kiosk_mcp import build_strict_mcp_config_file, strict_mcp_config_enabled
+    from presence_ui.gateway.kiosk_mcp import (
+        build_strict_mcp_config_file,
+        strict_mcp_config_enabled,
+    )
 
     if strict_mcp_config_enabled():
         try:

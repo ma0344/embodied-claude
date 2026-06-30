@@ -32,13 +32,13 @@ _SPEAKING_MOVES = frozenset(
 
 
 async def _ingest_human_message(*, person_id: str, session_id: str, text: str, ts: str) -> str:
-    event_id, _outcome = await ingest_human_turn_async(
+    result = await ingest_human_turn_async(
         person_id=person_id,
         session_id=session_id,
         text=text,
         ts=ts,
     )
-    return event_id
+    return result.event_id
 
 
 def _ingest_koyori_message(*, person_id: str, session_id: str, text: str, ts: str) -> str:

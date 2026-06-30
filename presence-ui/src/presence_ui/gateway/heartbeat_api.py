@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from interaction_orchestrator_mcp.compose import compose_interaction_context
@@ -15,8 +14,8 @@ from interaction_orchestrator_mcp.schemas import (
 )
 from pydantic import BaseModel, Field
 
-from presence_ui.gateway.context_limits import full_compose_max_chars, lite_compose_max_chars
 from presence_ui.deps import get_stores
+from presence_ui.gateway.context_limits import full_compose_max_chars, lite_compose_max_chars
 from presence_ui.heartbeat.record import finalize_chat_turn
 from presence_ui.services.somatic_context import enrich_interaction_context
 

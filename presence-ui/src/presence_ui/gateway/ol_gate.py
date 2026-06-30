@@ -6,9 +6,9 @@ import asyncio
 import logging
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
-from typing import Any
+from typing import Any, Sequence
 
 from relationship_mcp.date_resolution import DEFAULT_TIMEZONE, anchor_temporal_in_text, as_of_date
 from relationship_mcp.inference import (
@@ -25,14 +25,20 @@ from presence_ui.gateway.ol_gate_prompts import (
     OL_GATE_CLASSIFIER_STABLE,
     build_ol_gate_extract_task,
 )
+from presence_ui.gateway.stage1_context import Stage1DepartureHint
+from presence_ui.gateway.stage1_kinds import CLOSE_SHAPES, STAGE1_KINDS
 
 logger = logging.getLogger(__name__)
 
-VALID_UTTERANCE_KINDS = frozenset(
-    {"future_commitment", "past_completion", "past_report", "greeting", "correction", "other"}
-)
 _PAST_TEMPORAL_MARKERS = ("昨日", "一昨日", "先週", "先月", "yesterday", "last week")
 _OBJECT_PARTICLE_RE = re.compile(r"[をがはにでと]$")
+_FUTURE_DEPARTURE_CUE = re.compile(r"これから")
+_DEPARTURE_ACTION_RE = re.compile(r"行って(?:き|く)る|行く|出かけ")
+# Finite wake/return greetings for Q3a safety net (not OL verb lists).
+_CONTEXTUAL_WAKE_GREETING_RE = re.compile(
+    r"^(?:おはよう|おはー|起きた|おきた)(?:[!.！?？～〜*\s]*)$",
+    re.I,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +53,7 @@ class OlGateParsed:
     action_terms: tuple[str, ...]
     completion_verbs: tuple[str, ...]
     ineligibility_reason: str | None
+    close_shape: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,28 +104,56 @@ def _str_list(value: object, *, limit: int = 5) -> tuple[str, ...]:
     return tuple(out)
 
 
+def normalize_close_shape(
+    *,
+    utterance_kind: str,
+    raw: object,
+    object_phrase: str | None,
+    action_phrase: str | None,
+) -> str | None:
+    """Infer close_shape from Stage1 when the model omits it."""
+    if utterance_kind != "past_completion":
+        return None
+    shape = _nullable_str(raw)
+    if shape in CLOSE_SHAPES:
+        return shape
+    if (object_phrase or "").strip():
+        return "activity_named"
+    if (action_phrase or "").strip():
+        return "action_only"
+    return None
+
+
 def parse_ol_gate_response(text: str, *, fallback_utterance: str = "") -> OlGateParsed | None:
     data = _extract_json_object(text)
     if not data:
         return None
     kind = str(data.get("utterance_kind") or "other").strip()
-    if kind not in VALID_UTTERANCE_KINDS:
+    if kind not in STAGE1_KINDS:
         kind = "other"
     utterance = str(data.get("utterance") or fallback_utterance).strip()
     utterance = utterance or fallback_utterance.strip()
     if not utterance:
         return None
+    object_phrase = _nullable_str(data.get("object_phrase"))
+    action_phrase = _nullable_str(data.get("action_phrase"))
     return OlGateParsed(
         utterance=utterance,
         utterance_kind=kind,
         temporal_phrase=_nullable_str(data.get("temporal_phrase")),
         inferred_temporal_phrase=_nullable_str(data.get("inferred_temporal_phrase")),
         temporal_source=_nullable_str(data.get("temporal_source")),
-        object_phrase=_nullable_str(data.get("object_phrase")),
-        action_phrase=_nullable_str(data.get("action_phrase")),
+        object_phrase=object_phrase,
+        action_phrase=action_phrase,
         action_terms=_str_list(data.get("action_terms")),
         completion_verbs=_str_list(data.get("completion_verbs")),
         ineligibility_reason=_nullable_str(data.get("ineligibility_reason")),
+        close_shape=normalize_close_shape(
+            utterance_kind=kind,
+            raw=data.get("close_shape"),
+            object_phrase=object_phrase,
+            action_phrase=action_phrase,
+        ),
     )
 
 
@@ -153,6 +188,7 @@ def seed_completion_verbs(
         stem_rules: tuple[tuple[str, tuple[str, ...]], ...] = (
             ("作", ("作った", "できた", "完成した")),
             ("行", ("行ってきた", "行った", "出かけてきた")),
+            ("してくる", ("してきた",)),
             ("食べ", ("食べた", "食べ終わった")),
             ("飲", ("飲んだ", "飲み終わった")),
             ("散歩", ("散歩してきた", "散歩終わった")),
@@ -171,6 +207,63 @@ def seed_completion_verbs(
 
 def _effective_temporal(parsed: OlGateParsed) -> str | None:
     return parsed.temporal_phrase or parsed.inferred_temporal_phrase
+
+
+def promote_future_departure_if_cued(stage1: OlGateParsed, *, utterance: str) -> OlGateParsed:
+    """Safety net when Stage1 mis-tags これから+出発 as past_* (prefer Stage1 Q5)."""
+    line = (utterance or "").strip()
+    if stage1.utterance_kind == "future_commitment":
+        return stage1
+    if stage1.utterance_kind in ("greeting", "correction", "calendar_operation"):
+        return stage1
+    if not _FUTURE_DEPARTURE_CUE.search(line):
+        return stage1
+    if not _DEPARTURE_ACTION_RE.search(line):
+        return stage1
+    logger.info(
+        "GW-S2: promote %s -> future_commitment (これから + departure) utterance=%r",
+        stage1.utterance_kind,
+        line[:80],
+    )
+    return replace(stage1, utterance_kind="future_commitment", close_shape=None)
+
+
+def _contextual_wake_action_phrase(utterance: str) -> str:
+    line = (utterance or "").strip()
+    for prefix in ("おはよう", "おはー", "起きた", "おきた"):
+        if line.lower().startswith(prefix.lower()):
+            return prefix
+    return line[:20] or "起きた"
+
+
+def promote_contextual_wake_greeting_if_cued(
+    stage1: OlGateParsed,
+    *,
+    utterance: str,
+    open_departure_loops: tuple[Stage1DepartureHint, ...] | Sequence[Stage1DepartureHint] = (),
+) -> OlGateParsed:
+    """Safety net when Stage1 tags Q3a wake greeting as plain greeting (prefer prompt Q3a)."""
+    if stage1.utterance_kind != "greeting":
+        return stage1
+    if len(open_departure_loops) != 1:
+        return stage1
+    line = (utterance or "").strip()
+    if not _CONTEXTUAL_WAKE_GREETING_RE.match(line):
+        return stage1
+    action = _contextual_wake_action_phrase(line)
+    logger.info(
+        "GW-S2: promote greeting -> past_completion (contextual wake, departure=%s) utterance=%r",
+        open_departure_loops[0].loop_id,
+        line[:80],
+    )
+    return replace(
+        stage1,
+        utterance_kind="past_completion",
+        close_shape="action_only",
+        object_phrase=None,
+        action_phrase=action,
+        completion_verbs=(action,),
+    )
 
 
 def _is_future_commitment(
@@ -200,6 +293,7 @@ def merge_ol_gate_gateway(
     base_detail: dict[str, Any] = {
         "kind": "ol_gate",
         "utterance_kind": parsed.utterance_kind,
+        "close_shape": parsed.close_shape,
         "temporal_phrase": parsed.temporal_phrase,
         "inferred_temporal_phrase": parsed.inferred_temporal_phrase,
         "temporal_source": parsed.temporal_source,
@@ -225,9 +319,13 @@ def merge_ol_gate_gateway(
         )
 
     action_terms = _normalize_action_terms(parsed)
-    completion_verbs = parsed.completion_verbs if parsed.utterance_kind == "past_completion" else ()
-
     if parsed.utterance_kind == "past_completion":
+        completion_verbs = seed_completion_verbs(
+            parsed.action_phrase,
+            llm_verbs=parsed.completion_verbs,
+        )
+        if parsed.action_phrase and parsed.action_phrase not in completion_verbs:
+            completion_verbs = (*completion_verbs, parsed.action_phrase)
         return OlGateGatewayDecision(
             utterance=parsed.utterance,
             utterance_kind=parsed.utterance_kind,
@@ -323,15 +421,29 @@ def merge_ol_gate_gateway(
     )
 
 
-def run_ol_gate_extract(*, utterance: str) -> OlGateParsed | None:
+def run_ol_gate_extract(
+    *,
+    utterance: str,
+    open_departure_loops: Sequence[Stage1DepartureHint] = (),
+) -> OlGateParsed | None:
     raw = run_classifier_turn(
         system=OL_GATE_CLASSIFIER_STABLE,
-        user=build_ol_gate_extract_task(utterance=utterance),
+        user=build_ol_gate_extract_task(
+            utterance=utterance,
+            open_departure_loops=open_departure_loops,
+        ),
         log_label="GW-S2 OL-GATE",
     )
     if not raw:
         return None
-    return parse_ol_gate_response(raw, fallback_utterance=utterance)
+    parsed = parse_ol_gate_response(raw, fallback_utterance=utterance)
+    if parsed is None:
+        return None
+    return promote_contextual_wake_greeting_if_cued(
+        parsed,
+        utterance=utterance,
+        open_departure_loops=tuple(open_departure_loops),
+    )
 
 
 def should_run_ol_gate(text: str) -> bool:
@@ -379,14 +491,23 @@ async def try_ol_gate_after_ingest(
         )
         return None
 
+    from presence_ui.gateway.stage1_context import fetch_stage1_departure_hints
     from presence_ui.gateway.temp_c_staged import (
         apply_staged_decisions,
         gw_s2_staged_enabled,
         run_staged_classify,
     )
 
+    # SQLite: ``stores`` is bound to the ingest asyncio thread — do not pass it to
+    # ``asyncio.to_thread`` (see ``try_ol7_after_ingest`` / ``presence_ui.deps``).
+    departure_hints = fetch_stage1_departure_hints(stores, person_id=person_id)
+
     if gw_s2_staged_enabled():
-        result = await asyncio.to_thread(run_staged_classify, utterance=text)
+        result = await asyncio.to_thread(
+            run_staged_classify,
+            utterance=text,
+            open_departure_loops=departure_hints,
+        )
         if result is None:
             if gw_s2_fallback_rules():
                 stores.relationship.note_human_utterance_for_loops(
@@ -408,7 +529,11 @@ async def try_ol_gate_after_ingest(
         )
         return decisions[-1] if decisions else None
 
-    parsed = await asyncio.to_thread(run_ol_gate_extract, utterance=text)
+    parsed = await asyncio.to_thread(
+        run_ol_gate_extract,
+        utterance=text,
+        open_departure_loops=departure_hints,
+    )
     if parsed is None:
         if gw_s2_fallback_rules():
             stores.relationship.note_human_utterance_for_loops(

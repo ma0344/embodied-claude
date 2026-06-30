@@ -4,18 +4,30 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sqlite3
 import time
+from dataclasses import dataclass
 
 from relationship_mcp.schemas import DismissOutcome
 from social_core import utc_now
 
 from presence_ui.deps import get_stores
+from presence_ui.gateway.ingest_hooks import IngestHookFailure, record_ingest_hook_failure
+from presence_ui.gateway.ol7_flow import Ol7IngestResult
 from presence_ui.services.room_events import ROOM_WRITE_SOURCE
 
 logger = logging.getLogger(__name__)
 
 _INGEST_LOCK_RETRIES = 5
+
+
+@dataclass(frozen=True, slots=True)
+class HumanIngestResult:
+    event_id: str
+    dismiss_outcome: DismissOutcome
+    ol7: Ol7IngestResult
+    hook_failures: tuple[IngestHookFailure, ...] = ()
 
 
 def _ingest_social_event_with_retry(stores, event: dict) -> dict:
@@ -41,15 +53,16 @@ def ingest_human_turn(
     session_id: str | None,
     text: str,
     ts: str | None = None,
-) -> tuple[str, DismissOutcome]:
-    """Record human speech (sync — rule-based reminders only)."""
+    run_llm: bool = False,
+) -> HumanIngestResult:
+    """Record human speech. Set ``run_llm=True`` for GW-S2 / OL7 ingest hooks."""
     return asyncio.run(
         _ingest_human_core_async(
             person_id=person_id,
             session_id=session_id,
             text=text,
             ts=ts,
-            run_llm=False,
+            run_llm=run_llm,
         )
     )
 
@@ -60,8 +73,8 @@ async def ingest_human_turn_async(
     session_id: str | None,
     text: str,
     ts: str | None = None,
-) -> tuple[str, DismissOutcome]:
-    """Record human speech; Phase B LLM reminder when rule parser misses."""
+) -> HumanIngestResult:
+    """Record human speech; GW-S2 / OL7 when enabled."""
     return await _ingest_human_core_async(
         person_id=person_id,
         session_id=session_id,
@@ -78,7 +91,7 @@ async def _ingest_human_core_async(
     text: str,
     ts: str | None,
     run_llm: bool,
-) -> tuple[str, DismissOutcome]:
+) -> HumanIngestResult:
     stores = get_stores()
     when = ts or utc_now()
     result = _ingest_social_event_with_retry(
@@ -95,6 +108,12 @@ async def _ingest_human_core_async(
     )
     event_id = str(result.get("event_id") or "")
     outcome = DismissOutcome()
+    ol7_result = Ol7IngestResult(route="no_op")
+    hook_failures: list[IngestHookFailure] = []
+    utterance_kind: str | None = None
+    object_phrase: str | None = None
+    action_phrase: str | None = None
+    close_shape: str | None = None
     try:
         from presence_ui.gateway.ol_gate import gw_s2_enabled
 
@@ -105,32 +124,41 @@ async def _ingest_human_core_async(
             source_event_id=event_id,
             rule_open_loops=not gw_s2_enabled(),
         )
-    except Exception:
-        logger.exception("note_human_utterance_for_loops failed")
+    except Exception as exc:
+        hook_failures.append(record_ingest_hook_failure("note_human_utterance_for_loops", exc))
     if run_llm:
         try:
             from presence_ui.gateway.ol_gate import gw_s2_enabled, try_ol_gate_after_ingest
 
             if gw_s2_enabled():
-                await try_ol_gate_after_ingest(
+                gate_decision = await try_ol_gate_after_ingest(
                     stores,
                     person_id=person_id,
                     text=text,
                     ts=when,
                     source_event_id=event_id,
                 )
-        except Exception:
-            logger.exception("GW-S2 OL-GATE failed")
+                if gate_decision is not None:
+                    utterance_kind = gate_decision.utterance_kind
+                    detail = gate_decision.detail if isinstance(gate_decision.detail, dict) else {}
+                    object_phrase = str(detail.get("object_phrase") or "").strip() or None
+                    action_phrase = str(detail.get("action_phrase") or "").strip() or None
+                    close_shape = str(detail.get("close_shape") or "").strip() or None
+        except Exception as exc:
+            hook_failures.append(record_ingest_hook_failure("gw_s2_ol_gate", exc))
         try:
             from presence_ui.gateway.ol7_flow import ol7_enabled, try_ol7_after_ingest
 
             if ol7_enabled():
                 ol7_result = await try_ol7_after_ingest(
-                    stores,
                     person_id=person_id,
                     text=text,
                     ts=when,
                     source_event_id=event_id,
+                    utterance_kind=utterance_kind,
+                    object_phrase=object_phrase,
+                    action_phrase=action_phrase,
+                    close_shape=close_shape,
                 )
                 if ol7_result.closed_topics:
                     outcome = outcome.model_copy(
@@ -141,8 +169,20 @@ async def _ingest_human_core_async(
                             ]
                         }
                     )
-        except Exception:
-            logger.exception("OL7 return-signal failed")
+                logger.info(
+                    "OL7 ingest: route=%s closed=%s pending_loop=%s utterance=%r",
+                    ol7_result.route,
+                    list(ol7_result.closed_topics),
+                    ol7_result.pending_loop_id,
+                    text[:80],
+                )
+            else:
+                logger.info(
+                    "OL7 ingest: skipped (PRESENCE_OL7_ENABLED=%r)",
+                    os.environ.get("PRESENCE_OL7_ENABLED"),
+                )
+        except Exception as exc:
+            hook_failures.append(record_ingest_hook_failure("ol7_return_signal", exc))
         try:
             from presence_ui.gateway.reminder_spec import try_create_llm_reminder_commitment
 
@@ -152,9 +192,14 @@ async def _ingest_human_core_async(
                 text=text,
                 ts=when,
             )
-        except Exception:
-            logger.exception("LLM reminder spec failed")
-    return event_id, outcome
+        except Exception as exc:
+            hook_failures.append(record_ingest_hook_failure("llm_reminder_spec", exc))
+    return HumanIngestResult(
+        event_id=event_id,
+        dismiss_outcome=outcome,
+        ol7=ol7_result,
+        hook_failures=tuple(hook_failures),
+    )
 
 
 def ingest_agent_turn(

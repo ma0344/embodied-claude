@@ -3,6 +3,8 @@
 **合意**: 2026-06-14（まー）  
 **方針**: オリジナル embodied-claude の判断/行動機構（compose / plan / stores / boundary / desires）は維持。**実行**は LLM→MCP ではなく gateway が代行してよい（remember 直実行と同型）。
 
+**LLM 判断の原則（2026-06-30）**: 不可逆な副作用は **一発 e4b 任せにしない** — [Propose → Confirm → Execute](./llm-propose-confirm-execute.md)（GAPI-7b · OL6/OL7 · 今後の TEMP-C5 等）。
+
 ---
 
 ## すでに gateway 直実行済み

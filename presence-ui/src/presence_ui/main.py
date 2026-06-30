@@ -65,6 +65,19 @@ def _load_repo_env() -> None:
 def create_app() -> FastAPI:
     _load_repo_env()
     native_chat = _native_chat_enabled()
+    import logging
+
+    from presence_ui.gateway.ol7_return_signal import ol7_enabled
+    from presence_ui.gateway.ol_gate import gw_s2_enabled
+    from presence_ui.gateway.temp_c_staged import gw_s2_staged_enabled
+
+    logging.getLogger(__name__).info(
+        "gateway flags: OL7=%s GW_S2=%s GW_S2_STAGED=%s PRESENCE_OL7_ENABLED=%r",
+        ol7_enabled(),
+        gw_s2_enabled(),
+        gw_s2_staged_enabled(),
+        os.environ.get("PRESENCE_OL7_ENABLED"),
+    )
     app = FastAPI(
         title="Koyori's Room",
         description="Gateway UI for Claude Code Web UI + sociality filter",
@@ -174,11 +187,20 @@ def create_app() -> FastAPI:
             surface_tts_ready,
             surface_tts_status,
         )
+        from presence_ui.gateway.ol7_return_signal import ol7_enabled
+        from presence_ui.gateway.ol_gate import gw_s2_enabled
+        from presence_ui.gateway.ingest_hooks import recent_ingest_hook_failures
+        from presence_ui.gateway.temp_c_staged import gw_s2_staged_enabled
 
         return utf8_json(
             {
                 "chat_backend": "native" if native_chat else "proxy8080",
                 "native_chat": native_chat,
+                "gateway_ol7_enabled": ol7_enabled(),
+                "gateway_gw_s2_enabled": gw_s2_enabled(),
+                "gateway_gw_s2_staged": gw_s2_staged_enabled(),
+                "gateway_presence_ol7_env": os.environ.get("PRESENCE_OL7_ENABLED"),
+                "gateway_recent_ingest_errors": recent_ingest_hook_failures(limit=5),
                 "native_login_path": "/api/native/login" if native_chat else None,
                 "native_chat_path": "/api/native/chat" if native_chat else None,
                 "native_sessions_path": "/api/v1/native/sessions" if native_chat else None,

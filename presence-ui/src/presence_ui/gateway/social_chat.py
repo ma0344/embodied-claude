@@ -50,11 +50,13 @@ from presence_ui.gateway.direct_actions import (
     write_private_reflection_direct,
 )
 from presence_ui.gateway.hybrid_intent import HybridBodyIntent, resolve_hybrid_intent
+from presence_ui.gateway.ol7_blocks import format_ol7_close_result, format_ol7_pending_block
+from presence_ui.gateway.ol7_flow import Ol7IngestResult
 from presence_ui.gateway.open_loop_dismiss import dismiss_note, dismiss_progress_label
 from presence_ui.gateway.prompt_block_safe import truncate_lite_turn_delta
 from presence_ui.gateway.prompt_injection import apply_gateway_prompt_injection
 from presence_ui.gateway.room_events import progress_event
-from presence_ui.gateway.room_ingest import ingest_human_turn_async
+from presence_ui.gateway.room_ingest import HumanIngestResult, ingest_human_turn_async
 from presence_ui.gateway.self_disclosure_encode import encode_self_disclosure_if_any
 from presence_ui.gateway.soul_prefetch import (
     detect_soul_read_request,
@@ -138,13 +140,100 @@ class ChatInterceptResult:
     session_id: str | None = None
 
 
-def _ingest_human_sync(*, person_id: str, session_id: str | None, text: str):
+def _ingest_failure_gateway_events(
+    failures: tuple,
+) -> list[dict[str, Any]]:
+    from presence_ui.gateway.room_events import activity_event
+
+    return [
+        activity_event(
+            kind="ingest",
+            label=f"ingest: {failure.hook}",
+            detail=f"{failure.error_type}: {failure.message}",
+            ok=False,
+        )
+        for failure in failures
+    ]
+
+
+def _merge_ingest_hook_events(
+    ingest_result: HumanIngestResult,
+    events: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]] | None:
+    if not ingest_result.hook_failures:
+        return events
+    merged = list(events or [])
+    merged.extend(_ingest_failure_gateway_events(ingest_result.hook_failures))
+    return merged
+
+
+def _ingest_human_sync(*, person_id: str, session_id: str | None, text: str) -> HumanIngestResult:
     from presence_ui.gateway.room_ingest import ingest_human_turn
 
-    _event_id, outcome = ingest_human_turn(
-        person_id=person_id, session_id=session_id, text=text
+    return ingest_human_turn(
+        person_id=person_id,
+        session_id=session_id,
+        text=text,
+        run_llm=True,
     )
-    return outcome
+
+
+def _ol7_loop_topic(*, person_id: str, loop_id: str) -> str:
+    for loop in get_stores().relationship.list_open_loops(person_id=person_id, limit=50):
+        if loop.id == loop_id:
+            return loop.topic
+    return loop_id
+
+
+def _apply_ol7_to_intercept(
+    *,
+    ol7: Ol7IngestResult | None,
+    person_id: str,
+    message: str,
+    memory_notes: list[str],
+    gateway_events: list[dict[str, Any]],
+    plan: ResponsePlan | None = None,
+) -> ResponsePlan | None:
+    if ol7 is None or ol7.route == "no_op":
+        return plan
+    if ol7.route == "immediate_close" and ol7.closed_topics:
+        memory_notes.append(
+            format_ol7_close_result(
+                closed_topics=list(ol7.closed_topics),
+                summary="",
+            )
+        )
+        gateway_events.append(
+            progress_event(
+                phase="relationship",
+                label=f"OL7 close: {ol7.closed_topics[0][:40]}",
+            )
+        )
+        return plan
+    if ol7.route == "pending_confirm" and ol7.pending_loop_id and plan is not None:
+        topic = _ol7_loop_topic(person_id=person_id, loop_id=ol7.pending_loop_id)
+        memory_notes.append(
+            format_ol7_pending_block(
+                loop_id=ol7.pending_loop_id,
+                topic=topic,
+                source_utterance=message,
+            )
+        )
+        gateway_events.append(
+            progress_event(
+                phase="relationship",
+                label="OL7 return-signal — confirm before close",
+            )
+        )
+        confirm_line = (
+            f"OL7 return-signal — ask ONE short natural question if "
+            f"「{topic[:60]}」 is done (do not assume closed yet)"
+        )
+        must_include = list(plan.must_include)
+        if confirm_line not in must_include:
+            must_include.append(confirm_line)
+        return plan.model_copy(update={"must_include": must_include})
+    return plan
 
 
 def _record_experience(*, person_id: str, summary: str) -> None:
@@ -185,9 +274,11 @@ def intercept_chat_request(
         raise ValueError("message must not be empty")
     session_id = payload.get("sessionId")
     session_key = str(session_id) if session_id else None
-    dismiss_outcome = _ingest_human_sync(
+    ingest_result = _ingest_human_sync(
         person_id=person_id, session_id=session_key, text=message
     )
+    dismiss_outcome = ingest_result.dismiss_outcome
+    ol7_result = ingest_result.ol7
 
     write_block = calendar_write
     confirm_block = calendar_confirm
@@ -205,6 +296,8 @@ def intercept_chat_request(
             confirm_block = cal_outcome.confirm_block
             cal_events.extend(cal_outcome.progress_events)
 
+    cal_events = _merge_ingest_hook_events(ingest_result, cal_events)
+
     return _finish_intercept_chat_request(
         payload=payload,
         person_id=person_id,
@@ -219,6 +312,7 @@ def intercept_chat_request(
         message=message,
         session_key=session_key,
         dismiss_outcome=dismiss_outcome,
+        ol7_result=ol7_result,
         hybrid=hybrid,
     )
 
@@ -244,11 +338,11 @@ async def intercept_chat_request_async(
 
     session_id = payload.get("sessionId")
     session_key = str(session_id) if session_id else None
-    dismiss_outcome = (
-        await ingest_human_turn_async(
-            person_id=person_id, session_id=session_key, text=message
-        )
-    )[1]
+    ingest_result = await ingest_human_turn_async(
+        person_id=person_id, session_id=session_key, text=message
+    )
+    dismiss_outcome = ingest_result.dismiss_outcome
+    ol7_result = ingest_result.ol7
 
     write_block = calendar_write
     confirm_block = calendar_confirm
@@ -260,6 +354,8 @@ async def intercept_chat_request_async(
         write_block = cal_outcome.write_block
         confirm_block = cal_outcome.confirm_block
         cal_gateway_events.extend(cal_outcome.progress_events)
+
+    cal_gateway_events = _merge_ingest_hook_events(ingest_result, cal_gateway_events) or []
 
     return _finish_intercept_chat_request(
         payload=payload,
@@ -275,6 +371,7 @@ async def intercept_chat_request_async(
         message=message,
         session_key=session_key,
         dismiss_outcome=dismiss_outcome,
+        ol7_result=ol7_result,
         hybrid=hybrid,
     )
 
@@ -294,6 +391,7 @@ def _finish_intercept_chat_request(
     message: str,
     session_key: str | None,
     dismiss_outcome,
+    ol7_result: Ol7IngestResult | None = None,
     hybrid: HybridBodyIntent | None = None,
 ) -> ChatInterceptResult:
     compose_max_chars = lite_compose_max_chars() if lite else full_compose_max_chars()
@@ -468,6 +566,14 @@ def _finish_intercept_chat_request(
             interaction_context=ctx,
             user_text=message,
         )
+    )
+    plan = _apply_ol7_to_intercept(
+        ol7=ol7_result,
+        person_id=person_id,
+        message=message,
+        memory_notes=memory_notes,
+        gateway_events=gateway_events,
+        plan=plan,
     )
     apply_somatic_plan_side_effects(
         primary_move=plan.primary_move,

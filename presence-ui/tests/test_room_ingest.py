@@ -20,14 +20,15 @@ def mock_stores(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
 
 def test_ingest_human_turn_updates_open_loops(mock_stores: MagicMock) -> None:
     mock_stores.relationship.note_human_utterance_for_loops.return_value = DismissOutcome()
-    event_id, outcome = room_ingest.ingest_human_turn(
+    result = room_ingest.ingest_human_turn(
         person_id="ma",
         session_id="sess-1",
         text="PR review 明日やるの覚えといて",
         ts="2026-06-14T03:00:00+00:00",
     )
-    assert event_id == "evt-42"
-    assert outcome.closed_loops == []
+    assert result.event_id == "evt-42"
+    assert result.dismiss_outcome.closed_loops == []
+    assert result.ol7.route == "no_op"
     mock_stores.relationship.note_human_utterance_for_loops.assert_called_once()
 
 
@@ -36,13 +37,13 @@ def test_ingest_human_turn_returns_dismiss_outcome(mock_stores: MagicMock) -> No
         closed_loops=["pr review"],
         cancelled_commitments=["PR review reminder"],
     )
-    _event_id, outcome = room_ingest.ingest_human_turn(
+    result = room_ingest.ingest_human_turn(
         person_id="ma",
         session_id="sess-1",
         text="PRのレビューは中止。その予定は忘れて。",
     )
-    assert outcome.closed_loops == ["pr review"]
-    assert outcome.cancelled_commitments == ["PR review reminder"]
+    assert result.dismiss_outcome.closed_loops == ["pr review"]
+    assert result.dismiss_outcome.cancelled_commitments == ["PR review reminder"]
 
 
 def test_ingest_agent_turn_skips_open_loops(mock_stores: MagicMock) -> None:

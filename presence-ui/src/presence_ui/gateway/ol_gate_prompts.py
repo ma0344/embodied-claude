@@ -4,121 +4,168 @@
 
 from __future__ import annotations
 
-OL_GATE_CLASSIFIER_STABLE = """あなたは会話発話の分類器です。まー（人間）の発話 1 文を解析し、**必ず次の順序**で考えてから JSON 1 件だけを出力してください。
+from typing import Sequence
 
-## 手順（この順を守る）
+from presence_ui.gateway.stage1_context import Stage1DepartureHint, append_stage1_departure_context
 
-1. **utterance_kind を先に 1 つだけ決める**（下表）
-2. **object_phrase / action_phrase** — 文中に現れる語だけ抜き出す（推測・補完禁止）
-3. **temporal_phrase** — 文中の「いつ」に相当する語だけ（推測禁止）
-4. **inferred_temporal_phrase** — 手順3が null のときだけ、手順1が許す場合に限り推測（下表）
+# Canonical Stage1 system prompt (TEMP-C + legacy OL-GATE extract share this).
+STAGE1_SYSTEM = """あなたは会話発話の **open loop 入口フィルタ** です。まー（人間）の発話 1 文を、下の **判断フロー（順番固定）** で通し、JSON 1 件だけを出力してください。
 
-## utterance_kind（4 値）
+## 判定の心構え（POC 較正 · 必須）
 
-| 値 | 意味 | 例 |
-|----|------|-----|
-| `future_commitment` | これからやる予定・してほしい約定 | 「明日、角煮を作る」「ごはん食べる」 |
-| `past_completion` | やり終えた・済んだ報告（既存の予定の消化） | 「角煮、作った」「散歩行ってきた」 |
-| `past_report` | 過去の出来事の叙述（予定の完了報告ではない） | 「昨日、ロバがコケた」 |
-| `other` | 挨拶・願望・回想・雑談・記憶質問など | 「また明日！」「いつも一緒にいたかった」 |
+**「適切か」「自然か」で厳しく採点しない。** 辞書的・時間帯の常識で FALSE にしない。
+代わりに **「完了・復帰の合図として間違いと断定できるか」** で判定する（POC の TRUE/FALSE 相当）。
 
-**分類の注意**
-- 「また明日」「じゃあね」→ `other`（挨拶）。when があっても予定ではない
-- 「いつも」「ずっと」「昔」だけの時間表現 → 予定の when にしない → 多くは `other`
-- 「作った」「行ってきた」「済んだ」「終わった」で **タスク完了** → `past_completion`
-- 「昨日〜た」で単なるエピソード → `past_report`
+- **TRUE（許可）** = その open departure のあと、まーが**実際に言いうる**短い合図 · **拒否できない**
+- **FALSE（拒否）** = 就寝宣言・無関係 · **完了合図として明確に間違い**（例: もう寝る → おはよう）
 
-## スロット抽出ルール
+## 判断フロー（上から順 · 最初に当てはまったら確定 · 後戻り禁止）
 
-- `object_phrase`: 動作の対象・話題の名詞句（文中のまま）。無ければ null
-- `action_phrase`: 動詞・動作句（文中のまま）。無ければ null
-- `temporal_phrase`: 文中の時間表現（明日、昨日、昼から、9時…）。**無ければ null**
-- `inferred_temporal_phrase`: **次のときだけ**設定可。それ以外は null
-  - `future_commitment` かつ `temporal_phrase` が null → 「今日」「今度」など最小限の推測可
-  - `past_completion` かつ `temporal_phrase` が null → 「いま」「今日」など最小限の推測可
-  - `other` / `past_report` → **常に null**（推測しない）
+**Q1 — Googleカレンダー操作か？**（「カレンダーに」「予定をずらして」等）
+→ YES: `utterance_kind=calendar_operation` · slots は null 可 · `close_shape=null` → 終了
 
-## 出力 JSON（フィールド名は厳守）
+**Q2 — 訂正・境界・話題 dismiss か？**（違う / 忘れて / 静かに / しつこい 等）
+→ YES: `utterance_kind=correction` · `close_shape=null` → 終了
+
+**Q3 — 短い挨拶か？**（おはよう / またね 等 · **ただいま・おかえり単独**は Q4 へ）
+→ NO: Q4 へ
+→ YES: **Q3a** へ
+
+**Q3a — 出発タスクからの復帰・起床挨拶か？**（user に `open_departure_loops` があるとき **必ず読む**）
+- 発話が **wake/return 挨拶**（おはよう / おはー / 起きた / おきた 等 · **活動名を含まない**短句）
+- かつ `open_departure_loops` が **ちょうど 1 件**
+- 問い: **その departure のあと、この発話を完了合図として使うのが間違いではないか？**（朝の挨拶の字面だけで FALSE にしない）
+→ YES（間違いではない）: `utterance_kind=past_completion` · `close_shape=action_only` · `object_phrase=null` · `action_phrase`=発話の核（おはよう / 起きた 等）→ 終了
+→ NO（間違いと断定できる / 複数 departure で特定不可）: `utterance_kind=greeting` · `close_shape=null` → 終了（OL7 が後段で選ぶ）
+- `open_departure_loops` が **(none)** → `utterance_kind=greeting` · `close_shape=null` → 終了
+
+**Q4 — 行動の完了報告か？**（タスクを終えた / 帰った / 済んだ — **完了合図として間違いではない** · POC TRUE 相当）
+→ YES: `utterance_kind=past_completion` → Q4a へ
+→ NO: Q5 へ
+
+**Q4a — past_completion の slots**
+- `action_phrase` **必須**（終わった / 行ってきた / してきた / 食べた / 作った 等 · 文中のまま）
+- `object_phrase`: 活動名が文中にあれば抽出 · なければ null
+- `close_shape`:
+  - `activity_named` — object あり（例: お昼寝をしてきた / 角煮、作った）
+  - `action_only` — object なし（例: 終わった / 行ってきた / してきたよ / ただいま）
+- `completion_verbs`: action_phrase を含める（最大5）
+→ 終了
+
+**Q5 — これからやる予定・出発宣言か？**（これから行く / してくる / 明日作る — POC の「散歩に行ってくる」= FALSE 相当）
+→ YES: `utterance_kind=future_commitment` · `close_shape=null` → 終了
+
+**Q6 — 過去の叙述か？**（昨日ロバが / 頭が痛かった — タスク完了ではない）
+→ YES: `utterance_kind=past_report` · `close_shape=null` → 終了
+
+**Q7 — それ以外**（願望・雑談・疲れた・記憶質問 等）
+→ `utterance_kind=other` · `ineligibility_reason` に短い理由 · `close_shape=null`
+
+## 完了報告 vs 非完了（POC 較正 · 必須）
+
+| 発話 | kind | close_shape |
+|------|------|-------------|
+| ご飯食べたよ | past_completion | activity_named |
+| 終わった / 終わったよ | past_completion | action_only |
+| 行ってきた / してきたよ | past_completion | action_only |
+| ただいま / ただいまー | past_completion | action_only |
+| 散歩行ってきた | past_completion | activity_named |
+| お昼寝をしてきた | past_completion | activity_named |
+| お昼寝 終わった | past_completion | activity_named |
+| 試合、見終わった | past_completion | activity_named |
+| これから散歩に行ってくる | future_commitment | null |
+| 頭が痛かった | past_report | null |
+| 今日は疲れた | other | null |
+| おはよう | greeting | null |
+| おはよう（open_departure=昼寝 1件） | past_completion | action_only |
+
+## コロケーション較正（POC · 間違いではないか？ · Q3a/Q4 の参考）
+
+出発宣言（open）に対し、完了合図候補が **間違いではない（TRUE）** か **間違い（FALSE）** か。
+
+| 出発（行動予告） | 合図: ただいま | 合図: おはよう |
+|------------------|----------------|----------------|
+| 昼寝してくる | TRUE | TRUE |
+| 公園に行ってくる | TRUE | — |
+| トイレに行ってくる | TRUE | — |
+| もう寝る / 寝る（就寝） | FALSE | FALSE |
+| ちょっと横になる | TRUE（短い離席） | FALSE（就寝・休憩宣言ではないが起床合図とも限らない） |
+
+- **ただいま** — 物理的離席・行ってくる系は TRUE · 就寝宣言のみ FALSE
+- **おはよう** — **昼寝してくる** のあとなら TRUE（起床合図として拒否できない）· **もう寝る** は FALSE · open_departure なしの単独「おはよう」は Q3a 前に greeting
+
+## open_departure_loops（Q3a 用 · gateway が注入）
+
+- user メッセージ末尾の `open_departure_loops:` を読む · 推測で loop を足さない
+- **(none)** なら Q3a はスキップして greeting
+
+## slots 共通ルール
+
+- 文中の語だけ · 推測・補完禁止
+- `temporal_phrase`: 明示の「いつ」のみ
+- `inferred_temporal_phrase`: future/past_completion で when なしのときのみ最小推測
+- `action_terms`: object から OL5 用（future / past_completion のみ · 最大5）
+
+## 出力 JSON（フィールド名厳守）
 
 ```json
 {
-  "utterance": "<入力文そのまま>",
-  "utterance_kind": "future_commitment | past_completion | past_report | other",
+  "utterance": "<入力そのまま>",
+  "utterance_kind": "future_commitment | past_completion | past_report | greeting | correction | calendar_operation | other",
+  "close_shape": "activity_named | action_only | null",
   "temporal_phrase": "<string or null>",
   "inferred_temporal_phrase": "<string or null>",
   "temporal_source": "explicit | inferred | null",
   "object_phrase": "<string or null>",
   "action_phrase": "<string or null>",
-  "action_terms": ["<OL5用・objectから>", "..."],
-  "completion_verbs": ["<past_completion時のみ・完了表現>", "..."],
+  "action_terms": [],
+  "completion_verbs": [],
   "ineligibility_reason": "<string or null>"
 }
 ```
 
-- `temporal_source`: `temporal_phrase` があれば `explicit`；`inferred_temporal_phrase` のみなら `inferred`；どちらもなければ `null`
-- `action_terms` / `completion_verbs`: `future_commitment` または `past_completion` のときだけ埋める（最大各5語）。`other` は `[]`
-- `ineligibility_reason`: `other` で分類理由を短く。それ以外は null
-
-## 較正例（期待）
-
-| 発話 | utterance_kind |
-|------|----------------|
-| いつも一緒にいたかった | other |
-| 明日、角煮を作る | future_commitment |
-| 昨日、ロバがコケた | past_report |
-| また明日！ | other |
-| 角煮、作った | past_completion |
-| 散歩行ってきた | past_completion |
-| 昼から出かける | future_commitment |
-| ごはん食べる | future_commitment（inferred: 今日 可） |
-
-JSON のみ返すこと。markdown フェンス不可。"""
-
-
-def build_ol_gate_extract_task(*, utterance: str) -> str:
-    u = utterance.strip().replace("\n", " ")
-    return f"[gateway_internal — not for まー]\ntask: ol_gate_extract\nutterance: {u}\n"
-
-
-# --- TEMP-C staged classification (Stage 1 + Stage 2) — see prottypemarkdown.md ---
-
-TEMP_C_STAGE1_SYSTEM = """あなたは会話発話の分類器です。まー（人間）の発話 1 文を解析し、**必ず次の順序**で考えてから JSON 1 件だけを出力してください。
-
-**手順**
-
-1. `utterance_kind` を先に 1 つ決める
-2. `object_phrase` / `action_phrase` — 文中の語だけ（推測禁止）
-3. `temporal_phrase` — 文中の「いつ」だけ（推測禁止）
-4. `inferred_temporal_phrase` — 手順3が null かつ kind が許すときだけ
-
-**utterance_kind**
-
-| 値 | 意味 | 例 |
-|----|------|-----|
-| `future_commitment` | これからの予定 | 明日角煮を作る / ごはん食べる |
-| `past_completion` | やり終えた報告 | 角煮、作った / 散歩行ってきた |
-| `past_report` | 過去の出来事 | 昨日、ロバがコケた |
-| `greeting` | 挨拶 | また明日！/ おはよう / またね |
-| `correction` | 訂正・境界・忘れて・違う | 違うみたい / 夜は静かに / 〜の話は忘れていい |
-| `calendar_operation` | **Googleカレンダーへの明示の作成・変更** | カレンダーに入れといて / 明日10時〜12時で会議 / 14時の予定16時にずらして |
-| `other` | 願望・雑談 | いつも一緒にいたかった |
-
-**calendar_operation と future_commitment の違い**: 「角煮作る」→ `future_commitment`。「カレンダーに入れといて」「ずらして」→ `calendar_operation`（OL ではなく GAPI）。
-
-**注意**: 「また明日」→ `greeting`。「いつも」は予定の when にしない → `other`。完了形（作った・行ってきた）→ `past_completion`。
-
-**inferred_temporal_phrase**（いつだけ推測可）
-
-* `future_commitment` かつ when なし → 「今日」など可
-* `past_completion` かつ when なし → 「いま」「今日」など可
-* `other` / `past_report` / `greeting` → **常に null**
+- `close_shape`: **past_completion のときのみ** · それ以外は null
+- past_completion では `action_phrase` を null にしない
 
 JSON のみ。markdown フェンス不可。"""
 
+TEMP_C_STAGE1_SYSTEM = STAGE1_SYSTEM
 
-TEMP_C_STAGE2_SYSTEM = """あなたは会話発話のイベント分解器です。Stage 1 で utterance_kind が決まった発話を、**文中の語だけ**で events[] に分解し JSON 1 件だけを出力してください。
+# Legacy non-staged extract — same decision flow (kinds unified).
+OL_GATE_CLASSIFIER_STABLE = STAGE1_SYSTEM
 
-**ルール**
+
+def build_ol_gate_extract_task(
+    *,
+    utterance: str,
+    open_departure_loops: Sequence[Stage1DepartureHint] = (),
+) -> str:
+    u = utterance.strip().replace("\n", " ")
+    lines = [
+        "[gateway_internal — not for まー]",
+        "task: ol_gate_extract",
+        f"utterance: {u}",
+    ]
+    append_stage1_departure_context(lines, open_departure_loops)
+    return "\n".join(lines) + "\n"
+
+
+def build_temp_c_stage1_task(
+    *,
+    utterance: str,
+    open_departure_loops: Sequence[Stage1DepartureHint] = (),
+) -> str:
+    u = utterance.strip().replace("\n", " ")
+    lines = [
+        "[gateway_internal — not for まー]",
+        "task: temp_c_stage1",
+        f"utterance: {u}",
+    ]
+    append_stage1_departure_context(lines, open_departure_loops)
+    return "\n".join(lines) + "\n"
+
+
+TEMP_C_STAGE2_RULES = """**ルール**
 
 1. 1 文に複数の予定・報告があるときは **events を複数**にする（最大 4）
 2. 推測で日付を足さない — when / until / after / lag は **原文に現れる語句**のみ
@@ -128,13 +175,15 @@ TEMP_C_STAGE2_SYSTEM = """あなたは会話発話のイベント分解器です
 
 **what と action_phrase（重要 — 小モデル向け）**
 
-- `what` = **名詞句・活動名のみ**（入浴介助 / 豚バラ軟骨角煮 / 部屋の掃除）。**動詞を what に入れない**
-- `action_phrase` = **動詞・動作句のみ**（作る / やって / 食べる / 作るよ）。文中に動詞があれば **必ずここに分離**
+- `what` = **名詞句・活動名のみ**（入浴介助 / 試合 / 豚バラ軟骨角煮）。**動詞を what に入れない**
+- `action_phrase` = **動詞・動作句のみ**（作る / 見終わった / 食べる）。文中に動詞があれば **必ずここに分離**
+- ❌ what=null · action_phrase=null の events[0] は **不合格**
 - ❌ what=「豚バラ軟骨角煮を作る」, action_phrase=null
 - ✅ what=「豚バラ軟骨角煮」, action_phrase=「作る」
 - `utterance_kind=future_commitment` で **これからやる行為**がある event は、原則 **action_phrase を null にしない**
+- `utterance_kind=past_completion` では **what と action_phrase を null にしない**（1 event でも両方埋める）
 - **例外**: 所要時間だけのブロック（入浴介助で15時まで等）で **完了動詞が文中に無い** event は action_phrase=null 可
-- 「作る感じだね」「やる感じ」→ action_phrase=「作る」「やる」（「感じだね」は commitment_strength 側）
+- user に `stage1_object_phrase` / `stage1_action_phrase` があるときは **そのまま events[0] にコピー**（再推論しない）
 
 **較正例（future_commitment · 必須合格）**
 
@@ -146,24 +195,73 @@ TEMP_C_STAGE2_SYSTEM = """あなたは会話発話のイベント分解器です
   {"index":1,"what":"豚バラ軟骨角煮","after_phrase":"帰ってきたら","lag_phrase":"すぐ","action_phrase":"作る","depends_on":0}
 ]}
 
+**較正例（past_completion · 必須合格）**
+
+発話: 「試合、見終わった」
+
+期待:
+{"commitment_strength":"firm","events":[
+  {"index":0,"what":"試合","when_phrase":null,"until_phrase":null,"after_phrase":null,"lag_phrase":null,"action_phrase":"見終わった","certainty":"firm","depends_on":null}
+]}
+
+発話: 「お昼寝をしてきた」
+
+期待:
+{"commitment_strength":"firm","events":[
+  {"index":0,"what":"お昼寝","when_phrase":null,"until_phrase":null,"after_phrase":null,"lag_phrase":null,"action_phrase":"してきた","certainty":"firm","depends_on":null}
+]}
+
 **フィールド**: what, when_phrase, until_phrase, after_phrase, lag_phrase, action_phrase, certainty, depends_on
 
 JSON のみ。markdown フェンス不可。"""
 
+_STAGE2_KIND_LABELS: dict[str, str] = {
+    "future_commitment": "future_commitment（これからの予定）",
+    "past_completion": "past_completion（やり終えた報告）",
+    "past_report": "past_report（過去の出来事）",
+}
 
-def build_temp_c_stage1_task(*, utterance: str) -> str:
-    u = utterance.strip().replace("\n", " ")
-    return f"[gateway_internal — not for まー]\ntask: temp_c_stage1\nutterance: {u}\n"
 
-
-def build_temp_c_stage2_task(*, utterance: str, utterance_kind: str) -> str:
-    u = utterance.strip().replace("\n", " ")
+def build_temp_c_stage2_system(*, utterance_kind: str) -> str:
+    """Kind-specific Stage 2 system prompt (matches manual LM Studio conditioning)."""
+    label = _STAGE2_KIND_LABELS.get(utterance_kind, utterance_kind)
     return (
-        f"[gateway_internal — not for まー]\n"
-        f"task: temp_c_stage2\n"
-        f"utterance_kind: {utterance_kind}\n"
-        f"utterance: {u}\n"
+        "あなたは会話発話のイベント分解器です。"
+        f"utterance_kind が **{label}** である与えられた発話を、"
+        "**文中の語だけ**で events[] に分解し JSON 1 件だけを出力してください。\n\n"
+        f"{TEMP_C_STAGE2_RULES}"
     )
+
+
+# Backward-compatible alias for tests/docs that referenced a single static prompt.
+TEMP_C_STAGE2_SYSTEM = build_temp_c_stage2_system(utterance_kind="future_commitment")
+
+
+def build_temp_c_stage2_task(
+    *,
+    utterance: str,
+    utterance_kind: str,
+    object_phrase: str | None = None,
+    action_phrase: str | None = None,
+) -> str:
+    u = utterance.strip().replace("\n", " ")
+    lines = [
+        "[gateway_internal — not for まー]",
+        "task: temp_c_stage2",
+        f"utterance_kind: {utterance_kind}",
+        f"utterance: {u}",
+    ]
+    obj = (object_phrase or "").strip()
+    act = (action_phrase or "").strip()
+    if obj:
+        lines.append(f"stage1_object_phrase: {obj}")
+    if act:
+        lines.append(f"stage1_action_phrase: {act}")
+    if obj or act:
+        lines.append(
+            "hint: stage1 slots above — copy into events[0].what / events[0].action_phrase when kind=past_completion"
+        )
+    return "\n".join(lines) + "\n"
 
 
 # --- SHIFT-R2 correction routing (Stage 2 after Stage 1 ``correction``) ---

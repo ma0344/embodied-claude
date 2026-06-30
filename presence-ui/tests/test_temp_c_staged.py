@@ -11,6 +11,7 @@ from presence_ui.gateway.temp_c_staged import (
     parse_stage2_response,
     should_create_loop_for_event,
     should_run_stage2,
+    stage1_fallback_events,
     staged_to_gateway_decisions,
 )
 
@@ -184,3 +185,43 @@ def test_should_create_loop_for_event() -> None:
         utterance_kind="future_commitment",
         event=StagedEvent(index=1, what="角煮", action_phrase="作る"),
     ) is True
+
+
+def test_stage1_fallback_events_for_past_completion() -> None:
+    stage1 = parse_stage1_response(
+        '{"utterance_kind":"past_completion","object_phrase":"試合","action_phrase":"見終わった",'
+        '"temporal_phrase":null,"inferred_temporal_phrase":"いま"}',
+        fallback_utterance="試合、見終わった",
+    )
+    assert stage1 is not None
+    events = stage1_fallback_events(stage1)
+    assert len(events) == 1
+    assert events[0].what == "試合"
+    assert events[0].action_phrase == "見終わった"
+
+
+def test_staged_past_completion_empty_stage2_uses_stage1_fallback() -> None:
+    stage1 = OlGateParsed(
+        utterance="試合、見終わった",
+        utterance_kind="past_completion",
+        temporal_phrase=None,
+        inferred_temporal_phrase="いま",
+        temporal_source="inferred",
+        object_phrase="試合",
+        action_phrase="見終わった",
+        action_terms=(),
+        completion_verbs=(),
+        ineligibility_reason=None,
+    )
+    result = StagedClassifyResult(
+        utterance="試合、見終わった",
+        stage1=stage1,
+        commitment_strength="firm",
+        events=stage1_fallback_events(stage1),
+    )
+    decisions = staged_to_gateway_decisions(
+        result, ts="2026-06-30T08:56:00+09:00", timezone="Asia/Tokyo"
+    )
+    assert len(decisions) == 1
+    assert decisions[0].try_ol5_close is True
+    assert "見終わった" in decisions[0].completion_verbs

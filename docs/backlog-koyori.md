@@ -13,7 +13,7 @@
 | **ALIVE / LW** | 🔥 | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md) |
 | **GW-SILENT** | ✅ S1 · ✅ S2（opt-in） | [tracks/gw-silent.md](./tracks/gw-silent.md) |
 | **OL5** | ✅ 運用確認済 | [tracks/ol5.md](./tracks/ol5.md) |
-| **MEM-8** | 概念済 | [architecture/mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) |
+| **MEM-8** | 概念済 · **8g compose retire** 💤 v0 · 📋 v1 gist | [architecture/mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) · [tracks/compose-topic-retire.md](./tracks/compose-topic-retire.md) |
 | **MEM パイプライン** | 運用+未 | [architecture/mem-pipeline.md](./architecture/mem-pipeline.md) |
 | **OBS** | 📋 | [tracks/obs.md](./tracks/obs.md) |
 | **CAM** | 💤 | [tracks/cam-tapo-ptz.md](./tracks/cam-tapo-ptz.md) |
@@ -42,6 +42,7 @@
 |----|----------|
 | WS-1〜2c | [ops/ws-2-conversation-web-search.md](./ops/ws-2-conversation-web-search.md) |
 | WS-5 自発検索 | [ops/ws-5-spontaneous-search.md](./ops/ws-5-spontaneous-search.md) |
+| **MEM-8g** | compose salience · gist retire | 💤 v0 · 📋 v1 | [tracks/compose-topic-retire.md](./tracks/compose-topic-retire.md) |
 
 ## 運用スクリプト
 

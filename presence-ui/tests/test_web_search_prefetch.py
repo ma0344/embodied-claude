@@ -15,6 +15,7 @@ from presence_ui.gateway.search_prefetch import (
 )
 from presence_ui.gateway.user_intent import resolve_user_intent
 from presence_ui.gateway.web_search import SearchHit, brave_web_search, search_with_urls
+from presence_ui.gateway.search_tier import clear_search_cache
 from presence_ui.services.llm import build_gateway_stable_append
 from test_social_chat import _minimal_ctx, _minimal_plan
 
@@ -106,16 +107,21 @@ async def test_brave_web_search_parses_results(monkeypatch: pytest.MonkeyPatch) 
 
 
 @pytest.mark.asyncio
-async def test_search_with_urls_prefers_brave(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_search_with_urls_prefers_brave_when_ddg_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    clear_search_cache()
     monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "test-key")
     hit = SearchHit(url="https://example.com", title="t", snippet="s")
+    monkeypatch.setattr(
+        "presence_ui.gateway.search_tier.fetch_direct_url_hits",
+        AsyncMock(return_value=[]),
+    )
     monkeypatch.setattr(
         "presence_ui.gateway.web_search.brave_web_search",
         AsyncMock(return_value=[hit]),
     )
     monkeypatch.setattr(
         "presence_ui.gateway.web_search.ddg_instant_answer",
-        AsyncMock(return_value=("should not use", "q")),
+        AsyncMock(return_value=("", "q")),
     )
     hits, used, status, backend = await search_with_urls("松本市 請求様式")
     assert hits == [hit]
@@ -144,6 +150,24 @@ async def test_prefetch_web_search_for_message_skips_casual() -> None:
     assert events == []
     assert hits == []
     assert query == ""
+
+
+@pytest.mark.asyncio
+async def test_prefetch_web_search_ws5_earthquake(monkeypatch: pytest.MonkeyPatch) -> None:
+    from presence_ui.gateway.search_tier import reset_ws5_cooldown
+
+    reset_ws5_cooldown()
+    monkeypatch.setattr(
+        "presence_ui.gateway.search_prefetch.search_with_urls",
+        AsyncMock(return_value=([], "関東 地震 2026年06月30日", "empty", "brave")),
+    )
+    note, events, hits, query = await prefetch_web_search_for_message(
+        "今日、関東で地震があったらしいよ"
+    )
+    assert note is not None
+    assert "trigger=ws5" in note
+    assert "地震" in query
+    assert events[0]["phase"] == "web_search"
 
 
 @pytest.fixture

@@ -7,6 +7,7 @@ from typing import Any
 
 from presence_ui.gateway.room_events import progress_event
 from presence_ui.gateway.web_search import SearchHit, search_with_urls
+from presence_ui.gateway.ws5_spontaneous import resolve_ws5_prefetch
 from presence_ui.gateway.ws_guard import looks_like_web_search_request
 
 _SEARCH_STRIP_RES = (
@@ -31,7 +32,30 @@ def web_search_prefetch_enabled() -> bool:
 
 
 def detect_web_search_intent(text: str) -> bool:
-    return web_search_prefetch_enabled() and looks_like_web_search_request(text)
+    if not web_search_prefetch_enabled():
+        return False
+    if looks_like_web_search_request(text):
+        return True
+    return resolve_ws5_prefetch(text) is not None
+
+
+def resolve_web_search_prefetch(
+    text: str,
+    *,
+    timezone: str = "Asia/Tokyo",
+) -> tuple[str, str] | None:
+    """Return (source, query) — ``ws2`` explicit or ``ws5`` spontaneous."""
+    if not web_search_prefetch_enabled():
+        return None
+    line = (text or "").strip()
+    if not line:
+        return None
+    if looks_like_web_search_request(line):
+        query = extract_search_query(line)
+        if query:
+            return ("ws2", query)
+        return None
+    return resolve_ws5_prefetch(line, timezone=timezone)
 
 
 def extract_search_query(text: str) -> str:
@@ -62,6 +86,7 @@ def format_web_search_prefetch_block(
     answer: str = "",
     status: str,
     backend: str = "",
+    source: str = "",
 ) -> str:
     rows = list(hits or [])
     url_hits = [hit for hit in rows if hit.url]
@@ -70,6 +95,8 @@ def format_web_search_prefetch_block(
         f"query={query.strip()[:120]}",
         f"status={status}",
     ]
+    if source:
+        lines.append(f"trigger={source}")
     if backend:
         lines.append(f"backend={backend}")
     if url_hits:
@@ -82,12 +109,24 @@ def format_web_search_prefetch_block(
     lines.append("[/web_search_prefetch]")
     lines.append("")
     if status == "ok" and (url_hits or answer or rows):
-        directive = (
-            "Gateway ran web search. URL list/snippets above are for discovery only.\n"
-            "Page body details must come from [url_prefetch] excerpt if present — "
-            "do NOT infer page contents from snippets alone.\n"
-            "Do NOT call WebSearch/WebFetch. Do NOT invent Sources or URLs beyond the prefetch."
-        )
+        if source == "ws5":
+            directive = (
+                "Gateway already looked up まー's report (WS-5 spontaneous fact-check).\n"
+                "Open your reply with at least one concrete fact from [url_prefetch] excerpt "
+                "or [web_search_prefetch] answer/snippets (date, place, official status).\n"
+                "Brief empathy or chat is fine AFTER grounding — "
+                "do NOT reply as if you never looked.\n"
+                "Page body details must come from [url_prefetch] when present; "
+                "do NOT infer page contents from snippets alone.\n"
+                "Do NOT call WebSearch/WebFetch. Do NOT invent Sources or URLs beyond the prefetch."
+            )
+        else:
+            directive = (
+                "Gateway ran web search. URL list/snippets above are for discovery only.\n"
+                "Page body details must come from [url_prefetch] excerpt if present — "
+                "do NOT infer page contents from snippets alone.\n"
+                "Do NOT call WebSearch/WebFetch. Do NOT invent Sources or URLs beyond the prefetch."
+            )
     elif status == "empty":
         directive = (
             "Gateway web search returned no useful results.\n"
@@ -113,25 +152,34 @@ async def web_search_for_message(
 
 async def prefetch_web_search_for_message(
     message: str,
+    *,
+    timezone: str = "Asia/Tokyo",
 ) -> tuple[str | None, list[dict[str, Any]], list[SearchHit], str]:
-    """Run bounded web search when the user asks to look something up."""
+    """Run bounded web search — WS-2 explicit or WS-5 spontaneous fact-check."""
     text = (message or "").strip()
-    if not text or not detect_web_search_intent(text):
+    resolved = resolve_web_search_prefetch(text, timezone=timezone)
+    if not resolved:
         return None, [], [], ""
 
-    query = extract_search_query(text)
-    if not query:
-        return None, [], [], ""
+    source, query = resolved
+    if source == "ws5":
+        from presence_ui.gateway.search_tier import ws5_record_fetch, ws5_should_skip_fetch
 
-    hits, used_query, status, backend = await web_search_for_message(query)
+        if ws5_should_skip_fetch(query):
+            return None, [], [], ""
+        hits, used_query, status, backend = await web_search_for_message(query)
+        ws5_record_fetch()
+    else:
+        hits, used_query, status, backend = await web_search_for_message(query)
     block = format_web_search_prefetch_block(
         query=used_query or query,
         hits=hits,
         status=status,
         backend=backend,
+        source=source,
     )
     if status == "ok":
-        label = "ネットを調べた"
+        label = "ネットを調べた" if source == "ws2" else "話の内容を調べた"
     elif status == "empty":
         label = "検索したが見つからなかった"
     else:

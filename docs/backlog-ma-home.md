@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ（ダッシュボード）
 
-**最終更新**: 2026-06-29（TEMP-5 ✅ · LW-7 · SHIFT-R3 ✅ · GAPI-7c/7d 📋 · 7b affirm 正規化）  
+**最終更新**: 2026-06-30（MEM-8g アクティブ · v0 様子見 / v1 gist 📋）  
 **詳細の正（アーカイブ）**: [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md)  
 **完了一覧**: [backlog-archive-ma-home.md](./backlog-archive-ma-home.md)
 
@@ -61,6 +61,7 @@
 | **BIO** | ループ骨格（pulse・somatic・経験→wake） | ✅ 基盤済 · PAUSE interpret 閉 | [architecture/heartbeat-loop.md](./architecture/heartbeat-loop.md) |
 | **GW** | 黙考ルート（**interpret** 層） | ✅ S1 · ✅ S2 · ✅ resume（opt-in） | [tracks/gw-silent.md](./tracks/gw-silent.md) |
 | **OL5** | 予定消化 loop close | ✅ a/b/c/6/STALE/d · 📋 OL7 return-signal | [tracks/ol5.md](./tracks/ol5.md) |
+| **MEM-8g** | compose salience · 終了スレの繰り返し抑制 | 💤 v0 運用確認 · 📋 **v1 gist 本線** | [tracks/compose-topic-retire.md](./tracks/compose-topic-retire.md) |
 
 ---
 
@@ -95,7 +96,7 @@
 | **V** | Surface UI 残（V4 等） | 部分済 | [tracks/surface-vision.md](./tracks/surface-vision.md) |
 | **GAPI** | Google Calendar / Drive | ✅ prep-1/2/3 · 7a/7b · 📋 **7c** 複数件 · **7d** e4b確認 | [tracks/gapi.md](./tracks/gapi.md) · [gapi-setup.md](./ops/gapi-setup.md) |
 | **TEMP** | TEMP-1〜5 ✅ · TEMP-C3/b/c4 ✅ · **C5 📋** clock/e4b · SHIFT-R1/R2/R3 ✅ | [utterance-anchoring.md](./tracks/utterance-anchoring.md) · [interpretation-shift-routing.md](./tracks/interpretation-shift-routing.md) |
-| **WS** | 会話 Web 検索 | ✅ WS-1〜2c · 📋 WS-5（[北極星: 地震例](./ops/ws-5-spontaneous-search.md#北極星シナリオ--会話中の興味疑問2026-06-27)） | [ws-2](./ops/ws-2-conversation-web-search.md) · [ws-5](./ops/ws-5-spontaneous-search.md) |
+| **WS** | 会話 Web 検索 | ✅ WS-5 v0 · 📋 v1 e4b | [ws-2](./ops/ws-2-conversation-web-search.md) · [ws-5](./ops/ws-5-spontaneous-search.md) |
 
 トピック索引: [backlog-koyori.md](./backlog-koyori.md)
 

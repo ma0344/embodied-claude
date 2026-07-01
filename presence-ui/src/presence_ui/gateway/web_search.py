@@ -175,23 +175,16 @@ async def brave_web_search(
     return hits
 
 
-async def search_with_urls(
+async def search_api_backends(
     query: str,
 ) -> tuple[list[SearchHit], str, str, str]:
-    """Return (hits, query_used, status, backend) where status is ok|empty|failed."""
+    """L1 DDG instant → L3 Brave (no cache / direct URL)."""
     q = query.strip()[:120]
     if not q:
         return [], "", "empty", "none"
 
     backend = web_search_backend()
     try:
-        if backend in {"auto", "brave"} and (backend == "brave" or _brave_api_key()):
-            hits = await brave_web_search(q)
-            if hits:
-                return hits, q, "ok", "brave"
-            if backend == "brave":
-                return [], q, "empty", "brave"
-
         if backend in {"auto", "ddg", "instant"}:
             answer, used = await ddg_instant_answer(q)
             if answer.strip():
@@ -201,7 +194,23 @@ async def search_with_urls(
                     "ok",
                     "ddg_instant",
                 )
+
+        if backend in {"auto", "brave"} and (backend == "brave" or _brave_api_key()):
+            hits = await brave_web_search(q)
+            if hits:
+                return hits, q, "ok", "brave"
+            if backend == "brave":
+                return [], q, "empty", "brave"
     except Exception:
         return [], q, "failed", backend
 
     return [], q, "empty", backend
+
+
+async def search_with_urls(
+    query: str,
+) -> tuple[list[SearchHit], str, str, str]:
+    """Return (hits, query_used, status, backend) — L0–L2 then API backends."""
+    from presence_ui.gateway.search_tier import tiered_search
+
+    return await tiered_search(query)

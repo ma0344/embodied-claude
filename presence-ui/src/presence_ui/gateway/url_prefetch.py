@@ -255,6 +255,8 @@ def format_url_prefetch_block(
     if status == "ok" and excerpt.strip():
         directive = (
             "Gateway fetched this page excerpt. Describe page contents ONLY from excerpt above.\n"
+            "Open your reply with at least one concrete fact from the excerpt when answering "
+            "まー's report or question.\n"
             "Do NOT infer details from search snippets or training data.\n"
             "If excerpt lacks the answer, say so honestly and point to other numbered search URLs."
         )

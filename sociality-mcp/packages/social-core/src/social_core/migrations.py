@@ -429,6 +429,22 @@ MIGRATIONS = [
             ON interpretation_shifts(domain, ts DESC);
         """,
     ),
+    Migration(
+        name="010_compose_topic_retire",
+        sql="""
+        CREATE TABLE IF NOT EXISTS compose_topic_retire (
+            retire_id TEXT PRIMARY KEY,
+            person_id TEXT NOT NULL,
+            topics_json TEXT NOT NULL,
+            retired_until TEXT NOT NULL,
+            source_utterance TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_compose_topic_retire_person
+            ON compose_topic_retire(person_id, retired_until DESC);
+        """,
+    ),
 ]
 
 

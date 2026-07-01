@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from social_core import SocialDB
 
 from boundary_mcp.store import BoundaryStore
 from joint_attention_mcp.store import JointAttentionStore
@@ -20,6 +23,7 @@ from social_core.date_resolution import (
 from social_state_mcp.store import SocialStateStore
 
 from .desire_source import load_desire_snapshot
+from .compose_salience import apply_compose_memory_salience, select_surface_memories
 from .memory_adapter import (
     OrchestratorMemoryAdapter,
 )
@@ -66,6 +70,7 @@ def compose_interaction_context(
     policy_timezone: str = DEFAULT_POLICY_TIMEZONE,
     memory_adapter: OrchestratorMemoryAdapter | None = None,
     session_adapter: OrchestratorSessionAdapter | None = None,
+    social_db: SocialDB | None = None,
 ) -> InteractionContext:
     """Gather everything the next move needs into a single snapshot."""
 
@@ -203,6 +208,14 @@ def compose_interaction_context(
             )
         )
 
+    relevant_memories = apply_compose_memory_salience(
+        relevant_memories,
+        user_text=payload.user_text,
+        person_id=payload.person_id,
+        db=social_db,
+        prefetch_fact_check=payload.prefetch_fact_check,
+    )
+
     joint_focus = _optional_dict(
         joint_attention_store,
         "get_current_joint_focus",
@@ -281,6 +294,7 @@ def compose_interaction_context(
         recent_experiences=recent_experiences,
         profile_gists=list((person_model or {}).get("profile_gists") or []),
         max_chars=payload.max_chars,
+        prefetch_fact_check=payload.prefetch_fact_check,
     )
 
     return InteractionContext(
@@ -994,6 +1008,7 @@ def _compact_block(
     recent_experiences: list[RecentExperienceRef] | None = None,
     profile_gists: list[str] | None = None,
     max_chars: int,
+    prefetch_fact_check: bool = False,
 ) -> str:
     contract_lines = [f"treat_user_as: {response_contract.treat_user_as}"]
     if response_contract.avoid:
@@ -1005,15 +1020,15 @@ def _compact_block(
         f"max_clarifying={response_contract.max_clarifying_questions}"
     )
     memory_lines: list[str] = []
-    all_mentionable = [m for m in relevant_memories if m.use_policy == "mentionable"]
-    mentionable = [m for m in all_mentionable if not is_episodic_blob(m.content)]
-    if not mentionable:
-        mentionable = all_mentionable
-    background = [m for m in relevant_memories if m.use_policy == "background_only"]
-    for m in mentionable[:3]:
+    visible = [m for m in relevant_memories if m.use_policy != "do_not_surface"]
+    mentionable, background = select_surface_memories(
+        visible,
+        prefetch_fact_check=prefetch_fact_check,
+    )
+    for m in mentionable:
         snippet = m.content[:120] + ("…" if len(m.content) > 120 else "")
         memory_lines.append(f"[mentionable r={m.relevance:.2f}] {snippet}")
-    for m in background[:2]:
+    for m in background:
         snippet = m.content[:80] + ("…" if len(m.content) > 80 else "")
         memory_lines.append(f"[background r={m.relevance:.2f}] {snippet}")
 

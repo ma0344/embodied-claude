@@ -66,6 +66,7 @@ class ComposeInteractionContextInput(BaseModel):
     claude_session_resume: bool = False
     include_private: bool = True
     max_chars: int = Field(default=3000, ge=200, le=12000)
+    prefetch_fact_check: bool = False
 
 
 class ResponseContract(BaseModel):

@@ -150,7 +150,16 @@ def merge_intent_with_plan(
     if url_prefetch_done:
         notes.append(
             "[Action] Gateway already ran url_prefetch. "
-            "Describe page contents ONLY from excerpt; do NOT infer from snippets or training data."
+            "Describe page contents ONLY from excerpt; "
+            "do NOT infer from snippets or training data. "
+            "When prefetch status=ok, lead your reply with at least one concrete fact "
+            "from the excerpt before empathy or small talk."
+        )
+
+    if web_search_prefetch_done and not url_prefetch_done:
+        notes.append(
+            "[Action] Gateway ran web_search_prefetch with results. "
+            "Ground your reply in prefetch answer/snippets before general chat."
         )
 
     if calendar_prefetch_done:

@@ -1,6 +1,6 @@
 # WS-5 — 自発 Web 検索
 
-**状態**: 📋 計画済（WS-1〜2c 済の後）  
+**状態**: 🔧 v0 実装済（2026-06-30）· v1 e4b 分類器は 📋  
 **合意**: 2026-06-23（たたき）· 2026-06-27（北極星シナリオ — 地震例）  
 **親仕様**: [ws-2-conversation-web-search.md](./ws-2-conversation-web-search.md)  
 **関連**: [cognitive-layers.md](../architecture/cognitive-layers.md)、[alive-lw-read.md](../tracks/alive-lw-read.md)（LW-7）、[gw-silent.md](../tracks/gw-silent.md)
@@ -85,16 +85,72 @@
 | 経路 | きっかけ |
 |------|----------|
 | `looks_like_web_search_request` | 「調べて」等のみ → WS-2 prefetch |
+| **`ws5_spontaneous` v0** | らしい/みたい + 災害・天気・地域・今日 → WS-5 prefetch（`trigger=ws5`） |
 | `web_search_direct` | 自律 tick（`browse_curiosity` / LW-7 opt-in） |
-| 表層 alone | 共感・一般論（地震例の **いま** 列） |
+| 表層 alone | 共感・一般論（prefetch 非発火時） |
 
-コード: `presence-ui/.../ws_guard.py`（`_WEB_SEARCH_CUE`）、`search_prefetch.py`、`native_chat_router.py`
+**env**: `PRESENCE_WS5_ENABLED=1`（既定 ON · `0` で v0 無効）· `PRESENCE_WEB_SEARCH_PREFETCH=1`
+
+コード: `presence-ui/.../ws5_spontaneous.py`、`search_prefetch.py`、`ws_guard.py`、`native_chat_router.py`
 
 ---
 
-## たたき（未実装）
+## v0 実装（2026-06-30）
 
-- **interpret 判定** — `compose` / plan 前の「今調べる価値あり」（ルール v0 → 前頭葉 LLM v1）
+- **許可型ゲート** — hearsay + verifiable topic/region/今日（finite regex · verb リスト増殖なし）
+- **query** — `extract_spontaneous_search_query`（トピック + 地域 + ローカル日付）
+- **配線** — `resolve_web_search_prefetch` → `search_tier`（L0–L2）→ `url_prefetch`
+- **表層** — WS-5 用 gateway directive + `user_intent` で prefetch 事実を冒頭に載せる
+- **WS-2 優先** — 明示「調べて」は WS-2 のみ（二重走査なし）
+
+### ma-home 確認（北極星 + 梅雨）
+
+1. `restart-presence-ui.ps1`
+2. 「今日、関東で地震があったらしいよ」または「沖縄は梅雨が明けたみたい」
+3. ログ: `native chat web search prefetch ok` · `trigger=ws5` · `backend=direct_url` or `cache:…`
+4. 応答: **prefetch の具体**（震度・明け日など）が冒頭付近にある。捏造 Sources 禁止は WS guard 維持
+
+---
+
+## v1 受け入れ条件（2026-06-30）
+
+### 解釈（e4b）
+
+- `needs_fact_check` — 許可型（「確認して間違いではないか」）
+- `fetch_tier` — `instant | direct_url | serp | full`（安い手段から）
+- `suggested_query` / 任意 `suggested_urls`
+
+### インフラ（L0–L2 · 実装済 2026-06-30）
+
+| Tier | 内容 | env |
+|------|------|-----|
+| **L0** | 正規化 query のセッションキャッシュ | `PRESENCE_WEB_SEARCH_CACHE_TTL_SEC`（既定 900） |
+| **L1** | DDG Instant（API backends 内・Brave より先） | `PRESENCE_WEB_SEARCH_BACKEND` |
+| **L2** | 気象庁など authority URL 直 fetch（梅雨・地震・台風） | — |
+| **L3** | Brave SERP（L1/L2 空のとき） | `BRAVE_SEARCH_API_KEY` |
+| **cooldown** | WS-5 自発のみ連打抑制 | `PRESENCE_WS5_COOLDOWN_SEC`（既定 90） |
+
+コード: `search_tier.py` · `web_search.search_api_backends`
+
+### 表層 grounding（prefetch → 会話）
+
+裏で取れても表層が共感だけ、は **失敗**。LLM 任せにしない。
+
+| 層 | 要件 |
+|----|------|
+| `[web_search_prefetch]` | `trigger=ws5` かつ `status=ok` → **返答の冒頭に prefetch の具体 1 件以上**（directive 明示） |
+| `[url_prefetch]` | `status=ok` → excerpt の事実を **共感より先** に述べる（`user_intent` + block directive） |
+| 反例 | 沖縄梅雨 — 気象庁 excerpt ありなのに「ええなぁ、夏本番やね」だけ |
+
+検証: ma-home で「沖縄は梅雨が明けたみたい」→ ログ `backend=direct_url` or `url_prefetch` + 応答に **明け日・公式の一言** が入ること。
+
+**既知の隣接問題（2026-06-30）**: prefetch は効いても **compose `[relevant_memories]`** に過去 `episode_close`（例: 蕎麦が LTM に多数）が載り、無関係な昼食話が付く。対策は LTM 禁止ではなく **compose salience 降下** — [compose-topic-retire.md](../tracks/compose-topic-retire.md)（MEM-8g）。
+
+---
+
+## たたき（v1 以降）
+
+- **interpret 判定** — e4b「事実確認して間違いではないか」（許可型 · OL/WS-5 v1 同型）
 - **query 生成** — 発話 + 日付 + 地域から `suggested_query`（地震例: `関東 地震 2026-06-27`）
 - 既存 **`search_prefetch` + `url_prefetch`** 再利用（WS-2b Brave 含む）
 - **`evaluate_action` / quiet hours** で抑制（深夜の過剰検索を防ぐ）
@@ -131,10 +187,11 @@
 1. WS-1 + WS-3 ✅  
 2. WS-2a → 2b → 2c ✅  
 3. GAPI  
-4. **WS-5** — 北極星は **地震シナリオ** で E2E 確認
+4. **WS-5 v0** ✅ — 北極星 **地震シナリオ** で E2E 確認  
+5. **WS-5 v1** — e4b `needs_fact_check` + `suggested_query`
 
-**v0 候補**: 災害・天気・「〜らしいよ」「〜あったみたい」+ 日付/地域ヒューリスティクス → prefetch（LLM なし）  
-**v1 候補**: GW 系 stateless 分類器（OL-GATE / LW interpret と同型）
+**v0（済）**: 災害・天気・「〜らしいよ」+ 日付/地域ヒューリスティクス → prefetch（`ws5_spontaneous.py`）  
+**v1 候補**: GW 系 stateless 分類器（OL-GATE / LW interpret と同型 · 許可型フレーミング）
 
 ---
 
@@ -153,6 +210,7 @@
 
 ## 関連トラック
 
+- **MEM-8g** — compose から話題を降ろす（蕎麦/Episodic 混入）→ [compose-topic-retire.md](../tracks/compose-topic-retire.md)
 - **LW-7** — 読書 PAUSE → Web（自律 tick）。共通化 → [alive-lw-read.md](../tracks/alive-lw-read.md)
 - **WS-2** — 明示検索・URL prefetch の親仕様
 - **GW-SILENT** — 将来の共有 interpret 層 → [gw-silent.md](../tracks/gw-silent.md)

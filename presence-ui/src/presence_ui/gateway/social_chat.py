@@ -542,6 +542,33 @@ def _finish_intercept_chat_request(
         )
 
     stores = get_stores()
+    try:
+        from interaction_orchestrator_mcp.topic_retire import (
+            TopicRetireStore,
+            maybe_record_topic_retire,
+            topic_retire_enabled,
+        )
+
+        if topic_retire_enabled():
+            TopicRetireStore(stores.db).clear_matching_topics(
+                person_id=person_id,
+                user_text=message,
+            )
+            if maybe_record_topic_retire(
+                stores.db,
+                person_id=person_id,
+                user_text=message,
+            ):
+                gateway_events.append(
+                    progress_event(phase="memory", label="話題をcomposeから降ろした")
+                )
+    except Exception:
+        pass
+
+    prefetch_fact_check = bool(
+        web_search_prefetch and "trigger=ws5" in web_search_prefetch
+    )
+
     ctx = compose_interaction_context(
         ComposeInteractionContextInput(
             person_id=person_id,
@@ -551,6 +578,7 @@ def _finish_intercept_chat_request(
             claude_session_resume=bool(session_key),
             include_private=not lite,
             max_chars=compose_max_chars,
+            prefetch_fact_check=prefetch_fact_check,
         ),
         social_state_store=stores.social_state,
         relationship_store=stores.relationship,
@@ -559,6 +587,7 @@ def _finish_intercept_chat_request(
         self_narrative_store=stores.self_narrative,
         orchestrator_store=stores.orchestrator,
         policy_timezone=stores.policy_timezone,
+        social_db=stores.db,
     )
     ctx = enrich_interaction_context(ctx, channel="chat", user_text=message)
     plan = plan_response(

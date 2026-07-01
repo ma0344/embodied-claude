@@ -104,6 +104,23 @@ f_keep = -1.000 # フル prefill（キャッシュミス）
 `settings.json` の UserPromptSubmit は **30 秒**（E5 warm ~9s + remember を考慮）。  
 5 秒だと `[memory_saved_server]` が JSONL に載らず db だけ更新される。
 
+**koyori-surface**（Native chat cwd）では hook を切る。compose / plan は gateway が `[gateway_turn_context]` で注入。
+
+### 3b. 表層会話 cwd（koyori-surface）
+
+Native chat の `claude` 子プロセスは **`presence-ui/koyori-surface/`** を cwd（`PRESENCE_CHAT_WORKING_DIR`）。
+薄い `CLAUDE.md` のみ — 開発用の厚い `CLAUDE.md` はリポジトリルート（Cursor）。
+
+**注意**: Claude Code は cwd から親へ遡って `CLAUDE.md` を全部読む。surface がリポ内にあるとルートの設備マニュアルも載る。
+→ `.claude/settings.local.json` の **`claudeMdExcludes`** で除外（起動時に `ensure_chat_surface_settings()` が同期）。
+
+| 経路 | cwd |
+|------|-----|
+| Cursor / 開発 | `embodied-claude/` |
+| Native chat / キオスク | `presence-ui/koyori-surface/` |
+
+戻す: `PRESENCE_CHAT_USE_REPO_ROOT=1`
+
 ### 4. PoC / 8090（実装済み 2026-06）
 
 既定 `PRESENCE_KV_STABLE_APPEND=1`:

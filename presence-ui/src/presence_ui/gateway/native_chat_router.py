@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from starlette.responses import StreamingResponse
 
 from presence_ui.gateway.calendar_prefetch import prefetch_calendar_for_message
-from presence_ui.gateway.calendar_write import execute_calendar_write_for_message
+from presence_ui.gateway.gateway_turn_cache import gateway_turn_cache_scope
 from presence_ui.gateway.ccs_integration import (
     agent_config_from_intercept,
     default_agent_config,
@@ -207,6 +207,15 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
         req: ChatRequest,
         _: None = Depends(_require_auth),
     ) -> StreamingResponse:
+        with gateway_turn_cache_scope():
+            return await _handle_native_chat(req, person_id=person_id, base_config=base)
+
+    async def _handle_native_chat(
+        req: ChatRequest,
+        *,
+        person_id: str,
+        base_config: AgentConfig,
+    ) -> StreamingResponse:
         list_request = detect_memory_list_request(req.prompt)
         if list_request:
             # Ingest utterance + progress via intercept side effects without Claude.
@@ -234,17 +243,6 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
         calendar_write_note: str | None = None
         search_hits = []
         search_query = ""
-        try:
-            calendar_write_note, _write_events = await execute_calendar_write_for_message(
-                req.prompt
-            )
-            if calendar_write_note:
-                logger.info(
-                    "native chat calendar write ok (%d chars)", len(calendar_write_note)
-                )
-        except Exception as exc:
-            logger.warning("native chat calendar write failed: %s", exc)
-            calendar_write_note = None
         try:
             calendar_note, _cal_events = await prefetch_calendar_for_message(req.prompt)
             if calendar_note:
@@ -318,7 +316,7 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
             return StreamingResponse(silent_stream(), media_type="text/event-stream")
 
         stream = _stream_agent_chat(
-            req=req, intercept=intercept, base_config=base, person_id=person_id
+            req=req, intercept=intercept, base_config=base_config, person_id=person_id
         )
         return StreamingResponse(stream, media_type="text/event-stream")
 

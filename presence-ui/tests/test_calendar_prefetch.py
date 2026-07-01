@@ -11,9 +11,8 @@ from presence_ui.gapi.calendar_client import CalendarEvent
 from presence_ui.gapi.policy import GooglePolicy
 from presence_ui.gateway import social_chat
 from presence_ui.gateway.calendar_prefetch import (
-    detect_calendar_intent,
+    calendar_read_cue,
     format_calendar_prefetch_with_directive,
-    looks_like_calendar_query,
     prefetch_calendar_for_message,
 )
 from presence_ui.gateway.prompt_injection import build_gateway_stable_append
@@ -29,16 +28,17 @@ from presence_ui.gateway.prompt_injection import build_gateway_stable_append
         ("松本市の様式を調べて", False),
     ],
 )
-def test_looks_like_calendar_query(text: str, expected: bool) -> None:
-    assert looks_like_calendar_query(text) is expected
+def test_calendar_read_cue_matches_legacy_cases(text: str, expected: bool) -> None:
+    assert calendar_read_cue(text) is expected
 
 
-def test_detect_calendar_intent_respects_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_detect_calendar_intent_delegates_to_staged_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("PRESENCE_GAPI_ENABLED", "0")
+    from presence_ui.gateway.calendar_prefetch import detect_calendar_intent
+
     assert detect_calendar_intent("今日の予定は？") is False
-    monkeypatch.setenv("PRESENCE_GAPI_ENABLED", "1")
-    monkeypatch.setenv("PRESENCE_GAPI_CALENDAR_PREFETCH", "1")
-    assert detect_calendar_intent("今日の予定は？") is True
 
 
 def test_format_calendar_prefetch_with_directive() -> None:

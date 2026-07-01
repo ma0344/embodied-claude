@@ -22,14 +22,13 @@ from presence_ui.deps import get_stores
 from presence_ui.gateway.calendar_prefetch import (
     calendar_honesty_directive,
     calendar_prefetch_enabled,
-    looks_like_calendar_query,
+    calendar_read_cue,
 )
 from presence_ui.gateway.calendar_write import (
     calendar_write_enabled,
     calendar_write_honesty_directive,
-    looks_like_calendar_create,
-    looks_like_calendar_update,
 )
+from presence_ui.gateway.calendar_write_flow import should_run_calendar_write
 from presence_ui.gateway.context_limits import (
     full_compose_max_chars,
     lite_append_max_chars,
@@ -693,7 +692,7 @@ def _finish_intercept_chat_request(
         turn_delta = f"{turn_delta}\n\n{honesty}" if turn_delta else honesty
     if (
         calendar_prefetch_enabled()
-        and looks_like_calendar_query(message)
+        and calendar_read_cue(message)
         and not calendar_prefetch
         and not calendar_write
     ):
@@ -701,8 +700,9 @@ def _finish_intercept_chat_request(
         turn_delta = f"{turn_delta}\n\n{honesty}" if turn_delta else honesty
     if (
         calendar_write_enabled()
-        and (looks_like_calendar_create(message) or looks_like_calendar_update(message))
+        and should_run_calendar_write(message, person_id=person_id)
         and not calendar_write
+        and not calendar_confirm
     ):
         honesty = calendar_write_honesty_directive()
         turn_delta = f"{turn_delta}\n\n{honesty}" if turn_delta else honesty

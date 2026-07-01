@@ -1,0 +1,12 @@
+{
+  "enabledMcpjsonServers": [
+    "system-temperature"
+  ],
+  "claudeMdExcludes": [
+    "**/embodied-claude/CLAUDE.md",
+    "**/embodied-claude/CLAUDE.local.md",
+    "C:\\Users\\ma\\src\\embodied-claude\\CLAUDE.md"
+  ],
+  "_enabledMcpjsonServers_comment": "Koyori surface cwd. Hooks off — gateway injects compose/plan.",
+  "_claudeMdExcludes_comment": "Claude Code walks up to parent CLAUDE.md; exclude dev handbook. Startup sync adds absolute repo paths."
+}

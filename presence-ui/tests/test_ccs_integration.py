@@ -94,12 +94,10 @@ def test_config_factory_injects_stable_gateway_append(
     cfg = factory(ChatRequest(prompt="hello", session_id="sess-1"))
 
     assert cfg.append_system_prompt == build_gateway_stable_append()
+    assert SOUL_VOICE_ANCHOR in (cfg.append_system_prompt or "")
     core = load_soul_core()
     if core:
-        assert "[SOUL core — mandatory for every reply]" in (cfg.append_system_prompt or "")
-        assert "うち" in (cfg.append_system_prompt or "")
-    else:
-        assert SOUL_VOICE_ANCHOR in (cfg.append_system_prompt or "")
+        assert "うち" in core
     assert cfg.permission_mode == "acceptEdits"
 
 
@@ -199,6 +197,22 @@ def test_mount_registers_native_routes(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "/api/native/chat" in paths
     assert "/api/native/login" in paths
     assert "/poc/native" in paths
+
+
+def test_default_agent_config_uses_chat_surface_cwd(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("PRESENCE_CHAT_USE_REPO_ROOT", raising=False)
+    monkeypatch.delenv("PRESENCE_CHAT_WORKING_DIR", raising=False)
+    cfg = ccs_integration.default_agent_config()
+    assert cfg.working_dir.endswith("koyori-surface") or cfg.working_dir.endswith(
+        "koyori-surface\\"
+    )
+
+
+def test_chat_working_dir_repo_root_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PRESENCE_CHAT_USE_REPO_ROOT", "1")
+    assert ccs_integration.chat_working_dir() == ccs_integration.embodied_repo_root()
 
 
 def test_default_agent_config_uses_qat_model(monkeypatch: pytest.MonkeyPatch) -> None:

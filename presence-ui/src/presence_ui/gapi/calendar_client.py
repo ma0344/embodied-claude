@@ -67,6 +67,80 @@ def _event_row(
     )
 
 
+def list_events_in_time_range(
+    service: Resource,
+    policy: GooglePolicy,
+    *,
+    time_min: datetime,
+    time_max: datetime,
+    search_query: str | None = None,
+) -> list[CalendarEvent]:
+    from presence_ui.gateway.calendar_read_search import filter_events_by_search_query
+
+    q = (search_query or "").strip() or None
+    events = _list_events_paginated(
+        service,
+        policy,
+        time_min=time_min,
+        time_max=time_max,
+        search_query=q,
+    )
+    if q:
+        filtered = filter_events_by_search_query(events, q)
+        if filtered:
+            return filtered
+        # Google Calendar q= can miss Japanese substring matches — scan window locally.
+        broad = _list_events_paginated(
+            service,
+            policy,
+            time_min=time_min,
+            time_max=time_max,
+            search_query=None,
+        )
+        return filter_events_by_search_query(broad, q)
+    return events
+
+
+def _list_events_paginated(
+    service: Resource,
+    policy: GooglePolicy,
+    *,
+    time_min: datetime,
+    time_max: datetime,
+    search_query: str | None = None,
+    max_pages: int = 20,
+) -> list[CalendarEvent]:
+    events: list[CalendarEvent] = []
+    q = (search_query or "").strip() or None
+    for calendar in policy.readable_calendars():
+        page_token: str | None = None
+        for _ in range(max_pages):
+            params: dict[str, Any] = {
+                "calendarId": calendar.id,
+                "timeMin": time_min.isoformat(),
+                "timeMax": time_max.isoformat(),
+                "singleEvents": True,
+                "orderBy": "startTime",
+                "maxResults": 250,
+            }
+            if q:
+                params["q"] = q
+            if page_token:
+                params["pageToken"] = page_token
+            result = service.events().list(**params).execute()
+            for item in result.get("items") or []:
+                if not isinstance(item, dict):
+                    continue
+                row = _event_row(calendar=calendar, item=item)
+                if row is not None:
+                    events.append(row)
+            page_token = result.get("nextPageToken")
+            if not page_token:
+                break
+    events.sort(key=lambda e: (e.start, e.calendar_id))
+    return events
+
+
 def list_events_in_prefetch_window(
     service: Resource,
     policy: GooglePolicy,
@@ -78,28 +152,7 @@ def list_events_in_prefetch_window(
         timezone=policy.timezone,
         as_of=as_of,
     )
-    events: list[CalendarEvent] = []
-    for calendar in policy.readable_calendars():
-        result = (
-            service.events()
-            .list(
-                calendarId=calendar.id,
-                timeMin=time_min.isoformat(),
-                timeMax=time_max.isoformat(),
-                singleEvents=True,
-                orderBy="startTime",
-                maxResults=250,
-            )
-            .execute()
-        )
-        for item in result.get("items") or []:
-            if not isinstance(item, dict):
-                continue
-            row = _event_row(calendar=calendar, item=item)
-            if row is not None:
-                events.append(row)
-    events.sort(key=lambda e: (e.start, e.calendar_id))
-    return events
+    return list_events_in_time_range(service, policy, time_min=time_min, time_max=time_max)
 
 
 def parse_calendar_datetime(value: str, tz: ZoneInfo) -> datetime:
@@ -185,16 +238,24 @@ def format_calendar_prefetch_block(
     events: list[CalendarEvent],
     *,
     status: str = "ok",
+    range_label: str | None = None,
+    resolution: str | None = None,
+    search_query: str | None = None,
 ) -> str:
     cal_ids = ",".join(cal.id for cal in policy.readable_calendars())
+    range_value = range_label or ",".join(policy.prefetch_day_range)
     lines = [
         "[calendar_prefetch]",
-        f"range={','.join(policy.prefetch_day_range)}",
+        f"range={range_value}",
         f"timezone={policy.timezone}",
         f"status={status}",
         f"calendars={cal_ids}",
-        "--- events ---",
     ]
+    if resolution:
+        lines.append(f"resolution={resolution}")
+    if search_query:
+        lines.append(f"search={search_query}")
+    lines.append("--- events ---")
     for event in events:
         loc = f" | {event.location}" if event.location else ""
         lines.append(

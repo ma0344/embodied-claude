@@ -9,7 +9,8 @@ STAGE1_KINDS = frozenset(
         "past_report",
         "greeting",
         "correction",
-        "calendar_operation",
+        "calendar_read",
+        "calendar_write",
         "other",
     }
 )
@@ -23,6 +24,7 @@ STAGE1_ROUTES: dict[str, str] = {
     "past_report": "no_loop",
     "greeting": "no_loop",
     "correction": "correction_route",
-    "calendar_operation": "calendar_gapi",
+    "calendar_read": "calendar_read_gapi",
+    "calendar_write": "calendar_gapi",
     "other": "no_loop",
 }

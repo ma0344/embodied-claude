@@ -214,7 +214,12 @@ def promote_future_departure_if_cued(stage1: OlGateParsed, *, utterance: str) ->
     line = (utterance or "").strip()
     if stage1.utterance_kind == "future_commitment":
         return stage1
-    if stage1.utterance_kind in ("greeting", "correction", "calendar_operation"):
+    if stage1.utterance_kind in (
+        "greeting",
+        "correction",
+        "calendar_read",
+        "calendar_write",
+    ):
         return stage1
     if not _FUTURE_DEPARTURE_CUE.search(line):
         return stage1
@@ -439,6 +444,9 @@ def run_ol_gate_extract(
     parsed = parse_ol_gate_response(raw, fallback_utterance=utterance)
     if parsed is None:
         return None
+    from presence_ui.gateway.stage1_calendar import normalize_calendar_stage1
+
+    parsed = normalize_calendar_stage1(parsed, utterance=utterance)
     return promote_contextual_wake_greeting_if_cued(
         parsed,
         utterance=utterance,
@@ -472,24 +480,6 @@ async def try_ol_gate_after_ingest(
     if not gw_s2_enabled() or not should_run_ol_gate(text):
         return None
     tz = timezone or stores.policy_timezone
-
-    from presence_ui.gateway.calendar_pending import calendar_confirm_enabled
-    from presence_ui.gateway.calendar_write import (
-        looks_like_calendar_create,
-        looks_like_calendar_update,
-    )
-    from presence_ui.gateway.calendar_write_flow import process_calendar_staged_ingest
-
-    if calendar_confirm_enabled() and (
-        looks_like_calendar_create(text) or looks_like_calendar_update(text)
-    ):
-        await asyncio.to_thread(
-            process_calendar_staged_ingest,
-            person_id=person_id,
-            utterance=text,
-            ts=ts,
-        )
-        return None
 
     from presence_ui.gateway.stage1_context import fetch_stage1_departure_hints
     from presence_ui.gateway.temp_c_staged import (

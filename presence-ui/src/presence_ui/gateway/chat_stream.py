@@ -8,12 +8,9 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from presence_ui.gateway.calendar_prefetch import (
-    detect_calendar_intent,
+    calendar_prefetch_enabled,
+    calendar_read_cue,
     prefetch_calendar_for_message,
-)
-from presence_ui.gateway.calendar_write import (
-    detect_calendar_write_intent,
-    execute_calendar_write_for_message,
 )
 from presence_ui.gateway.hybrid_intent import resolve_hybrid_intent
 from presence_ui.gateway.room_events import activity_event, encode_event, progress_event
@@ -30,6 +27,7 @@ from presence_ui.gateway.social_chat import (
     stream_direct_action_response,
     stream_silent_response,
 )
+from presence_ui.gateway.gateway_turn_cache import gateway_turn_cache_scope
 from presence_ui.gateway.stream_sanitize import extract_assistant_speech, stream_passthrough_chat
 from presence_ui.gateway.url_prefetch import prefetch_urls_for_turn
 from presence_ui.services.vision_capture import vision_prefetch_enabled
@@ -41,7 +39,19 @@ async def stream_gateway_chat(
     person_id: str = "ma",
 ) -> AsyncIterator[bytes]:
     """Run social intercept, then proxy Claude Code with room UI side-channels."""
+    with gateway_turn_cache_scope():
+        async for chunk in _stream_gateway_chat_impl(
+            payload=payload,
+            person_id=person_id,
+        ):
+            yield chunk
 
+
+async def _stream_gateway_chat_impl(
+    *,
+    payload: dict[str, Any],
+    person_id: str = "ma",
+) -> AsyncIterator[bytes]:
     message = str(payload.get("message") or "").strip()
     vision_note: str | None = None
     web_search_note: str | None = None
@@ -54,24 +64,7 @@ async def stream_gateway_chat(
     hybrid = resolve_hybrid_intent(message) if message else None
 
     if message:
-        if detect_calendar_write_intent(message):
-            yield encode_event(progress_event(phase="calendar", label="カレンダーに書いてる…"))
-        try:
-            calendar_write_note, write_events = await execute_calendar_write_for_message(message)
-            gateway_events.extend(write_events)
-        except Exception as exc:  # noqa: BLE001
-            calendar_write_note = None
-            gateway_events.append(
-                activity_event(
-                    kind="calendar",
-                    label="カレンダー書込みに失敗",
-                    detail=str(exc)[:120],
-                    ok=False,
-                )
-            )
-
-    if message:
-        if detect_calendar_intent(message):
+        if calendar_prefetch_enabled() and calendar_read_cue(message):
             yield encode_event(progress_event(phase="calendar", label="カレンダーを見てる…"))
         try:
             calendar_note, cal_events = await prefetch_calendar_for_message(message)

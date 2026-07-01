@@ -40,6 +40,25 @@ def embodied_repo_root() -> Path:
     return Path(__file__).resolve().parents[4]
 
 
+def _default_chat_surface_dir() -> Path:
+    return embodied_repo_root() / "presence-ui" / "koyori-surface"
+
+
+def chat_working_dir() -> Path:
+    """Native chat subprocess cwd — thin CLAUDE.md, separate from dev repo root."""
+    if os.getenv("PRESENCE_CHAT_USE_REPO_ROOT", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return embodied_repo_root()
+    override = os.getenv("PRESENCE_CHAT_WORKING_DIR", "").strip()
+    if override:
+        return Path(override).expanduser().resolve()
+    return _default_chat_surface_dir().resolve()
+
+
 def resolved_claude_model() -> str:
     """Single model id for Claude CLI + LM Studio (prefer QAT)."""
     for key in _MODEL_ENV_KEYS:
@@ -89,7 +108,13 @@ def default_agent_config(*, working_dir: Path | None = None) -> AgentConfig:
         for k, v in os.environ.items()
         if k.startswith("ANTHROPIC_") or k.startswith("CLAUDE_")
     }
-    merged_env = {**extra, **base_env}
+    repo = embodied_repo_root()
+    merged_env = {
+        **extra,
+        **base_env,
+        "EMBODIED_CLAUDE_ROOT": os.getenv("EMBODIED_CLAUDE_ROOT", str(repo)),
+        "PRESENCE_PROJECT_PATH": os.getenv("PRESENCE_PROJECT_PATH", str(repo)),
+    }
 
     mcp_config_path: str | None = None
     strict_mcp = False
@@ -106,7 +131,7 @@ def default_agent_config(*, working_dir: Path | None = None) -> AgentConfig:
             strict_mcp = False
 
     return AgentConfig(
-        working_dir=str(working_dir or embodied_repo_root()),
+        working_dir=str(working_dir or chat_working_dir()),
         permission_mode=os.getenv("PRESENCE_CCS_PERMISSION_MODE", _DEFAULT_PERMISSION_MODE),
         password=ccs_password(),
         max_turns=int(os.getenv("PRESENCE_CCS_MAX_TURNS", "20")),

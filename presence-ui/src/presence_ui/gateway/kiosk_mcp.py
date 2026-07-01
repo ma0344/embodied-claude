@@ -7,7 +7,7 @@ import logging
 import os
 from pathlib import Path
 
-from presence_ui.gateway.ccs_integration import embodied_repo_root
+from presence_ui.gateway.ccs_integration import chat_working_dir, embodied_repo_root
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +28,50 @@ def strict_mcp_config_enabled() -> bool:
 
 
 def settings_local_paths() -> tuple[Path, ...]:
-    """Claude Code may read repo-root and .claude/ settings.local.json — keep both aligned."""
-    root = embodied_repo_root()
+    """Paths Claude Code may read — chat surface first, then dev repo (alignment check)."""
+    chat = chat_working_dir()
+    repo = embodied_repo_root()
+    paths: list[Path] = [chat / ".claude" / "settings.local.json"]
+    if chat.resolve() != repo.resolve():
+        paths.extend(
+            (
+                repo / "settings.local.json",
+                repo / ".claude" / "settings.local.json",
+            )
+        )
+    return tuple(paths)
+
+
+def _project_keys_for_path(root: Path) -> tuple[str, ...]:
+    resolved = root.resolve()
     return (
-        root / "settings.local.json",
-        root / ".claude" / "settings.local.json",
+        resolved.as_posix(),
+        str(resolved),
     )
+
+
+def _project_keys_for_repo() -> tuple[str, ...]:
+    return _project_keys_for_path(embodied_repo_root())
+
+
+def _project_lookup_order() -> tuple[Path, ...]:
+    chat = chat_working_dir().resolve()
+    repo = embodied_repo_root().resolve()
+    if chat == repo:
+        return (repo,)
+    return (chat, repo)
+
+
+def all_native_chat_project_keys() -> tuple[str, ...]:
+    """~/.claude.json keys for repo root and koyori-surface cwd."""
+    seen: dict[str, None] = {}
+    for root in _project_lookup_order():
+        for key in _project_keys_for_path(root):
+            seen.setdefault(key, None)
+    for root in (embodied_repo_root(), chat_working_dir()):
+        for key in _project_keys_for_path(root):
+            seen.setdefault(key, None)
+    return tuple(seen)
 
 
 def claude_json_path() -> Path:
@@ -41,22 +79,16 @@ def claude_json_path() -> Path:
 
 
 def _settings_label(path: Path) -> str:
-    try:
-        return str(path.relative_to(embodied_repo_root())).replace("\\", "/")
-    except ValueError:
-        return str(path)
-
-
-def _project_keys_for_repo() -> tuple[str, ...]:
-    root = embodied_repo_root().resolve()
-    return (
-        root.as_posix(),
-        str(root),
-    )
+    for base in (chat_working_dir(), embodied_repo_root()):
+        try:
+            return str(path.relative_to(base)).replace("\\", "/")
+        except ValueError:
+            continue
+    return str(path)
 
 
 def read_enabled_mcp_servers(settings_path: Path | None = None) -> list[str] | None:
-    path = settings_path or (embodied_repo_root() / ".claude" / "settings.local.json")
+    path = settings_path or (chat_working_dir() / ".claude" / "settings.local.json")
     if not path.is_file():
         return None
     try:
@@ -81,13 +113,14 @@ def read_claude_json_enabled_servers() -> list[str] | None:
     projects = data.get("projects")
     if not isinstance(projects, dict):
         return None
-    for key in _project_keys_for_repo():
-        entry = projects.get(key)
-        if not isinstance(entry, dict):
-            continue
-        servers = entry.get("enabledMcpjsonServers")
-        if isinstance(servers, list):
-            return [str(item).strip() for item in servers if str(item).strip()]
+    for root in _project_lookup_order():
+        for key in _project_keys_for_path(root):
+            entry = projects.get(key)
+            if not isinstance(entry, dict):
+                continue
+            servers = entry.get("enabledMcpjsonServers")
+            if isinstance(servers, list):
+                return [str(item).strip() for item in servers if str(item).strip()]
     return None
 
 
@@ -109,7 +142,7 @@ def sync_enabled_mcp_to_claude_json() -> tuple[bool, str]:
         data["projects"] = projects
 
     updated = False
-    for key in _project_keys_for_repo():
+    for key in all_native_chat_project_keys():
         entry = projects.setdefault(key, {})
         if not isinstance(entry, dict):
             entry = {}
@@ -205,7 +238,7 @@ def validate_claude_json_mcp_profile() -> tuple[bool, str]:
     if actual_list is None:
         return (
             False,
-            "~/.claude.json has no project entry for this repo — "
+            "~/.claude.json has no project entry for native chat cwd — "
             "empty enablement loads ALL .mcp.json servers",
         )
     actual = set(actual_list)
@@ -223,7 +256,91 @@ def validate_claude_json_mcp_profile() -> tuple[bool, str]:
     )
 
 
+_REPO_CLAUDE_MD_GLOBS = (
+    "**/embodied-claude/CLAUDE.md",
+    "**/embodied-claude/CLAUDE.local.md",
+)
+
+
+def _repo_claude_md_exclude_paths() -> list[str]:
+    """Paths/globs to skip when Claude Code walks up from koyori-surface cwd."""
+    repo = embodied_repo_root().resolve()
+    paths: list[str] = []
+    for name in ("CLAUDE.md", "CLAUDE.local.md"):
+        candidate = repo / name
+        if candidate.is_file():
+            paths.append(str(candidate))
+    paths.extend(_REPO_CLAUDE_MD_GLOBS)
+    seen: dict[str, None] = {}
+    for item in paths:
+        seen.setdefault(item, None)
+    return list(seen)
+
+
+def _chat_surface_settings_template() -> Path:
+    return (
+        embodied_repo_root()
+        / "presence-ui"
+        / "koyori-surface"
+        / ".claude"
+        / "settings.local.json"
+    )
+
+
+def ensure_chat_surface_settings() -> tuple[bool, str]:
+    """Ensure surface settings exist and exclude dev-repo CLAUDE.md from parent walk."""
+    surface = chat_working_dir()
+    settings_dir = surface / ".claude"
+    settings_dir.mkdir(parents=True, exist_ok=True)
+    path = settings_dir / "settings.local.json"
+
+    data: dict = {}
+    if path.is_file():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            data = {}
+    else:
+        template = _chat_surface_settings_template()
+        if template.is_file():
+            try:
+                data = json.loads(template.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                data = {}
+
+    required_excludes = _repo_claude_md_exclude_paths()
+    current = data.get("claudeMdExcludes")
+    if not isinstance(current, list):
+        current = []
+    merged = [str(item) for item in current if str(item).strip()]
+    changed = not path.is_file()
+    for item in required_excludes:
+        if item not in merged:
+            merged.append(item)
+            changed = True
+    if merged != current:
+        data["claudeMdExcludes"] = merged
+        changed = True
+
+    expected_servers = list(expected_kiosk_mcp_servers())
+    if data.get("enabledMcpjsonServers") != expected_servers:
+        data["enabledMcpjsonServers"] = expected_servers
+        changed = True
+
+    if changed:
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return True, f"chat surface settings updated: {path} (claudeMdExcludes={len(merged)})"
+
+    return True, f"chat surface settings OK: {path}"
+
+
 def log_kiosk_mcp_status() -> None:
+    surface_ok, surface_message = ensure_chat_surface_settings()
+    if surface_ok:
+        logger.info("IBF-4 %s", surface_message)
+    else:
+        logger.warning("IBF-4 %s", surface_message)
+
     ok, message = validate_kiosk_mcp_profile()
     if ok:
         logger.info("IBF-4 %s", message)

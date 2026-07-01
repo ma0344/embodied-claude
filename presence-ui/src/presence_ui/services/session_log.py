@@ -141,16 +141,20 @@ def fetch_session_log_messages(
 ) -> list[ChatMessage]:
     """Load recent dialogue from Claude Code JSONL session files (archive only)."""
     claude_home = get_claude_home()
-    project = get_project_path(project_path)
-    project_dir = _find_project_dir(claude_home, project)
-    if project_dir is None:
-        return []
+    root = claude_home / "projects"
+    jsonl_files: list[Path] = []
+    seen_dirs: set[str] = set()
+    for project in chat_project_paths(project_path):
+        for project_dir in _find_matching_project_dirs(root, project):
+            key = str(project_dir.resolve())
+            if key in seen_dirs:
+                continue
+            seen_dirs.add(key)
+            jsonl_files.extend(project_dir.glob("*.jsonl"))
 
-    jsonl_files = sorted(
-        project_dir.glob("*.jsonl"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )[:max_sessions]
+    jsonl_files = sorted(jsonl_files, key=lambda p: p.stat().st_mtime, reverse=True)[
+        :max_sessions
+    ]
 
     merged: list[ChatMessage] = []
     for path in reversed(jsonl_files):
@@ -201,21 +205,41 @@ def _find_matching_project_dirs(root: Path, project_path: str) -> list[Path]:
     return matches
 
 
+def chat_project_paths(project_path: str | None = None) -> list[str]:
+    """Roots whose ~/.claude/projects JSONL dirs may hold native chat sessions."""
+    from presence_ui.gateway.ccs_integration import chat_working_dir
+
+    paths: list[str] = []
+    seen: set[str] = set()
+    for candidate in (get_project_path(project_path), str(chat_working_dir())):
+        norm = os.path.normcase(os.path.normpath(candidate))
+        if norm in seen:
+            continue
+        seen.add(norm)
+        paths.append(candidate)
+    return paths
+
+
 def discover_workspace_dirs(project_path: str | None = None) -> list[dict[str, str]]:
-    """Find Claude Code project folders for the repo path (Cursor is excluded)."""
-    project = get_project_path(project_path)
+    """Find Claude Code project folders for repo root and native chat cwd."""
     discovered: list[dict[str, str]] = []
     claude_home = get_claude_home()
     root = claude_home / "projects"
-    for project_dir in _find_matching_project_dirs(root, project):
-        discovered.append(
-            {
-                "source": "claude-code",
-                "project_path": project,
-                "project_dir": str(project_dir),
-                "workspace_home": str(claude_home),
-            }
-        )
+    seen_dirs: set[str] = set()
+    for project in chat_project_paths(project_path):
+        for project_dir in _find_matching_project_dirs(root, project):
+            key = str(project_dir.resolve())
+            if key in seen_dirs:
+                continue
+            seen_dirs.add(key)
+            discovered.append(
+                {
+                    "source": "claude-code",
+                    "project_path": project,
+                    "project_dir": str(project_dir),
+                    "workspace_home": str(claude_home),
+                }
+            )
     return discovered
 
 
@@ -301,19 +325,21 @@ def list_project_jsonl_files(
 ) -> list[dict[str, object]]:
     """Scan ~/.claude/projects/<encoded>/ for Claude Code JSONL session logs."""
     claude_home = get_claude_home()
-    project = get_project_path(project_path)
-    history = load_history_index(claude_home, project)
+    history: dict[str, dict[str, object]] = {}
+    for project in chat_project_paths(project_path):
+        history.update(load_history_index(claude_home, project))
 
-    candidates: list[tuple[Path, Path]] = []
-    for entry in discover_workspace_dirs(project):
+    candidates: list[tuple[str, Path, Path]] = []
+    for entry in discover_workspace_dirs(project_path):
         project_dir = Path(entry["project_dir"])
+        entry_project = str(entry["project_path"])
         for path in _jsonl_files_in_dir(project_dir):
-            candidates.append((project_dir, path))
+            candidates.append((entry_project, project_dir, path))
 
-    candidates.sort(key=lambda item: item[1].stat().st_mtime, reverse=True)
+    candidates.sort(key=lambda item: item[2].stat().st_mtime, reverse=True)
 
     results: list[dict[str, object]] = []
-    for project_dir, path in candidates[:limit]:
+    for entry_project, project_dir, path in candidates[:limit]:
         preview_messages = _messages_from_jsonl(path)
         if not preview_messages:
             continue
@@ -331,7 +357,7 @@ def list_project_jsonl_files(
                     preview_messages=preview_messages,
                 ),
                 "message_count": len(preview_messages),
-                "project_path": project,
+                "project_path": entry_project,
                 "project_dir": str(project_dir),
                 "source": "claude-code",
             }

@@ -11,6 +11,14 @@ from presence_ui.gapi.calendar_writes import CalendarWriteError, run_write_smoke
 from presence_ui.gapi.policy import load_google_policy
 from presence_ui.gapi.scopes import DEFAULT_PREP_SCOPES
 
+_DEFAULT_READ_WINDOW_UTTERANCES = (
+    "今日の予定は？",
+    "来週の予定は？",
+    "来月の予定は？",
+    "昨日の予定はどうなっていた？",
+    "来週中に何かある？",
+)
+
 
 def consent_main() -> int:
     parser = argparse.ArgumentParser(description="Google OAuth consent for GAPI (Calendar read)")
@@ -114,3 +122,88 @@ def write_smoke_main() -> int:
     print(f"  {patched.start} -> {patched.end}")
     print("Note: delete API is not exposed — remove [gapi-smoke] events manually if needed.")
     return 0
+
+
+def read_window_smoke_main() -> int:
+    """GAPI-2b — utterance-dependent read window + Calendar list (ma-home E2E)."""
+    import os
+    import re
+
+    parser = argparse.ArgumentParser(
+        description="Resolve prefetch window from utterance and list events (GAPI-2b)"
+    )
+    parser.add_argument(
+        "--utterance",
+        action="append",
+        dest="utterances",
+        help="Test utterance (repeatable). Default: built-in matrix.",
+    )
+    parser.add_argument(
+        "--show-block",
+        action="store_true",
+        help="Print full [calendar_prefetch] block for each utterance",
+    )
+    parser.add_argument(
+        "--no-api",
+        action="store_true",
+        help="Resolve window only — skip Calendar API",
+    )
+    args = parser.parse_args()
+
+    os.environ.setdefault("PRESENCE_GAPI_READ_WINDOW_E4B", "0")
+    utterances = args.utterances or list(_DEFAULT_READ_WINDOW_UTTERANCES)
+
+    policy = load_google_policy()
+    if not policy.enabled:
+        print("gapi-policy: google.enabled is false or policy file missing.", file=sys.stderr)
+        return 1
+    if not policy.readable_calendars():
+        print("gapi-policy: no readable calendars configured.", file=sys.stderr)
+        return 1
+
+    from presence_ui.gateway.calendar_prefetch import fetch_calendar_prefetch_sync
+
+    failures = 0
+    for utterance in utterances:
+        print(f"\n=== {utterance} ===")
+        if args.no_api:
+            from presence_ui.gateway.calendar_read_window import resolve_prefetch_window
+            from zoneinfo import ZoneInfo
+
+            tz = ZoneInfo(policy.timezone)
+            anchor = __import__("datetime").datetime.now(tz).isoformat(timespec="seconds")
+            window = resolve_prefetch_window(
+                utterance,
+                anchor_iso=anchor,
+                tz_name=policy.timezone,
+                fallback_day_range=policy.prefetch_day_range,
+            )
+            print(f"resolution={window.resolution} range={window.range_label}")
+            if window.resolution == "ambiguous":
+                print(f"ambiguous={','.join(window.ambiguous_phrases)}")
+            continue
+
+        block, status = fetch_calendar_prefetch_sync(utterance)
+        range_match = re.search(r"^range=(.+)$", block, re.M)
+        resolution_match = re.search(r"^resolution=(.+)$", block, re.M)
+        event_lines = [
+            line
+            for line in block.splitlines()
+            if line and not line.startswith("[") and not line.startswith("---")
+        ]
+        event_count = sum(
+            1
+            for line in event_lines
+            if "|" in line and not line.startswith("timezone=") and not line.startswith("status=")
+        )
+        print(f"status={status}")
+        if range_match:
+            print(f"range={range_match.group(1).strip()}")
+        if resolution_match:
+            print(f"resolution={resolution_match.group(1).strip()}")
+        print(f"events={event_count}")
+        if status in {"error", "disabled"}:
+            failures += 1
+        if args.show_block:
+            print(block)
+    return 1 if failures else 0

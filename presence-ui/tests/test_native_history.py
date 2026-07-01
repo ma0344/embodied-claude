@@ -69,6 +69,43 @@ def test_resolve_session_jsonl_path(claude_workspace: tuple[Path, str]) -> None:
     assert resolve_session_jsonl_path("not-a-valid-session") is None
 
 
+def test_resolve_session_jsonl_path_koyori_surface_cwd(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Native chat cwd (koyori-surface) JSONL must resolve when PRESENCE_PROJECT_PATH is repo root."""
+    repo_root = str(tmp_path / "embodied-claude")
+    surface_path = str(tmp_path / "embodied-claude" / "presence-ui" / "koyori-surface")
+    claude_home = tmp_path / ".claude"
+    encoded = _encode_project_path(surface_path)
+    project_dir = claude_home / "projects" / encoded
+    project_dir.mkdir(parents=True)
+    session_id = "dddddddd-dddd-dddd-dddd-dddddddddddd"
+    jsonl_path = project_dir / f"{session_id}.jsonl"
+    jsonl_path.write_text(
+        json.dumps(
+            {
+                "type": "user",
+                "timestamp": "2026-06-20T10:00:00+00:00",
+                "message": {"content": [{"type": "text", "text": "来週の予定は？"}]},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CLAUDE_HOME", str(claude_home))
+    monkeypatch.setenv("PRESENCE_PROJECT_PATH", repo_root)
+    monkeypatch.setenv("PRESENCE_CHAT_WORKING_DIR", surface_path)
+
+    resolved = resolve_session_jsonl_path(session_id)
+    assert resolved == jsonl_path
+    result = fetch_native_session_messages(session_id)
+    assert result is not None
+    assert result.messages[0].message == "来週の予定は？"
+
+    listed = list_native_sessions(limit=10)
+    assert any(row.session_id == session_id for row in listed.sessions)
+
+
 def test_list_native_sessions(claude_workspace: tuple[Path, str]) -> None:
     del claude_workspace
     result = list_native_sessions(limit=10)

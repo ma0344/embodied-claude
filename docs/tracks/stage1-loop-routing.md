@@ -1,6 +1,6 @@
 # Stage1 → loop routing (GW-S2 / OL7)
 
-Stage1 (e4b) classifies each human utterance into a fixed **7-value** `utterance_kind`.
+Stage1 (e4b) classifies each human utterance into a fixed **`utterance_kind`** taxonomy.
 Completion **shape** is a separate field `close_shape` (only when `past_completion`).
 
 Gateway does **not** grow verb regex lists for OL close. Regex stays limited to finite,
@@ -15,7 +15,9 @@ deterministic tasks (dates, until-times, prompt fences, recall/dismiss filters).
 | `past_report` | no loop | skip | skip | narrative only |
 | `greeting` | no loop | skip | skip | |
 | `correction` | correction | skip | skip | TEMP-C correction path |
-| `calendar_operation` | GAPI calendar | skip | skip | explicit calendar flow |
+| `calendar_read` | GAPI read (ingest) | skip | skip | chat は L0 prefetch（2r-S2 で Stage1 統合） |
+| `calendar_write` | GAPI write / 7b | skip | skip | create/update + confirm |
+| `calendar_operation` | GAPI write (legacy) | skip | skip | **alias** → normalize to read/write |
 | `other` | no loop | skip | skip | |
 
 Defined in `presence_ui/gateway/stage1_kinds.py` (`STAGE1_ROUTES`).

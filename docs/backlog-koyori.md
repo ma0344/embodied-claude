@@ -19,7 +19,7 @@
 | **CAM** | 💤 | [tracks/cam-tapo-ptz.md](./tracks/cam-tapo-ptz.md) |
 | **EAR** | 📋 | [tracks/ear.md](./tracks/ear.md) |
 | **VIS** | 💤 | [tracks/vis-health.md](./tracks/vis-health.md) |
-| **GAPI** | ✅ prep-1/2 · 📋 配線要検討 | [tracks/gapi.md](./tracks/gapi.md) · [ops/gapi-setup.md](./ops/gapi-setup.md) |
+| **GAPI** | ✅ prep-1/2 · **2b/2r/2r-S2/2s** ma-home E2E · 📋 7c/7d | [tracks/gapi.md](./tracks/gapi.md) · [ops/gapi-setup.md](./ops/gapi-setup.md) |
 | **TEMP** | 🔧 utterance anchoring + 段階分類 POC | [tracks/utterance-anchoring.md](./tracks/utterance-anchoring.md) · [prottypemarkdown.md](../prottypemarkdown.md) |
 | **V / Surface UI 残** | 部分済 | [tracks/surface-vision.md](./tracks/surface-vision.md) |
 | **BIO-8** | ✅ | [heartbeat-loop.md](./architecture/heartbeat-loop.md) § Somatic |

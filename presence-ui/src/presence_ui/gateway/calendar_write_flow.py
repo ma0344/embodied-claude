@@ -1,8 +1,10 @@
-"""GAPI-7b — calendar confirm flow orchestration."""
+"""GAPI-7b / GAPI-2w — calendar confirm flow orchestration."""
 
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -25,6 +27,7 @@ from presence_ui.gateway.calendar_pending import (
     pending_matches_utterance,
     save_pending,
 )
+from presence_ui.gateway.calendar_prefetch import looks_like_calendar_query
 from presence_ui.gateway.calendar_stage import (
     calendar_staged_enabled,
     compute_missing_fields,
@@ -33,11 +36,12 @@ from presence_ui.gateway.calendar_stage import (
     run_calendar_stage2_extract,
 )
 from presence_ui.gateway.calendar_write import (
+    calendar_write_enabled,
     execute_pending_calendar_sync,
-    looks_like_calendar_create,
-    looks_like_calendar_update,
 )
 from presence_ui.gateway.room_events import progress_event
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,10 +51,45 @@ class CalendarTurnOutcome:
     progress_events: tuple[dict[str, Any], ...] = ()
 
 
-def should_skip_ol_for_calendar(text: str, *, person_id: str = "ma") -> bool:
-    if is_calendar_affirmation(text) or is_calendar_denial(text):
+def calendar_write_staged_enabled() -> bool:
+    """Stage1 calendar_write gate for chat/ingest (GAPI-2w)."""
+    if not calendar_write_enabled() or not calendar_confirm_enabled():
+        return False
+    raw = os.getenv("PRESENCE_GAPI_CALENDAR_WRITE_STAGED", "1").strip().lower()
+    return raw not in ("0", "false", "no", "off")
+
+
+def classify_calendar_write_stage1(*, utterance: str) -> str | None:
+    from presence_ui.gateway.calendar_read_flow import classify_calendar_read_stage1
+
+    return classify_calendar_read_stage1(utterance=utterance)
+
+
+def should_run_calendar_write(text: str, *, person_id: str = "ma") -> bool:
+    """True when gateway should run 7b confirm flow for this utterance."""
+    line = (text or "").strip()
+    if not line:
+        return False
+    if is_calendar_affirmation(line) or is_calendar_denial(line):
         return load_pending(person_id=person_id) is not None
-    return bool(looks_like_calendar_create(text) or looks_like_calendar_update(text))
+    if not calendar_write_staged_enabled():
+        return False
+    if not looks_like_calendar_query(line):
+        return False
+    kind = classify_calendar_write_stage1(utterance=line)
+    if kind is None:
+        logger.warning(
+            "GAPI-2w: Stage1 unavailable for calendar cue %r — skipping write",
+            line[:80],
+        )
+        return False
+    from presence_ui.gateway.stage1_calendar import normalized_calendar_kind
+
+    return normalized_calendar_kind(kind=kind, utterance=line) == "calendar_write"
+
+
+def should_skip_ol_for_calendar(text: str, *, person_id: str = "ma") -> bool:
+    return should_run_calendar_write(text, person_id=person_id)
 
 
 def _progress_for_status(*, action: str, status: str) -> str:
@@ -81,8 +120,6 @@ def process_calendar_staged_ingest(
 ) -> CalendarPendingRecord | None:
     """Run Stage2 extract on ingest; save pending for confirm/clarify."""
     if not calendar_staged_enabled() or not calendar_confirm_enabled():
-        return None
-    if not (looks_like_calendar_create(utterance) or looks_like_calendar_update(utterance)):
         return None
     when = ts or utc_now()
     extract = run_calendar_stage2_extract(utterance=utterance)
@@ -184,7 +221,7 @@ def process_calendar_turn_sync(
         return CalendarTurnOutcome(write_block=block, progress_events=tuple(events))
 
     pending = load_pending(person_id=person_id)
-    is_calendar_op = looks_like_calendar_create(text) or looks_like_calendar_update(text)
+    is_calendar_op = should_run_calendar_write(text, person_id=person_id)
     if pending and pending.status in {"awaiting_confirm", "needs_clarification"}:
         if is_calendar_op:
             when = utc_now()

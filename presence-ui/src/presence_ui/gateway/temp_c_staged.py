@@ -32,7 +32,15 @@ from presence_ui.gateway.ol_gate_prompts import (
     build_temp_c_stage2_system,
     build_temp_c_stage2_task,
 )
+from presence_ui.gateway.stage1_calendar import (
+    CALENDAR_STAGE1_KINDS,
+    normalize_calendar_stage1,
+)
 from presence_ui.gateway.stage1_context import Stage1DepartureHint
+from presence_ui.gateway.gateway_turn_cache import (
+    get_or_set_cached_stage1,
+    stage1_cache_key,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -264,31 +272,51 @@ def should_create_loop_for_event(
     return bool(event.action_phrase or event.until_phrase)
 
 
+def run_stage1_classify(
+    *,
+    utterance: str,
+    open_departure_loops: tuple[Stage1DepartureHint, ...] | list[Stage1DepartureHint] = (),
+) -> OlGateParsed | None:
+    """Stage 1 only — kind gate + calendar normalization."""
+    cache_key = stage1_cache_key(utterance, open_departure_loops)
+
+    def _classify() -> OlGateParsed | None:
+        raw1 = run_classifier_turn(
+            system=TEMP_C_STAGE1_SYSTEM,
+            user=build_temp_c_stage1_task(
+                utterance=utterance,
+                open_departure_loops=open_departure_loops,
+            ),
+            max_tokens=_stage1_max_tokens(),
+            log_label="TEMP-C Stage1",
+        )
+        stage1 = parse_stage1_response(raw1 or "", fallback_utterance=utterance)
+        if stage1 is None:
+            return None
+        stage1 = promote_correction_kind_if_cued(stage1, utterance=utterance)
+        stage1 = promote_future_departure_if_cued(stage1, utterance=utterance)
+        stage1 = promote_contextual_wake_greeting_if_cued(
+            stage1,
+            utterance=utterance,
+            open_departure_loops=tuple(open_departure_loops),
+        )
+        return normalize_calendar_stage1(stage1, utterance=utterance)
+
+    return get_or_set_cached_stage1(cache_key, _classify)
+
+
 def run_staged_classify(
     *,
     utterance: str,
     open_departure_loops: tuple[Stage1DepartureHint, ...] | list[Stage1DepartureHint] = (),
 ) -> StagedClassifyResult | None:
     """Stage 1 → optional Stage 2 with guards (G1–G4)."""
-    raw1 = run_classifier_turn(
-        system=TEMP_C_STAGE1_SYSTEM,
-        user=build_temp_c_stage1_task(
-            utterance=utterance,
-            open_departure_loops=open_departure_loops,
-        ),
-        max_tokens=_stage1_max_tokens(),
-        log_label="TEMP-C Stage1",
+    stage1 = run_stage1_classify(
+        utterance=utterance,
+        open_departure_loops=open_departure_loops,
     )
-    stage1 = parse_stage1_response(raw1 or "", fallback_utterance=utterance)
     if stage1 is None:
         return None
-    stage1 = promote_correction_kind_if_cued(stage1, utterance=utterance)
-    stage1 = promote_future_departure_if_cued(stage1, utterance=utterance)
-    stage1 = promote_contextual_wake_greeting_if_cued(
-        stage1,
-        utterance=utterance,
-        open_departure_loops=tuple(open_departure_loops),
-    )
 
     correction: CorrectionParsed | None = None
     if correction_routing_enabled() and should_run_correction_stage2(
@@ -303,7 +331,7 @@ def run_staged_classify(
             correction=correction,
         )
 
-    if stage1.utterance_kind == "calendar_operation":
+    if stage1.utterance_kind in CALENDAR_STAGE1_KINDS:
         return StagedClassifyResult(
             utterance=utterance,
             stage1=stage1,
@@ -433,10 +461,20 @@ def apply_staged_decisions(
     result: StagedClassifyResult,
     timezone: str,
 ) -> list[OlGateGatewayDecision]:
-    if result.stage1.utterance_kind == "calendar_operation":
+    kind = result.stage1.utterance_kind
+    if kind == "calendar_write":
         from presence_ui.gateway.calendar_write_flow import process_calendar_staged_ingest
 
         process_calendar_staged_ingest(
+            person_id=person_id,
+            utterance=text,
+            ts=ts,
+        )
+        return []
+    if kind == "calendar_read":
+        from presence_ui.gateway.calendar_read_flow import process_calendar_read_staged_ingest
+
+        process_calendar_read_staged_ingest(
             person_id=person_id,
             utterance=text,
             ts=ts,

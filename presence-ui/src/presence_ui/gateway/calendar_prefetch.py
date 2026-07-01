@@ -7,13 +7,12 @@ import os
 import re
 from typing import Any
 
-from presence_ui.gapi.auth import GoogleAuthError, get_calendar_service
 from presence_ui.gapi.calendar_client import (
     CalendarEvent,
     format_calendar_prefetch_block,
-    list_events_in_prefetch_window,
 )
-from presence_ui.gapi.policy import GooglePolicy, load_google_policy
+from presence_ui.gapi.policy import GooglePolicy
+from presence_ui.gateway.calendar_read_window import PrefetchWindow
 from presence_ui.gateway.room_events import progress_event
 
 _CALENDAR_KEYWORDS = re.compile(
@@ -43,7 +42,7 @@ def calendar_prefetch_enabled() -> bool:
 
 
 def looks_like_calendar_query(text: str) -> bool:
-    """L0 calendar read intent — explicit schedule keywords only (not bare おはよ)."""
+    """Light calendar cue — gates Stage1; not sufficient alone for prefetch (GAPI-2r-S2)."""
     line = (text or "").strip()
     if not line or len(line) > 500:
         return False
@@ -52,8 +51,14 @@ def looks_like_calendar_query(text: str) -> bool:
     return bool(_SCHEDULE_WHEN.search(line) or _WHEN_SCHEDULE.search(line))
 
 
+# Alias — cue before Stage1, not the read classifier.
+calendar_read_cue = looks_like_calendar_query
+
+
 def detect_calendar_intent(text: str) -> bool:
-    return calendar_prefetch_enabled() and looks_like_calendar_query(text)
+    from presence_ui.gateway.calendar_read_flow import should_run_calendar_read
+
+    return should_run_calendar_read(text)
 
 
 def calendar_honesty_directive() -> str:
@@ -86,22 +91,52 @@ def format_calendar_prefetch_with_directive(
     policy: GooglePolicy,
     events: list[CalendarEvent],
     status: str = "ok",
+    window: PrefetchWindow | None = None,
 ) -> str:
-    block = format_calendar_prefetch_block(policy, events, status=status)
-    block, _ = _truncate_prefetch_block(block, max_chars=policy.max_prefetch_chars)
+    range_label = window.range_label if window else None
+    resolution = window.resolution if window else None
+    block = format_calendar_prefetch_block(
+        policy,
+        events,
+        status=status,
+        range_label=range_label,
+        resolution=resolution,
+        search_query=window.search_query if window else None,
+    )
+    block, truncated = _truncate_prefetch_block(block, max_chars=policy.max_prefetch_chars)
+    if truncated and window and window.search_query:
+        block = block.replace("status=truncated", "status=truncated_search", 1)
     lines = [block, ""]
-    if status == "ok":
+    range_hint = (window.range_label if window else ",".join(policy.prefetch_day_range))
+    if status == "ok" and not truncated:
         directive = (
-            "Gateway fetched Google Calendar (today+tomorrow window).\n"
+            f"Gateway fetched Google Calendar (range={range_hint}"
+            f"{f', search={window.search_query}' if window and window.search_query else ''}).\n"
             "Treat [calendar_prefetch] events as authoritative for schedule questions.\n"
             "[open_loops] in compose may supplement; do not contradict calendar events.\n"
             "Do NOT invent events beyond the prefetch block."
         )
+    elif status == "ok" and truncated:
+        directive = (
+            f"Gateway fetched Google Calendar (range={range_hint}) but the list was "
+            "TRUNCATED by max_prefetch_chars.\n"
+            "The prefetch block is INCOMPLETE — do NOT claim you listed every event in the range.\n"
+            "Say honestly that only the earliest part of the window is shown, or ask まー to "
+            "narrow the date range or add a keyword filter."
+        )
     elif status == "empty":
         directive = (
-            "Gateway fetched Google Calendar; no events in the prefetch window.\n"
-            "Say honestly there is nothing on the calendar for today/tomorrow unless "
+            f"Gateway fetched Google Calendar; no events in range {range_hint}"
+            f"{f' matching search={window.search_query}' if window and window.search_query else ''}.\n"
+            "Say honestly there is nothing on the calendar for that window unless "
             "[open_loops] lists informal tasks."
+        )
+    elif status == "ambiguous":
+        phrases = ", ".join(window.ambiguous_phrases) if window else ""
+        directive = (
+            "User asked about schedule but the date window is ambiguous "
+            f"({phrases or 'unspecified span'}).\n"
+            "Ask まー which dates they mean before inventing events."
         )
     elif status == "disabled":
         directive = calendar_honesty_directive().split("\n", 1)[-1]
@@ -115,16 +150,23 @@ def format_calendar_prefetch_with_directive(
     return "\n".join(lines)
 
 
-def _format_error_block(*, policy: GooglePolicy | None, status: str, detail: str) -> str:
+def _format_error_block(
+    *,
+    policy: GooglePolicy | None,
+    status: str,
+    detail: str,
+    range_label: str | None = None,
+) -> str:
     tz = policy.timezone if policy else "Asia/Tokyo"
-    day_range = policy.prefetch_day_range if policy else ["today", "tomorrow"]
-    cal_ids = ",".join(cal.id for cal in policy.readable_calendars()) if policy else ""
+    day_range = range_label or (
+        ",".join(policy.prefetch_day_range) if policy else "today,tomorrow"
+    )
     lines = [
         "[calendar_prefetch]",
-        f"range={','.join(day_range)}",
+        f"range={day_range}",
         f"timezone={tz}",
         f"status={status}",
-        f"calendars={cal_ids}",
+        f"calendars={','.join(cal.id for cal in policy.readable_calendars()) if policy else ''}",
         f"detail={detail[:240]}",
         "--- events ---",
         "[/calendar_prefetch]",
@@ -135,64 +177,33 @@ def _format_error_block(*, policy: GooglePolicy | None, status: str, detail: str
     return "\n".join(lines)
 
 
-def fetch_calendar_prefetch_sync() -> tuple[str, str]:
+def fetch_calendar_prefetch_sync(
+    utterance: str = "",
+    *,
+    anchor_iso: str | None = None,
+) -> tuple[str, str]:
     """Return (prefetch block with directive, status)."""
-    policy = load_google_policy()
-    if not policy.enabled:
-        return (
-            _format_error_block(
-                policy=policy,
-                status="disabled",
-                detail="gapi-policy google.enabled is false or policy missing",
-            ),
-            "disabled",
-        )
-    if not policy.readable_calendars():
-        return (
-            _format_error_block(
-                policy=policy,
-                status="disabled",
-                detail="no readable calendars in gapi-policy",
-            ),
-            "disabled",
-        )
-    try:
-        service = get_calendar_service()
-        events = list_events_in_prefetch_window(service, policy)
-    except GoogleAuthError as exc:
-        return (
-            _format_error_block(policy=policy, status="error", detail=str(exc)),
-            "error",
-        )
-    except Exception as exc:  # noqa: BLE001
-        return (
-            _format_error_block(policy=policy, status="error", detail=str(exc)),
-            "error",
-        )
+    from presence_ui.gateway.calendar_read_flow import run_calendar_read_pipeline
 
-    status = "ok" if events else "empty"
-    block = format_calendar_prefetch_with_directive(policy=policy, events=events, status=status)
-    return block, status
+    return run_calendar_read_pipeline(utterance, anchor_iso=anchor_iso)
 
 
 async def prefetch_calendar_for_message(
     message: str,
 ) -> tuple[str | None, list[dict[str, Any]]]:
     text = (message or "").strip()
-    if not text or not detect_calendar_intent(text):
+    from presence_ui.gateway.calendar_read_flow import should_run_calendar_read
+
+    if not text or not should_run_calendar_read(text):
         return None, []
 
-    # Write turns carry [calendar_write_result]; skip redundant read prefetch.
-    from presence_ui.gateway.calendar_write import detect_calendar_write_intent
-
-    if detect_calendar_write_intent(text):
-        return None, []
-
-    block, status = await asyncio.to_thread(fetch_calendar_prefetch_sync)
+    block, status = await asyncio.to_thread(fetch_calendar_prefetch_sync, text)
     if status == "ok":
         label = "カレンダーを見た"
     elif status == "empty":
         label = "カレンダーに予定なし"
+    elif status == "ambiguous":
+        label = "日付を確認して"
     elif status == "disabled":
         label = "カレンダー未接続"
     else:

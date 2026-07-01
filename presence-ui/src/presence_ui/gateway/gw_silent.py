@@ -11,6 +11,7 @@ from typing import Literal
 
 import httpx
 
+from presence_ui.gateway.gateway_llm_log import append_gateway_llm_log
 from presence_ui.gateway.llm_intent import _extract_json_object, lm_studio_available
 from presence_ui.services.llm import (
     _lm_classifier_settings,
@@ -126,8 +127,25 @@ def run_classifier_turn(
                 headers=headers,
             )
             response.raise_for_status()
-            return _parse_openai_chat_content(response.json())
+            text = _parse_openai_chat_content(response.json())
+            append_gateway_llm_log(
+                log_label=log_label,
+                model=model,
+                system=system,
+                user=user,
+                output=text,
+                ok=bool(text),
+            )
+            return text
     except Exception as exc:
+        append_gateway_llm_log(
+            log_label=log_label,
+            model=model,
+            system=system,
+            user=user,
+            output=str(exc)[:200],
+            ok=False,
+        )
         logger.warning("%s failed: %s", log_label, exc)
         return None
 

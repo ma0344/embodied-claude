@@ -15,11 +15,11 @@ from presence_ui.schemas import (
 from presence_ui.services.display_time import normalize_iso_timestamp
 from presence_ui.services.native_session_prefs import load_hidden_session_ids
 from presence_ui.services.session_log import (
-    _find_project_dir,
+    _find_matching_project_dirs,
     _messages_from_jsonl,
     _preview_for_messages,
+    chat_project_paths,
     get_claude_home,
-    get_project_path,
     list_project_jsonl_files,
 )
 
@@ -35,16 +35,17 @@ def resolve_session_jsonl_path(
     if not _SAFE_SESSION_ID.match(session_id):
         return None
     claude_home = get_claude_home()
-    project = get_project_path(project_path)
-    project_dir = _find_project_dir(claude_home, project)
-    if project_dir is None:
-        return None
-    candidate = (project_dir / f"{session_id}.jsonl").resolve()
-    try:
-        candidate.relative_to(project_dir.resolve())
-    except ValueError:
-        return None
-    return candidate if candidate.is_file() else None
+    root = claude_home / "projects"
+    for project in chat_project_paths(project_path):
+        for project_dir in _find_matching_project_dirs(root, project):
+            candidate = (project_dir / f"{session_id}.jsonl").resolve()
+            try:
+                candidate.relative_to(project_dir.resolve())
+            except ValueError:
+                continue
+            if candidate.is_file():
+                return candidate
+    return None
 
 
 def _session_updated_at(*, messages: list[ChatMessage], path: Path) -> str:

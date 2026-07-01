@@ -21,8 +21,27 @@ STAGE1_SYSTEM = """あなたは会話発話の **open loop 入口フィルタ** 
 
 ## 判断フロー（上から順 · 最初に当てはまったら確定 · 後戻り禁止）
 
-**Q1 — Googleカレンダー操作か？**（「カレンダーに」「予定をずらして」等）
-→ YES: `utterance_kind=calendar_operation` · slots は null 可 · `close_shape=null` → 終了
+**Q1 — Googleカレンダーか？**（予定・スケジュール・カレンダー）
+
+→ NO: Q2 へ
+
+→ YES かつ **読取**（予定を聞く・確認する · **入れて/ずらして/変更/登録 が無い**）
+  例: 今日の予定は？ / 来週空いてる？ / スケジュール教えて
+  → `utterance_kind=calendar_read` · slots は null 可 · `close_shape=null` → 終了
+
+→ YES かつ **書込・変更**（カレンダーに入れて / ずらして / 登録 / 時間変更 等 · 副作用あり）
+  例: 来週火曜15時に〇〇、カレンダー入れといて / 予定を1時間ずらして
+  → `utterance_kind=calendar_write` · slots は null 可 · `close_shape=null` → 終了
+
+**Q1 較正**
+
+| 発話 | kind |
+|------|------|
+| 来週の予定は？ | calendar_read |
+| 明日空いてる？ | calendar_read |
+| カレンダー入れといて | calendar_write |
+| 15時の予定を17時にずらして | calendar_write |
+| 今日は疲れた | Q2 へ（other） |
 
 **Q2 — 訂正・境界・話題 dismiss か？**（違う / 忘れて / 静かに / しつこい 等）
 → YES: `utterance_kind=correction` · `close_shape=null` → 終了
@@ -111,7 +130,7 @@ STAGE1_SYSTEM = """あなたは会話発話の **open loop 入口フィルタ** 
 ```json
 {
   "utterance": "<入力そのまま>",
-  "utterance_kind": "future_commitment | past_completion | past_report | greeting | correction | calendar_operation | other",
+  "utterance_kind": "future_commitment | past_completion | past_report | greeting | correction | calendar_read | calendar_write | other",
   "close_shape": "activity_named | action_only | null",
   "temporal_phrase": "<string or null>",
   "inferred_temporal_phrase": "<string or null>",

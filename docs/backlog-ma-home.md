@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ（ダッシュボード）
 
-**最終更新**: 2026-06-30（MEM-8g アクティブ · v0 様子見 / v1 gist 📋）  
+**最終更新**: 2026-07-01（GAPI-2 読取パイプライン ma-home E2E）  
 **詳細の正（アーカイブ）**: [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md)  
 **完了一覧**: [backlog-archive-ma-home.md](./backlog-archive-ma-home.md)
 
@@ -94,7 +94,7 @@
 | **EAR** | Surface マイク | 📋 | [tracks/ear.md](./tracks/ear.md) |
 | **VIS** | VL health · vision **e4b** | ✅ 切替済（2026-06-29） | [vis-health.md](./tracks/vis-health.md) |
 | **V** | Surface UI 残（V4 等） | 部分済 | [tracks/surface-vision.md](./tracks/surface-vision.md) |
-| **GAPI** | Google Calendar / Drive | ✅ prep-1/2/3 · 7a/7b · 📋 **7c** 複数件 · **7d** e4b確認 | [tracks/gapi.md](./tracks/gapi.md) · [gapi-setup.md](./ops/gapi-setup.md) |
+| **GAPI** | Google Calendar / Drive | ✅ prep-1/2/3 · 7a/7b · **2b/2r/2r-S2/2s** · 📋 **7c** 複数件 · **7d** e4b確認 | [tracks/gapi.md](./tracks/gapi.md) · [gapi-setup.md](./ops/gapi-setup.md) |
 | **TEMP** | TEMP-1〜5 ✅ · TEMP-C3/b/c4 ✅ · **C5 📋** clock/e4b · SHIFT-R1/R2/R3 ✅ | [utterance-anchoring.md](./tracks/utterance-anchoring.md) · [interpretation-shift-routing.md](./tracks/interpretation-shift-routing.md) |
 | **WS** | 会話 Web 検索 | ✅ WS-5 v0 · 📋 v1 e4b | [ws-2](./ops/ws-2-conversation-web-search.md) · [ws-5](./ops/ws-5-spontaneous-search.md) |
 

@@ -166,7 +166,8 @@ function relocateSessionControls() {
 function applyDebugInjectionVisibility() {
   const wrap = document.getElementById("debug-injection-wrap");
   if (!wrap) return;
-  wrap.hidden = isKioskLayout() && !isDebugMode();
+  // Session controls (and 注入) mount in the room drawer on kiosk — keep toggle reachable there.
+  wrap.hidden = false;
 }
 
 function ensureSessionControlsMounted() {

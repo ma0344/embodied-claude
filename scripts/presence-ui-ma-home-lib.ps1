@@ -253,6 +253,9 @@ function Initialize-PresenceUiEnv {
     }
     if (-not $env:PRESENCE_PROJECT_PATH) { $env:PRESENCE_PROJECT_PATH = $Repo }
     if (-not $env:EMBODIED_CLAUDE_ROOT) { $env:EMBODIED_CLAUDE_ROOT = $Repo }
+    if (-not $env:PRESENCE_CHAT_WORKING_DIR) {
+        $env:PRESENCE_CHAT_WORKING_DIR = Join-Path $Repo "presence-ui\koyori-surface"
+    }
     if (-not $env:PRESENCE_OUTBOUND_WIN_TOAST) { $env:PRESENCE_OUTBOUND_WIN_TOAST = "1" }
     $WinToast = Join-Path $Repo "scripts\show-koyori-win-toast.ps1"
     if ((Test-Path $WinToast) -and -not $env:PRESENCE_OUTBOUND_WIN_TOAST_SCRIPT) {

@@ -96,6 +96,34 @@ def lm_studio_env_for_model(model: str) -> dict[str, str]:
     }
 
 
+_CAPABILITIES_ENV_KEYS = (
+    "ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES",
+)
+
+
+def lm_studio_claude_compat_env() -> dict[str, str]:
+    """Kiosk defaults: keep Claude Code from sending effort/thinking to Gemma via LM Studio.
+
+    Gemma 4 only accepts reasoning ``on``/``off``; any effort level becomes ``on`` and the
+    chat template injects ``<|think|>`` before the harness system text (see ``llm.prediction.input``).
+
+    Override: ``PRESENCE_CLAUDE_DISABLE_THINKING``, ``PRESENCE_CLAUDE_EFFORT_LEVEL``,
+    ``PRESENCE_CLAUDE_SUPPORTED_CAPABILITIES`` (empty = no effort/thinking features).
+    """
+    disable = os.getenv("PRESENCE_CLAUDE_DISABLE_THINKING", "1").strip() or "1"
+    effort = os.getenv("PRESENCE_CLAUDE_EFFORT_LEVEL", "auto").strip() or "auto"
+    caps = os.getenv("PRESENCE_CLAUDE_SUPPORTED_CAPABILITIES", "").strip()
+    env: dict[str, str] = {
+        "CLAUDE_CODE_DISABLE_THINKING": disable,
+        "CLAUDE_CODE_EFFORT_LEVEL": effort,
+    }
+    for key in _CAPABILITIES_ENV_KEYS:
+        env[key] = caps
+    return env
+
+
 def ccs_password() -> str:
     return os.getenv("PRESENCE_CCS_PASSWORD", "koyori-poc")
 
@@ -112,9 +140,11 @@ def default_agent_config(*, working_dir: Path | None = None) -> AgentConfig:
     merged_env = {
         **extra,
         **base_env,
+        **lm_studio_claude_compat_env(),
         "EMBODIED_CLAUDE_ROOT": os.getenv("EMBODIED_CLAUDE_ROOT", str(repo)),
         "PRESENCE_PROJECT_PATH": os.getenv("PRESENCE_PROJECT_PATH", str(repo)),
     }
+    merged_env.pop("CLAUDE_CODE_ALWAYS_ENABLE_EFFORT", None)
 
     mcp_config_path: str | None = None
     strict_mcp = False

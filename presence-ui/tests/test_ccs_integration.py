@@ -223,6 +223,36 @@ def test_default_agent_config_uses_qat_model(monkeypatch: pytest.MonkeyPatch) ->
     assert cfg.env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "google/gemma-4-12b-qat"
 
 
+def test_default_agent_config_forces_auto_effort_for_lm_studio(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_CODE_EFFORT_LEVEL", "high")
+    monkeypatch.delenv("PRESENCE_CLAUDE_EFFORT_LEVEL", raising=False)
+    cfg = ccs_integration.default_agent_config()
+    assert cfg.env is not None
+    assert cfg.env["CLAUDE_CODE_EFFORT_LEVEL"] == "auto"
+    assert cfg.env["CLAUDE_CODE_DISABLE_THINKING"] == "1"
+    assert cfg.env["ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES"] == ""
+
+
+def test_default_agent_config_strips_always_enable_effort(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_CODE_ALWAYS_ENABLE_EFFORT", "1")
+    cfg = ccs_integration.default_agent_config()
+    assert cfg.env is not None
+    assert "CLAUDE_CODE_ALWAYS_ENABLE_EFFORT" not in cfg.env
+
+
+def test_default_agent_config_respects_presence_effort_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PRESENCE_CLAUDE_EFFORT_LEVEL", "medium")
+    cfg = ccs_integration.default_agent_config()
+    assert cfg.env is not None
+    assert cfg.env["CLAUDE_CODE_EFFORT_LEVEL"] == "medium"
+
+
 def test_default_agent_config_strict_mcp_when_enabled(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,

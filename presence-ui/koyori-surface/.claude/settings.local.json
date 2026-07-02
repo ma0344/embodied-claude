@@ -1,4 +1,19 @@
 {
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:1234",
+    "CLAUDE_CODE_ATTRIBUTION_HEADER": "0",
+    "CLAUDE_MODEL": "google/gemma-4-12b-qat",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "google/gemma-4-12b-qat",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "google/gemma-4-12b-qat",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "google/gemma-4-12b-qat",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "google/gemma-4-12b-qat",
+    "CLAUDE_CODE_DISABLE_THINKING": "1",
+    "CLAUDE_CODE_EFFORT_LEVEL": "auto",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES": "",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES": "",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES": "",
+    "LM_STUDIO_VISION_MODEL": "google/gemma-4-e4b"
+  },
   "enabledMcpjsonServers": [
     "system-temperature"
   ],

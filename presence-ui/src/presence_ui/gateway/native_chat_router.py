@@ -139,16 +139,8 @@ async def _stream_agent_chat(
             _CLAUDE_SESSIONS.mark_created(sid)
 
         reply = "".join(reply_parts).strip()
-        if reply and intercept.plan and intercept.ctx:
-            from presence_ui.gateway.gw_resume import run_post_chat_internal_turn
-
-            await run_post_chat_internal_turn(
-                session_id=sid,
-                person_id=person_id,
-                ctx=intercept.ctx,
-                plan=intercept.plan,
-                reply_text=reply,
-            )
+        # PAUSE（青空の咀嚼）は inward 自律 tick で実行。会話直後の post-chat internal は
+        # ma のターンに食い込むため native chat からは呼ばない（gw_resume は smoke 用に残す）。
 
     if intercept.plan and intercept.ctx:
         from presence_ui.heartbeat.record import finalize_chat_turn

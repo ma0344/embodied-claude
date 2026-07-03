@@ -366,7 +366,7 @@ messages = [
 
 - **GW-S1 配線済** — tick PAUSE で LM Studio + `build_gateway_stable_append()`。LLM 失敗時 v0 テンプレ。
 - **Claude resume（2026-06-29）** — `session_id` 付き internal turn は Claude CLI `--resume`（KV 再利用）。`PRESENCE_GW_S1_CLAUDE=1` で有効（**既定 OFF**）。失敗時 LM Studio にフォールバック。
-- **Post-chat internal** — 表返答後 **同一 session lock 内**で PAUSE 内省。`PRESENCE_GW_AFTER_CHAT=1`（**既定 OFF**、`PRESENCE_GW_S1_CLAUDE=1` と併用）。JSONL には残るが Room 履歴 API / `cc-messages.js` で `[gateway_internal]` と PAUSE JSON を **非表示**。
+- **Post-chat internal** — 表返答後 **同一 session lock 内**で PAUSE 内省（実験用）。`PRESENCE_GW_AFTER_CHAT=1` + `PRESENCE_GW_S1_CLAUDE=1`。**native `/api/native/chat` からは呼ばない**（2026-07-03 — 咀嚼は inward 自律 tick のみ）。`gw_resume.run_post_chat_internal_turn` は smoke / テスト用に残す。
 - **GW-S2 配線済** — Native chat ingest 後に stateless 分類器（v4 prompt）。`PRESENCE_GW_S2_ENABLED=1` で有効（**既定 OFF**）。ON 時は v0 `FUTURE_MARKERS` loop 作成を抑止。
 - **デバッグ** — `list_open_loops` が `detail`（when/what/how、`completion_verbs`）を返す。
 - **次**: OL5 close / OL-STALE の ma-home 運用確認、resume の実戦スモーク（chat → PAUSE reflect）。

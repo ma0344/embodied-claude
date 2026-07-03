@@ -39,7 +39,10 @@ async def run_post_chat_internal_turn(
     plan: ResponsePlan | None,
     reply_text: str,
 ) -> None:
-    """Background internal turn N+1 after surface chat (same Claude JSONL session)."""
+    """Optional smoke: PAUSE on same Claude session after surface chat.
+
+    Not used from native ``/api/native/chat`` — PAUSE runs on autonomous tick instead.
+    """
     if not gw_after_chat_enabled() or not gw_s1_claude_enabled():
         return
     sid = (session_id or "").strip()

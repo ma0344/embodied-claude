@@ -690,7 +690,9 @@ function parseNativeSseBlock(block) {
 }
 
 function applyNativeSessionEvent(payload, userPreview) {
-  if (!payload?.session_id || payload.claude_session === false) return;
+  // Surface direct sends claude_session=false but still needs a stable session_id
+  // so JSONL appends to one file per room (not one UUID per turn).
+  if (!payload?.session_id) return;
   activeSessionId = payload.session_id;
   persistActiveSession();
   if (pendingInboundReply?.text) {
@@ -1127,10 +1129,14 @@ function setMessageBodyContent(bodyEl, msg) {
   }
 }
 
-function confirmNativeUserMessage(trimmed, timestamp) {
+function confirmNativeUserMessage(trimmed, timestamp, enrichedMessage) {
+  const body =
+    enrichedMessage && String(enrichedMessage).trim() !== String(trimmed).trim()
+      ? String(enrichedMessage).trim()
+      : trimmed;
   const userMsg = {
     sender: "ma",
-    message: trimmed,
+    message: body,
     timestamp: timestamp || new Date().toISOString(),
   };
   chatMessages = [...chatMessages.filter((msg) => !msg._pending), userMsg];
@@ -1535,6 +1541,7 @@ async function sendChatMessageNative(trimmed) {
     let buf = "";
     let assistantDraft = "";
     let doneMeta = null;
+    let nativeUserEnriched = null;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -1549,6 +1556,23 @@ async function sendChatMessageNative(trimmed) {
             applyNativeSessionEvent(JSON.parse(data), trimmed);
           } catch {
             // ignore malformed session event
+          }
+        }
+        if (evt === "user_context" && data) {
+          try {
+            const payload = JSON.parse(data);
+            if (payload.enriched) {
+              nativeUserEnriched = payload.enriched;
+              const pending = chatMessages.find((msg) => msg._pending && msg.sender === "ma");
+              if (pending) {
+                pending.message = nativeUserEnriched;
+                const root = document.getElementById("chat-log");
+                const pendingEl = root?.querySelector(".message.ma.is-pending");
+                if (pendingEl) updateMessageElement(pendingEl, pending);
+              }
+            }
+          } catch {
+            // ignore malformed user_context event
           }
         }
         if (evt === "text" && data) {
@@ -1591,7 +1615,7 @@ async function sendChatMessageNative(trimmed) {
       assistantDraft = "（いまは静かにしている）";
     }
 
-    confirmNativeUserMessage(trimmed, optimistic.timestamp);
+    confirmNativeUserMessage(trimmed, optimistic.timestamp, nativeUserEnriched);
 
     if (assistantDraft.trim()) {
       appendAssistantMessage(assistantDraft);

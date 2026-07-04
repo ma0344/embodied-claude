@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -227,6 +228,24 @@ def _user_usable(text: str) -> bool:
     return True
 
 
+def pairs_from_surface_jsonl(path: Path) -> list[tuple[str, str]]:
+    """Training pairs from surface direct JSONL (display user text, not enriched)."""
+    from presence_ui.gateway.surface_session import load_surface_turns
+
+    turns = load_surface_turns(path.stem)
+    pairs: list[tuple[str, str]] = []
+    pending_user: str | None = None
+    for turn in turns:
+        if turn.role == "user":
+            pending_user = turn.text.strip()
+        elif turn.role == "assistant" and pending_user:
+            pairs.append(
+                (pending_user, strip_trailing_cheerleader_closings(turn.text.strip()))
+            )
+            pending_user = None
+    return pairs
+
+
 def pairs_from_session_jsonl(path: Path) -> list[tuple[str, str]]:
     messages = _messages_from_jsonl(path, strip_user_injection=True)
     pairs: list[tuple[str, str]] = []
@@ -266,14 +285,35 @@ def export_persona_jsonl(
     skipped = 0
     sessions_scanned = 0
     candidates: list[tuple[str, str]] = []
+    seen_sessions: set[str] = set()
+
+    from presence_ui.gateway.surface_session import list_surface_session_rows
+
+    include_surface = os.environ.get("PRESENCE_PERSONA_EXPORT_SURFACE", "1").strip().lower()
+    if include_surface not in {"0", "false", "no", "off"}:
+        for row in list_surface_session_rows(limit=max_sessions):
+            session_id = str(row.get("session_id") or "")
+            path = Path(str(row.get("path") or ""))
+            if not session_id or session_id in hidden or session_id in seen_sessions:
+                continue
+            if not path.is_file():
+                continue
+            seen_sessions.add(session_id)
+            sessions_scanned += 1
+            for user_text, assistant_text in pairs_from_surface_jsonl(path):
+                if pair_usable_for_training(user_text, assistant_text):
+                    candidates.append((user_text, assistant_text))
+                else:
+                    skipped += 1
 
     for row in rows:
         session_id = str(row.get("session_file_id") or "")
-        if not session_id or session_id in hidden:
+        if not session_id or session_id in hidden or session_id in seen_sessions:
             continue
         path = Path(str(row.get("path") or ""))
         if not path.is_file():
             continue
+        seen_sessions.add(session_id)
         sessions_scanned += 1
         for user_text, assistant_text in pairs_from_session_jsonl(path):
             if pair_usable_for_training(user_text, assistant_text):

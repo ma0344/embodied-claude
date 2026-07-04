@@ -13,7 +13,7 @@
 | **ALIVE / LW** | 🔥 | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md) |
 | **GW-SILENT** | ✅ S1 · ✅ S2（opt-in） | [tracks/gw-silent.md](./tracks/gw-silent.md) |
 | **OL5** | ✅ 運用確認済 | [tracks/ol5.md](./tracks/ol5.md) |
-| **MEM-8** | 概念済 · **8g compose retire** 💤 v0 · 📋 v1 gist | [architecture/mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) · [tracks/compose-topic-retire.md](./tracks/compose-topic-retire.md) |
+| **MEM-8** | 概念済 · **8g** 💤 · **8h** 📋 | [architecture/mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) · [tracks/mem-8h-memory-bridge.md](./tracks/mem-8h-memory-bridge.md) |
 | **MEM パイプライン** | 運用+未 | [architecture/mem-pipeline.md](./architecture/mem-pipeline.md) |
 | **OBS** | 📋 | [tracks/obs.md](./tracks/obs.md) |
 | **CAM** | 💤 | [tracks/cam-tapo-ptz.md](./tracks/cam-tapo-ptz.md) |
@@ -22,6 +22,7 @@
 | **GAPI** | ✅ prep-1/2 · **2b/2r/2r-S2/2s** ma-home E2E · 📋 7c/7d | [tracks/gapi.md](./tracks/gapi.md) · [ops/gapi-setup.md](./ops/gapi-setup.md) |
 | **TEMP** | 🔧 utterance anchoring + 段階分類 POC | [tracks/utterance-anchoring.md](./tracks/utterance-anchoring.md) · [prottypemarkdown.md](../prottypemarkdown.md) |
 | **V / Surface UI 残** | 部分済 | [tracks/surface-vision.md](./tracks/surface-vision.md) |
+| **Surface direct LLM** | ✅ v0 + 8h-A/C（compact transcript · memory bridge） | [tracks/surface-direct-llm.md](./tracks/surface-direct-llm.md) · [mem-8h-memory-bridge.md](./tracks/mem-8h-memory-bridge.md) |
 | **BIO-8** | ✅ | [heartbeat-loop.md](./architecture/heartbeat-loop.md) § Somatic |
 | **Outbound** | ✅ | [architecture/outbound-channels.md](./architecture/outbound-channels.md) |
 | **プラットフォーム** | ✅ | [architecture/platform-ma-home.md](./architecture/platform-ma-home.md) |

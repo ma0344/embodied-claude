@@ -158,8 +158,7 @@ def test_native_chat_list_bypasses_claude(
 
     monkeypatch.setenv("PRESENCE_CCS_PASSWORD", "test-poc-pw")
     monkeypatch.setattr(
-        dm,
-        "fetch_memory_list",
+        "presence_ui.gateway.native_chat_router.fetch_memory_list",
         lambda **kwargs: [
             {
                 "id": "1",

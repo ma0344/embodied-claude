@@ -9,6 +9,7 @@
 | 項目 | 決定 |
 |------|------|
 | 会話エンジン | Native — `claude-code-server` → `/api/native/chat` |
+| 表層 LLM | **Surface Direct** — gateway intercept 後 LM Studio `/v1/chat/completions`（CC 子プロセスなし） |
 | 本番 URL | `http://localhost:8090/`（presence-ui） |
 | 8080 webui | **任意**。新機能は載せない。Task 外してよい（C9 済） |
 | キオスク | Surface → ma-home `:8090/?kiosk=1`（8080 直結ではない） |

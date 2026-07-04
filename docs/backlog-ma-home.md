@@ -62,6 +62,7 @@
 | **GW** | 黙考ルート（**interpret** 層） | ✅ S1 · ✅ S2 · ✅ resume（opt-in） | [tracks/gw-silent.md](./tracks/gw-silent.md) |
 | **OL5** | 予定消化 loop close | ✅ a/b/c/6/STALE/d · 📋 OL7 return-signal | [tracks/ol5.md](./tracks/ol5.md) |
 | **MEM-8g** | compose salience · 終了スレの繰り返し抑制 | 💤 v0 運用確認 · 📋 **v1 gist 本線** | [tracks/compose-topic-retire.md](./tracks/compose-topic-retire.md) |
+| **MEM-8h** | memory bridge · Surface compact transcript | ✅ **A–C** · 📋 D | [tracks/mem-8h-memory-bridge.md](./tracks/mem-8h-memory-bridge.md) · [surface-direct-llm.md](./tracks/surface-direct-llm.md) |
 
 ---
 

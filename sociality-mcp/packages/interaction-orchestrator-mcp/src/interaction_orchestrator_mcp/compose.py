@@ -488,6 +488,8 @@ def _pick_contract(
                 "meta comments about TTS or using tools",
                 "closing cheerleading every turn (応援してるで, 楽しみにしてるで, "
                 "頑張ってね as default sign-off)",
+                "physical co-action with まー (手伝う/一緒にやる/うちもやる for まー's bodily tasks)",
+                "asking まー to help with work まー already proposed as theirs",
             ],
             prefer=[
                 "Kansai dialect Japanese casual (うち / タメ口) per SOUL.md",
@@ -1009,6 +1011,7 @@ def _compact_block(
     profile_gists: list[str] | None = None,
     max_chars: int,
     prefetch_fact_check: bool = False,
+    memory_bridge_lines: list[str] | None = None,
 ) -> str:
     contract_lines = [f"treat_user_as: {response_contract.treat_user_as}"]
     if response_contract.avoid:
@@ -1048,6 +1051,14 @@ def _compact_block(
         if memory_lines:
             pinned_schedule.extend(["", "[relevant_memories]", *memory_lines[:2]])
 
+    pinned_bridge: list[str] = []
+    if memory_bridge_lines:
+        pinned_bridge = [
+            "",
+            "[memory_bridge — cross-session cues; mention naturally if relevant]",
+            *memory_bridge_lines,
+        ]
+
     session_budget = min(7000, max(max_chars // 2, 1200))
     trimmed_session = ""
     if session_context_block:
@@ -1062,6 +1073,8 @@ def _compact_block(
     ]
     if pinned_schedule:
         sections.extend(pinned_schedule)
+    if pinned_bridge:
+        sections.extend(pinned_bridge)
     soul_sections = [
         *_format_desire_section(
             dominant_desire=dominant_desire,
@@ -1093,10 +1106,14 @@ def _compact_block(
         sections.extend(memory_lines)
     block = "\n".join(sections)
     if len(block) > max_chars:
-        pin_len = 2 + len(pinned_schedule) if pinned_schedule else len(sections)
-        pinned_prefix = "\n".join(sections[:pin_len])
-        if pinned_schedule and len(pinned_prefix) < max_chars:
-            rest = "\n".join(sections[2 + len(pinned_schedule):])
+        pin_count = 1  # [interaction_context] + prompt_summary
+        if pinned_schedule:
+            pin_count += len(pinned_schedule)
+        if pinned_bridge:
+            pin_count += len(pinned_bridge)
+        pinned_prefix = "\n".join(sections[:pin_count])
+        if (pinned_schedule or pinned_bridge) and len(pinned_prefix) < max_chars:
+            rest = "\n".join(sections[pin_count:])
             budget = max_chars - len(pinned_prefix) - 1
             if budget > 80 and rest:
                 trimmed_rest = rest[:budget].rsplit("\n", 1)[0].rstrip()

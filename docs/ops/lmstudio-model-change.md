@@ -70,35 +70,27 @@ API リクエストだけ非 QAT モデルになることがある。`set-lmstud
 
 **vision 切替（2026-06-29）:** Qwen2.5-VL-3B から e4b へ。手順: `.\scripts\enable-vis-e4b-ma-home.ps1` → LM Studio で Qwen unload → `restart-presence-ui.ps1`。
 
-## SOUL.core — チャットモデルの System Prompt（RP Phase 1）
+## SOUL.core — 表層チャットの人格（Surface Direct 本線）
 
-人格の Deep 層を LM Studio 側に置く。**Vision モデルには貼らない**（チャット用 Gemma のみ）。
+**Surface Direct（`PRESENCE_SURFACE_DIRECT=1`）**: SOUL は **gateway が毎ターン `build_gateway_stable_append()` で注入**。
+`presets/koyori-SOUL.core.md` を編集 → `presence-ui` 再起動で反映。**LM Studio のチャットモデル System Prompt は空**にする（二重・矛盾を防ぐ）。
 
 | 項目 | 値 |
 |------|------|
 | ファイル | `presets/koyori-SOUL.core.md`（リポジトリ内・コミット可） |
-| 貼り付け先 | LM Studio → `google/gemma-4-12b-qat` を Load → **System Prompt** |
-| 二重回避 | `PRESENCE_SOUL_CORE_IN_APPEND=0`（presence-ui の append から core を外す） |
+| 注入 | `PRESENCE_SOUL_CORE_IN_APPEND=1`（既定・ma-home 推奨） |
+| LM Studio チャット | **System Prompt 空** — vision モデルには貼らない |
 
 ```powershell
-cd C:\Users\ma\src\embodied-claude
-
-# 1) ファイルを開いて LM Studio System Prompt に全文コピペ
-.\scripts\open-soul-core-for-lmstudio.ps1
-# またはクリップボード: .\scripts\open-soul-core-for-lmstudio.ps1 -CopyToClipboard
-
-# 2) LM Studio でモデル再ロード / Local Server 再起動
-
-# 3) presence-ui 側の二重注入を止める（presence-ui.local.env に書く）
-.\scripts\enable-rp-phase1-ma-home.ps1
+# SOUL 更新後
 .\scripts\restart-presence-ui.ps1
+# LM Studio: google/gemma-4-12b-qat の System Prompt を空にして Local Server 再起動
 ```
 
-**残る append（毎ターン）:** `[Gateway — stable]`（compose/plan・memory ツール禁止）+ 短い voice anchor。SOUL 全文は LM Studio system のみ。
+**Legacy（RP Phase 1 / LM Studio 側 SOUL）:** `PRESENCE_SOUL_CORE_IN_APPEND=0` + LM Studio に core 全文コピペ。
+Surface Direct では非推奨。
 
-**ロールバック:** `PRESENCE_SOUL_CORE_IN_APPEND=1` に戻して presence-ui 再起動（LM Studio の system は空にしても可）。
-
-詳細 → [role-persistence-ma-home.md](./role-persistence-ma-home.md)
+詳細 → [surface-direct-llm.md](../tracks/surface-direct-llm.md) · [role-persistence-ma-home.md](./role-persistence-ma-home.md)
 
 ## Vision スロット（こよりの目）
 

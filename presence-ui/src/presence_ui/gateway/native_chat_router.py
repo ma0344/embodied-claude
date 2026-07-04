@@ -12,10 +12,10 @@ from claude_code_server import AgentConfig, ChatRequest
 from claude_code_server.agent import ClaudeAgent
 from claude_code_server.models import LoginRequest
 from fastapi import APIRouter, Depends, HTTPException, Request
+from social_core import utc_now
 from starlette.responses import StreamingResponse
 
 from presence_ui.gateway.calendar_prefetch import prefetch_calendar_for_message
-from presence_ui.gateway.gateway_turn_cache import gateway_turn_cache_scope
 from presence_ui.gateway.ccs_integration import (
     agent_config_from_intercept,
     default_agent_config,
@@ -27,11 +27,15 @@ from presence_ui.gateway.deterministic_memory import (
     fetch_memory_list,
     format_memory_list_reply,
 )
+from presence_ui.gateway.gateway_turn_cache import gateway_turn_cache_scope
 from presence_ui.gateway.hybrid_intent import resolve_hybrid_intent
 from presence_ui.gateway.search_prefetch import prefetch_web_search_for_message
 from presence_ui.gateway.see_prefetch import prefetch_camera_for_message
 from presence_ui.gateway.social_chat import ChatInterceptResult, intercept_chat_request_async
+from presence_ui.gateway.surface_direct import use_surface_direct_path
+from presence_ui.gateway.surface_session import append_surface_turn
 from presence_ui.gateway.url_prefetch import prefetch_urls_for_turn
+from presence_ui.services.llm import generate_surface_reply
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +96,119 @@ def _session_chat_lock(session_id: str) -> asyncio.Lock:
     return lock
 
 
+async def _emit_post_reply_side_effects(
+    *,
+    person_id: str,
+    session_id: str,
+    user_text: str,
+    reply: str,
+    intercept: ChatInterceptResult,
+) -> AsyncIterator[str]:
+    if intercept.plan and intercept.ctx:
+        from presence_ui.heartbeat.record import finalize_chat_turn
+
+        await asyncio.to_thread(
+            finalize_chat_turn,
+            person_id=person_id,
+            session_id=session_id,
+            user_text=user_text,
+            reply_text=reply,
+            plan=intercept.plan,
+            ctx=intercept.ctx,
+        )
+
+    if intercept.gateway_speak_after_reply and reply:
+        from presence_ui.gateway.gateway_speak import deliver_gateway_speak_after_reply
+
+        ok, detail = await deliver_gateway_speak_after_reply(
+            text=reply,
+            person_id=person_id,
+        )
+        yield _sse(
+            "room_activity",
+            {
+                "kind": "say",
+                "label": "Surface で話した" if ok else "声を届けられなかった",
+                "detail": detail[:120],
+                "ok": ok,
+            },
+        )
+
+
+def _resolve_surface_session_id(
+    *,
+    req: ChatRequest,
+    intercept: ChatInterceptResult,
+) -> str:
+    for candidate in (intercept.session_id, req.session_id):
+        if candidate and str(candidate).strip():
+            return str(candidate).strip()
+    return str(uuid.uuid4())
+
+
+async def _stream_surface_chat(
+    *,
+    req: ChatRequest,
+    intercept: ChatInterceptResult,
+    person_id: str,
+) -> AsyncIterator[str]:
+    """Direct LM Studio surface path — no Claude Code subprocess."""
+    enriched = intercept.payload or {}
+    enriched_user = str(enriched.get("message") or req.prompt).strip()
+    raw_user = str(req.prompt).strip()
+    sid = _resolve_surface_session_id(req=req, intercept=intercept)
+    yield _sse("session", {"session_id": sid, "claude_session": False})
+    if enriched_user and enriched_user != raw_user:
+        yield _sse("user_context", {"enriched": enriched_user, "raw": raw_user})
+
+    reply = ""
+    async with _session_chat_lock(sid):
+        try:
+            if intercept.ctx is None:
+                raise RuntimeError("surface direct requires intercept.ctx from compose/plan")
+            reply = await generate_surface_reply(
+                enriched_user=enriched_user,
+                raw_user=raw_user,
+                ctx=intercept.ctx,
+            )
+        except Exception as exc:
+            logger.exception("surface direct reply failed")
+            yield _sse("error", {"message": str(exc)})
+            return
+
+        if reply:
+            yield _sse("text", {"content": reply})
+        yield _sse(
+            "done",
+            {"cost": 0.0, "duration_ms": 0, "direct": True, "claude_session": False},
+        )
+
+        if reply:
+            ts = utc_now()
+            append_surface_turn(
+                session_id=sid,
+                role="user",
+                text=raw_user,
+                timestamp=ts,
+                enriched=enriched_user,
+            )
+            append_surface_turn(
+                session_id=sid,
+                role="assistant",
+                text=reply,
+                timestamp=ts,
+            )
+
+    async for event in _emit_post_reply_side_effects(
+        person_id=person_id,
+        session_id=sid,
+        user_text=raw_user,
+        reply=reply,
+        intercept=intercept,
+    ):
+        yield event
+
+
 async def _stream_agent_chat(
     *,
     req: ChatRequest,
@@ -142,35 +259,14 @@ async def _stream_agent_chat(
         # PAUSE（青空の咀嚼）は inward 自律 tick で実行。会話直後の post-chat internal は
         # ma のターンに食い込むため native chat からは呼ばない（gw_resume は smoke 用に残す）。
 
-    if intercept.plan and intercept.ctx:
-        from presence_ui.heartbeat.record import finalize_chat_turn
-
-        await asyncio.to_thread(
-            finalize_chat_turn,
-            person_id=person_id,
-            session_id=sid,
-            user_text=req.prompt,
-            reply_text=reply,
-            plan=intercept.plan,
-            ctx=intercept.ctx,
-        )
-
-    if intercept.gateway_speak_after_reply and reply:
-        from presence_ui.gateway.gateway_speak import deliver_gateway_speak_after_reply
-
-        ok, detail = await deliver_gateway_speak_after_reply(
-            text=reply,
-            person_id=person_id,
-        )
-        yield _sse(
-            "room_activity",
-            {
-                "kind": "say",
-                "label": "Surface で話した" if ok else "声を届けられなかった",
-                "detail": detail[:120],
-                "ok": ok,
-            },
-        )
+    async for event in _emit_post_reply_side_effects(
+        person_id=person_id,
+        session_id=sid,
+        user_text=req.prompt,
+        reply=reply,
+        intercept=intercept,
+    ):
+        yield event
 
 
 def create_native_chat_router(*, person_id: str) -> APIRouter:
@@ -307,9 +403,16 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
 
             return StreamingResponse(silent_stream(), media_type="text/event-stream")
 
-        stream = _stream_agent_chat(
-            req=req, intercept=intercept, base_config=base_config, person_id=person_id
-        )
+        if use_surface_direct_path():
+            stream = _stream_surface_chat(
+                req=req,
+                intercept=intercept,
+                person_id=person_id,
+            )
+        else:
+            stream = _stream_agent_chat(
+                req=req, intercept=intercept, base_config=base_config, person_id=person_id
+            )
         return StreamingResponse(stream, media_type="text/event-stream")
 
     return router

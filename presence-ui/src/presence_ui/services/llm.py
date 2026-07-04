@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Literal
 
 import httpx
-from interaction_orchestrator_mcp.schemas import InteractionContext, ResponsePlan
+from interaction_orchestrator_mcp.schemas import InteractionContext, ResponsePlan, SessionTurn
 
 from presence_ui.gateway.ws_guard import ws_guard_stable_append
 
@@ -213,6 +214,50 @@ def build_gateway_stable_append() -> str:
     return "\n\n".join(parts)
 
 
+def surface_history_max_turns() -> int:
+    raw = os.environ.get("PRESENCE_SURFACE_HISTORY_TURNS", "12").strip()
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 12
+
+
+def surface_max_tokens() -> int:
+    raw = os.environ.get("PRESENCE_SURFACE_MAX_TOKENS", "500").strip()
+    try:
+        return max(64, int(raw))
+    except ValueError:
+        return 500
+
+
+def build_surface_chat_messages(
+    *,
+    enriched_user: str,
+    raw_user: str,
+    session_history: list[SessionTurn] | None = None,
+) -> list[dict[str, str]]:
+    """OpenAI-style messages for native surface chat (system + history + enriched user)."""
+    system = (
+        f"{build_gateway_stable_append()}\n\n"
+        "Always respond in Japanese. Use Kansai dialect casual タメ口 only. "
+        "Reply as こより to まー in 1–3 short paragraphs. "
+        "Do not mention tools, APIs, gateway blocks, or being an AI."
+    )
+    messages: list[dict[str, str]] = [{"role": "system", "content": system}]
+    prior: list[SessionTurn] = list(session_history or [])
+    raw = (raw_user or "").strip()
+    if prior and prior[-1].sender == "ma" and prior[-1].text.strip() == raw:
+        prior = prior[:-1]
+    cap = surface_history_max_turns()
+    if cap > 0 and len(prior) > cap:
+        prior = prior[-cap:]
+    for turn in prior:
+        role = "user" if turn.sender == "ma" else "assistant"
+        messages.append({"role": role, "content": turn.text})
+    messages.append({"role": "user", "content": (enriched_user or raw).strip()})
+    return messages
+
+
 def prepend_gateway_turn_context(*, user_text: str, delta: str) -> str:
     """Prefix the utterance with per-turn gateway context (hook-like, user-side)."""
     body = (delta or "").strip()
@@ -231,8 +276,44 @@ async def generate_koyori_reply(
     plan: ResponsePlan,
     max_tokens: int = 500,
 ) -> str:
-    base, model, token = _lm_studio_settings()
     prompt = build_reply_prompt(user_text=user_text, ctx=ctx, plan=plan)
+    return await _post_chat_completion(
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=max_tokens,
+        model_scope="surface",
+    )
+
+
+async def generate_surface_reply(
+    *,
+    enriched_user: str,
+    raw_user: str,
+    ctx: InteractionContext,
+    max_tokens: int | None = None,
+) -> str:
+    """Native kiosk surface — gateway-stable system + transcript + enriched user."""
+    messages = build_surface_chat_messages(
+        enriched_user=enriched_user,
+        raw_user=raw_user,
+        session_history=ctx.session_history,
+    )
+    return await _post_chat_completion(
+        messages=messages,
+        max_tokens=max_tokens or surface_max_tokens(),
+        model_scope="surface",
+    )
+
+
+async def _post_chat_completion(
+    *,
+    messages: list[dict[str, str]],
+    max_tokens: int,
+    model_scope: Literal["surface", "classifier"] = "surface",
+) -> str:
+    if model_scope == "classifier":
+        base, model, token = _lm_classifier_settings()
+    else:
+        base, model, token = _lm_studio_settings()
     headers = {
         "Authorization": f"Bearer {token}",
         "x-api-key": token,
@@ -242,12 +323,7 @@ async def generate_koyori_reply(
         "model": model,
         "max_tokens": max_tokens,
         "temperature": 0.75,
-        "messages": [
-            {
-                "role": "user",
-                "content": prompt,
-            }
-        ],
+        "messages": messages,
     }
     url = f"{base}/v1/chat/completions"
     async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:

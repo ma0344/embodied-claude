@@ -10,7 +10,17 @@ from interaction_orchestrator_mcp.schemas import InteractionContext, ResponseCon
 from relationship_mcp.schemas import DismissOutcome
 
 from presence_ui.gateway import social_chat
+from presence_ui.gateway.ol7_flow import Ol7IngestResult
+from presence_ui.gateway.room_ingest import HumanIngestResult
 from presence_ui.services.llm import build_gateway_stable_append
+
+
+def _noop_ingest(**kwargs) -> HumanIngestResult:
+    return HumanIngestResult(
+        event_id="evt-test",
+        dismiss_outcome=DismissOutcome(),
+        ol7=Ol7IngestResult(route="no_op"),
+    )
 
 
 def _minimal_ctx() -> InteractionContext:
@@ -52,11 +62,7 @@ def mock_stores(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     monkeypatch.setattr(social_chat, "get_stores", lambda: stores)
     monkeypatch.setattr("presence_ui.deps.get_stores", lambda: stores)
     monkeypatch.setattr("presence_ui.gateway.room_ingest.get_stores", lambda: stores)
-    monkeypatch.setattr(
-        social_chat,
-        "_ingest_human_sync",
-        lambda **kwargs: DismissOutcome(),
-    )
+    monkeypatch.setattr(social_chat, "_ingest_human_sync", _noop_ingest)
     monkeypatch.setattr(
         social_chat,
         "compose_interaction_context",
@@ -121,13 +127,8 @@ def test_intercept_includes_vision_prefetch(
 def test_intercept_injects_accept_edits_when_missing(
     mock_stores: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    captured: dict = {}
-
-    def capture_compose(payload, **kwargs):
-        captured["payload"] = payload
-        return _minimal_ctx()
-
-    monkeypatch.setattr(social_chat, "compose_interaction_context", capture_compose)
+    monkeypatch.setenv("PRESENCE_SURFACE_DIRECT", "1")
+    monkeypatch.delenv("PRESENCE_SURFACE_USE_CLAUDE", raising=False)
     result = social_chat.intercept_chat_request(
         payload={"message": "hello", "requestId": "req-1", "sessionId": "sess-abc"},
         person_id="ma",
@@ -136,8 +137,45 @@ def test_intercept_injects_accept_edits_when_missing(
     assert result.forward is True
     assert result.payload is not None
     assert result.payload["permissionMode"] == "acceptEdits"
-    assert captured["payload"].session_id == "sess-abc"
+
+
+def test_intercept_claude_resume_omits_transcript_when_legacy_cc(
+    mock_stores: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Legacy CC surface path: session_id → claude_session_resume (compact arc only)."""
+    captured: dict = {}
+
+    def capture_compose(payload, **kwargs):
+        captured["payload"] = payload
+        return _minimal_ctx()
+
+    monkeypatch.setenv("PRESENCE_SURFACE_USE_CLAUDE", "1")
+    monkeypatch.setattr(social_chat, "compose_interaction_context", capture_compose)
+    social_chat.intercept_chat_request(
+        payload={"message": "hello", "requestId": "req-1", "sessionId": "sess-abc"},
+        person_id="ma",
+    )
     assert captured["payload"].claude_session_resume is True
+
+
+def test_intercept_surface_direct_includes_transcript_in_compose(
+    mock_stores: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Surface Direct (default): full transcript in compact — no CC JSONL resume."""
+    captured: dict = {}
+
+    def capture_compose(payload, **kwargs):
+        captured["payload"] = payload
+        return _minimal_ctx()
+
+    monkeypatch.setenv("PRESENCE_SURFACE_DIRECT", "1")
+    monkeypatch.delenv("PRESENCE_SURFACE_USE_CLAUDE", raising=False)
+    monkeypatch.setattr(social_chat, "compose_interaction_context", capture_compose)
+    social_chat.intercept_chat_request(
+        payload={"message": "hello", "requestId": "req-1", "sessionId": "sess-abc"},
+        person_id="ma",
+    )
+    assert captured["payload"].claude_session_resume is False
 
 
 def test_intercept_no_resume_flag_without_session_id(

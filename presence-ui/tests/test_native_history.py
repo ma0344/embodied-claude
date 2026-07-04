@@ -301,6 +301,40 @@ def test_fetch_native_session_messages_preserves_injection_for_debug_toggle(
     assert result.messages[0].message == enriched
 
 
+def test_fetch_surface_session_messages_preserves_injection_for_debug_toggle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Surface direct JSONL stores enriched separately; API must return it for 注入 toggle."""
+    from presence_ui.gateway import surface_session as ss
+
+    sessions_dir = tmp_path / "surface-sessions"
+    monkeypatch.setenv("PRESENCE_SURFACE_SESSIONS_DIR", str(sessions_dir))
+    session_id = "dddddddd-dddd-dddd-dddd-dddddddddddd"
+    enriched = (
+        "[gateway_turn_context — not for the user]\n"
+        "[Social context]\n\n"
+        "牛丼の話"
+    )
+    ss.append_surface_turn(
+        session_id=session_id,
+        role="user",
+        text="牛丼の話",
+        timestamp="2026-07-03T10:00:00+00:00",
+        enriched=enriched,
+    )
+    ss.append_surface_turn(
+        session_id=session_id,
+        role="assistant",
+        text="ほんまやね",
+        timestamp="2026-07-03T10:00:01+00:00",
+    )
+
+    result = fetch_native_session_messages(session_id)
+    assert result is not None
+    assert result.messages[0].message == enriched
+    assert result.messages[1].message == "ほんまやね"
+
+
 def test_list_native_sessions_strips_injected_title(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -1827,6 +1827,7 @@ class MemoryMCPServer:
                 "content": r.memory.content[:200] if hasattr(r, "memory") else str(r)[:200],
                 "emotion": r.memory.emotion if hasattr(r, "memory") else "",
                 "score": relevance,
+                "timestamp": r.memory.timestamp if hasattr(r, "memory") else None,
             })
         return {"items": items}
 

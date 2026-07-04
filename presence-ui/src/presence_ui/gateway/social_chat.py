@@ -29,6 +29,11 @@ from presence_ui.gateway.calendar_write import (
     calendar_write_honesty_directive,
 )
 from presence_ui.gateway.calendar_write_flow import should_run_calendar_write
+from presence_ui.gateway.compose_memory_bridge import (
+    maybe_enrich_memory_bridge,
+    resolve_memory_retrieve_route,
+)
+from presence_ui.gateway.compose_recall_stage2 import maybe_enrich_compose_recall_stage2
 from presence_ui.gateway.context_limits import (
     full_compose_max_chars,
     lite_append_max_chars,
@@ -61,6 +66,7 @@ from presence_ui.gateway.soul_prefetch import (
     detect_soul_read_request,
     soul_read_prefetch_block,
 )
+from presence_ui.gateway.surface_direct import compose_omit_session_transcript_in_compact
 from presence_ui.gateway.user_intent import (
     ibf_gateway_speak_enabled,
     merge_intent_with_plan,
@@ -574,7 +580,7 @@ def _finish_intercept_chat_request(
             channel="chat",
             user_text=message,
             session_id=session_key,
-            claude_session_resume=bool(session_key),
+            claude_session_resume=compose_omit_session_transcript_in_compact(session_key),
             include_private=not lite,
             max_chars=compose_max_chars,
             prefetch_fact_check=prefetch_fact_check,
@@ -588,6 +594,27 @@ def _finish_intercept_chat_request(
         policy_timezone=stores.policy_timezone,
         social_db=stores.db,
     )
+    ctx, stage2_label = maybe_enrich_compose_recall_stage2(
+        ctx,
+        user_text=message,
+        max_chars=compose_max_chars,
+        include_private=not lite,
+        prefetch_fact_check=prefetch_fact_check,
+        social_db=stores.db,
+    )
+    if stage2_label:
+        gateway_events.append(progress_event(phase="memory", label=stage2_label))
+    mem_route = resolve_memory_retrieve_route(message)
+    ctx, bridge_label = maybe_enrich_memory_bridge(
+        ctx,
+        user_text=message,
+        max_chars=compose_max_chars,
+        route=mem_route,
+        prefetch_fact_check=prefetch_fact_check,
+        social_db=stores.db,
+    )
+    if bridge_label:
+        gateway_events.append(progress_event(phase="memory", label=bridge_label))
     ctx = enrich_interaction_context(ctx, channel="chat", user_text=message)
     plan = plan_response(
         PlanResponseInput(

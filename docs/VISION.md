@@ -33,16 +33,21 @@ embodied-claude の **きっかけ・土台・目指すもの** を1本にまと
 ### 技術的な土台
 
 ```
-Claude Code（オーケストレータ）
+presence-ui gateway（ma-home · :8090）
+    │
+    ├── Surface Direct — 表層会話（LM Studio 直叩き · 本線）
+    │     prefetch → compose/plan → generate_surface_reply
     │
     ├── MCP サーバー群 … 「身体パーツ」
-    │     目・首・耳 / 声 / 脳（記憶） / 体温 / …
+    │     目・首・耳 / 声 / 脳（記憶） / 体温 / sociality …
     │
-    └── hooks・skills・自律スクリプト … 会話の前後処理
+    ├── gateway 直実行 … 自律 tick / see / 青空 / GW-S1
+    │
+    └── hooks … 会話前の associative recall 等
 ```
 
 - **[Model Context Protocol (MCP)](https://modelcontextprotocol.io/)** … ツールを身体部位として差し替え可能にする共通口
-- **[Claude Code](https://github.com/anthropics/claude-code)** … MCP 接続・会話・ツール呼び出しの本体（本 fork では LM Studio 互換 API 先にも接続）
+- **presence-ui gateway** … compose / plan / 記憶 prefetch / boundary を表層 LM の前に intercept（Claude Code 子プロセスはレガシー経路）
 - **身体メタファ** … 各サブプロジェクトは `wifi-cam-mcp`（目・首・耳）、`memory-mcp`（脳）、`tts-mcp`（声）のように **感覚・運動・記憶** に名前が付いている
 
 ### 設計思想（本家 README より）
@@ -87,26 +92,33 @@ Claude Code（オーケストレータ）
 
 ```
 koyori（Surface Go）          ma-home（Windows + RTX 3090）
-  Firefox キオスク ──LAN──▶  presence-ui (:8090) ──▶ claude-code-webui (:8080)
-  半/全 IME・BT キーボード        LM Studio（Gemma）
-                                Claude Code + 全 MCP
-                                記憶・sociality・Tapo カメラ・TTS
+  Firefox キオスク ──LAN──▶  presence-ui (:8090)
+                              ├─ native chat（Surface Direct · 本線）
+                              │    prefetch → compose/plan → LM Studio /v1/chat/completions
+                              ├─ gateway 直実行（see / tick / 青空 / GW-S1）
+                              └─ MCP 群（memory · sociality · Tapo · TTS）
+  半/全 IME・BT キーボード        LM Studio（Gemma 12B 表層 + e4b classifier/vision）
+                                記憶 · sociality · hooks
 ```
 
 - **まー** は koyori の前、または ma-home から **こよりと会話** できる
+- **表層会話** は Claude Code 子プロセスを経由しない（[surface-direct-llm.md](./tracks/surface-direct-llm.md)）。compose / plan / 記憶 prefetch は gateway が intercept
+- **8080 claude-code-webui** は任意（レガシー）。キオスクは `:8090` 直結
 - **目** は主に Tapo PTZ（部屋）。将来 koyori 内蔵カメラは「近目」用
 - **脳** はローカル LLM + `memory-mcp`（ベクトル記憶・エピソード）
 - **声** は TTS（ElevenLabs / VOICEVOX）
 - **社会性** は sociality + desire + hooks による自動コンテキスト
+- **会話の連続性** — 同 session: `messages[]` N ターン + compose `[recent_room_context]`。跨 session: cue 語から LTM を引く **memory bridge**（[mem-8h-memory-bridge.md](./tracks/mem-8h-memory-bridge.md)）
 
 本番ランタイムは **ma-home 1台**。koyori は表示・入力端末。
 
 ### 中期
 
-- webui の常時起動（ログオン時タスク）
+- webui の常時起動（ログオン時タスク）— **表層は Surface Direct が本線**（8080 はレガシー）
 - desire / sociality / memory の **自律ループ** を安定運用
 - ローカル LLM でも vision・tool use が破綻しないパイプラインの維持（wifi-cam + LM Studio describe 等）
 - 開発ワークスペースを **ma-home の Cursor** に統一（設定の二重管理をやめる）
+- **MEM-8h-D** — 8a fact 行と bridge の統合、plan の soft must_include
 
 ### 長期（本家 README の展望 + この fork の方向）
 
@@ -136,6 +148,8 @@ koyori（Surface Go）          ma-home（Windows + RTX 3090）
 | LM Studio・モデル切替 | [ops/lmstudio-model-change.md](./ops/lmstudio-model-change.md) |
 | koyori キオスク・IME・BT キーボード | [ops/koyori-kiosk-ime.md](./ops/koyori-kiosk-ime.md)、[ops/koyori-input-sharing.md](./ops/koyori-input-sharing.md) |
 | ma-home 運用バックログ | [backlog-ma-home.md](./backlog-ma-home.md) |
+| Surface Direct · 表層 LM | [tracks/surface-direct-llm.md](./tracks/surface-direct-llm.md) |
+| 跨 session 記憶 bridge | [tracks/mem-8h-memory-bridge.md](./tracks/mem-8h-memory-bridge.md) |
 | セッション JSONL → MD export | [archive/session-export-ma-home.md](./archive/session-export-ma-home.md) |
 | セットアップ会話の全文アーカイブ | [archive/cursor_system_setup_for_local_llm_with.md](./archive/cursor_system_setup_for_local_llm_with.md) |
 | **ma-home で Cursor を開き直すときのプロンプト** | [ma-home-cursor-handoff.md](./ma-home-cursor-handoff.md) |
@@ -150,4 +164,4 @@ koyori（Surface Go）          ma-home（Windows + RTX 3090）
 
 ---
 
-*最終更新: 2026-06 — ma-home / koyori 構成を反映*
+*最終更新: 2026-07 — Surface Direct 本線化 · MEM-8h memory bridge 反映*

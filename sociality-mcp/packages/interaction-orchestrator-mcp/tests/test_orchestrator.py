@@ -776,6 +776,16 @@ class TestPlan:
         joined = " ".join(plan.must_avoid)
         assert "generic assistant tone" in joined
         assert "cheerleading" in joined
+        assert "physical co-action" in joined
+
+    def test_plan_must_avoid_physical_co_action(self, stores):
+        ctx = _compose(stores, user_text="梅干し作ろう")
+        plan = plan_response(
+            PlanResponseInput(interaction_context=ctx, user_text="梅干し作ろう")
+        )
+        joined = " ".join(plan.must_avoid)
+        assert "physical co-action" in joined
+        assert "まー already proposed" in joined
 
     def test_plan_somatic_pending_in_must_include(self, stores):
         ctx = _compose(stores, user_text="please help")

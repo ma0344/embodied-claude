@@ -111,7 +111,7 @@ PDF(bytes or path)
 
 **L3 原則**: 原文 chunk は `chunks.jsonl` 保持。memory には**参照（doc_id）と gist だけ**。全文 remember はしない。
 
-**青空への布石（将来）**: 同じ A/B 契約を青空読書に流用 — A＝節読了・地図化時、B＝まーとその作品について話した初回。`doc_id` は作品 ID＋しおり等で足す。
+**青空への布石（将来）**: 同じ A/B 契約を青空読書に流用 — A＝節読了・地図化時、B＝まーとその作品について話した初回。`doc_id` は作品 ID＋しおり等で足す。地図は **内面の俯瞰資産**（知識・解釈の定着）であり、会話注入は副産物。正本の目的階層 → [alive-lw-read.md](./alive-lw-read.md#目的階層合意-2026-07-08--まー)。
 
 **env**: `PRESENCE_DOC_MEMORY`（既定 ON）· `PRESENCE_DOC_MEMORY_GIST_MAX_CHARS`（gist 上限、既定 3500）
 

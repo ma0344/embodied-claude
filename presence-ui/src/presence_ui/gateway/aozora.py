@@ -398,6 +398,7 @@ def finish_close_book(state_path: Path | None = None) -> ReadingState:
     save_reading_state(state, path)
     return state
 
+
 def strip_html_text(fragment: str) -> str:
     cleaned = re.sub(r"<rp>.*?</rp>", "", fragment, flags=re.DOTALL)
     cleaned = re.sub(r"<rt>.*?</rt>", "", cleaned, flags=re.DOTALL)
@@ -409,11 +410,11 @@ def strip_html_text(fragment: str) -> str:
 
 
 def aozora_passage_max_chars() -> int:
-    raw = os.getenv("PRESENCE_AOZORA_PASSAGE_MAX_CHARS", "1600").strip()
+    raw = os.getenv("PRESENCE_AOZORA_PASSAGE_MAX_CHARS", "3200").strip()
     try:
         value = int(raw)
     except ValueError:
-        value = 1600
+        value = 3200
     return max(400, min(value, 4000))
 
 

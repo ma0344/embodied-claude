@@ -138,6 +138,64 @@ function Stop-ProcessTree {
     return ($result.ExitCode -eq 0)
 }
 
+function Stop-MemoryHttpDaemon {
+    param(
+        [int]$Port = 18900,
+        [string]$Repo,
+        [string]$TaskName = "EmbodiedClaude-MemoryHTTP"
+    )
+
+    $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    if ($task) {
+        Write-Host "    Stop-ScheduledTask $TaskName"
+        Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    }
+
+    $daemonPatterns = @(
+        "run-memory-daemon\.ps1",
+        "run-memory-daemon-hidden\.vbs",
+        "memory-mcp-http-daemon"
+    )
+    $targetPids = @{}
+    foreach ($proc in Get-CimInstance Win32_Process -ErrorAction SilentlyContinue) {
+        $cmd = $proc.CommandLine
+        if (-not $cmd) { continue }
+        foreach ($pattern in $daemonPatterns) {
+            if ($cmd -match $pattern) {
+                $targetPids[$proc.ProcessId] = $true
+                break
+            }
+        }
+    }
+    foreach ($targetPid in @($targetPids.Keys)) {
+        Write-Host "    stopping daemon tree PID $targetPid"
+        Stop-ProcessTree -ProcessId $targetPid
+    }
+
+    $listenerPid = Get-MemoryHttpListenerPid -Port $Port
+    if ($listenerPid) {
+        Write-Host "    stopping listener PID $listenerPid"
+        Stop-ProcessTree -ProcessId $listenerPid
+    }
+
+    Start-Sleep -Seconds 2
+
+    for ($attempt = 0; $attempt -lt 6; $attempt++) {
+        if (-not (Get-MemoryHttpListenerPid -Port $Port)) {
+            return $true
+        }
+        Start-Sleep -Milliseconds 500
+    }
+
+    if ($Repo) {
+        Write-Host "    reclaim stale port via memory_mcp.http_sidecar"
+        $null = Invoke-ReclaimMemoryHttpPort -Port $Port -Repo $Repo
+        Start-Sleep -Seconds 1
+    }
+
+    return -not (Get-MemoryHttpListenerPid -Port $Port)
+}
+
 function Get-StuckClaudeMemoryStdio {
     param(
         [int]$MinAgeMinutes = 8,

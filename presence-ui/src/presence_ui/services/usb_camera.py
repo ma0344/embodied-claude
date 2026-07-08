@@ -16,12 +16,19 @@ _usb_lock = asyncio.Lock()
 
 
 def usb_camera_enabled() -> bool:
-    return os.getenv("PRESENCE_USB_CAMERA_ENABLED", "0").lower() in {
+    """USB outside camera is retired — look_outside uses Tapo window preset only."""
+    legacy = os.getenv("PRESENCE_USB_CAMERA_ENABLED", "0").lower() in {
         "1",
         "true",
         "yes",
         "on",
     }
+    if legacy:
+        logger.warning(
+            "PRESENCE_USB_CAMERA_ENABLED is set but USB outside camera is retired; "
+            "use Tapo window preset (look_outside / mode=window)"
+        )
+    return False
 
 
 def usb_camera_name_hint() -> str:

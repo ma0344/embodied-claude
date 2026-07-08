@@ -70,7 +70,7 @@ N ターン transcript は **捨てない**（同 session の直接動機）。b
 | **A** | Surface Direct: `claude_session_resume=False` → compact に session transcript 載せる | ✅ 2026-07-03 |
 | **B** | Stage 1 ルート表 + `calendar_read` / temporal 定番 → bridge 禁止 | ✅ 2026-07-03 |
 | **C** | bridge POC: kw → recall → `[memory_bridge]` tier-1 pin | ✅ 2026-07-04 |
-| **D** | 8a fact 行 + bridge 統合 · plan soft must_include | 📋 |
+| **D** | 8a fact 行 + bridge 統合 · plan soft must_include | ✅ 2026-07-04 |
 
 ---
 
@@ -144,7 +144,27 @@ memory_bridge ルート && PRESENCE_MEM8H_BRIDGE=1
 
 ---
 
-## 受け入れ（C 以降）
+---
+
+## D — 8a fact 優先 + plan soft must_include（済）
+
+**8a-lite**（本格 multi-view encode 前）:
+
+- HTTP `/recall` item に `category` · `importance` を返す
+- `is_fact_like_row` + `bridge_hit_rank` — 短い fact 行を episode snippet より優先
+- compact fact 行は `relevant_memories` に `memory_bridge_fact_row` として最大 2 件追加
+
+**plan**:
+
+- `ctx.memory_bridge_lines` があるとき `must_include` に **soft** 連続性 nudge
+- 「前にも話してた」系の自然な一言 OK · 日付の棒読みリスト禁止
+- `stay_silent` / `defer` では載せない
+
+| 変数 | 既定 | 意味 |
+|------|------|------|
+| `PRESENCE_MEM8H_BRIDGE_FACT_REFS` | `2` | bridge fact を relevant_memories へ昇格する上限 |
+
+コード: `recall_query.is_fact_like_row` · `memory_bridge.bridge_fact_refs` · `plan.append_memory_bridge_plan_constraints`
 
 1. 新 session で「梅干し」→ 過去の梅干し fact / episode gist が日付付きで 1–2 行 surface
 2. 「明日の予定」→ bridge 走らず calendar / schedule 経路のみ

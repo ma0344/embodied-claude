@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>こよりの部屋</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260619-c11-pc" />
+        <link rel="stylesheet" href="/static/style.css?v=20260704-chat-image" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500&family=Cormorant+Garamond:wght@400;500&display=swap" rel="stylesheet" />
@@ -48,18 +48,26 @@
           <p class="placeholder">読み込み中…</p>
         </div>
         <form class="chat-compose" id="chat-form" autocomplete="off">
-          <label class="sr-only" for="chat-input">こよりに話しかける</label>
-          <textarea
-            id="chat-input"
-            class="chat-input"
-            rows="1"
-            maxlength="4000"
-            placeholder="こよりに話しかける..."
-            aria-label="こよりに話しかける"
-          ></textarea>
-          <button type="submit" class="chat-send" id="chat-send" aria-label="送信">
-            送る
-          </button>
+          <div class="chat-attach-preview" id="chat-attach-preview" hidden>
+            <img id="chat-attach-preview-img" alt="" class="chat-attach-preview__img" />
+            <button type="button" class="chat-attach-preview__remove" id="chat-attach-remove" aria-label="添付画像を外す">×</button>
+          </div>
+          <div class="chat-compose-row">
+            <input type="file" id="chat-attach-input" accept="image/jpeg,image/png,image/webp" hidden />
+            <button type="button" class="chat-attach" id="chat-attach" aria-label="画像を添付" title="画像を添付">📎</button>
+            <label class="sr-only" for="chat-input">こよりに話しかける</label>
+            <textarea
+              id="chat-input"
+              class="chat-input"
+              rows="1"
+              maxlength="4000"
+              placeholder="こよりに話しかける..."
+              aria-label="こよりに話しかける"
+            ></textarea>
+            <button type="submit" class="chat-send" id="chat-send" aria-label="送信">
+              送る
+            </button>
+          </div>
         </form>
       </section>
 
@@ -255,6 +263,6 @@
   <script src="/static/chat-markdown.js?v=20260620-citation-fix"></script>
   <script src="/static/cc-messages.js?v=20260629-gw-internal-filter"></script>
   <script src="/static/koyori-voice.js?v=20260619-inner-voice-1"></script>
-  <script src="/static/app.js?v=20260629-kiosk-helper-quiet"></script>
+  <script src="/static/app.js?v=20260704-chat-image3"></script>
 </body>
 </html>

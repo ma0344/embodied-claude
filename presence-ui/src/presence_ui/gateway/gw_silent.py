@@ -92,7 +92,8 @@ def run_classifier_turn(
     """Stateless LM Studio completion (OL-GATE — no SOUL / no session history).
 
     ``model_scope="classifier"`` (default): ``PRESENCE_CLASSIFIER_*`` when set,
-    else same model as surface chat. GW-S1 uses ``model_scope="surface"``.
+    else ``google/gemma-4-e4b-qat`` (PFC-1 default — not surface 12B).
+    GW-S1 uses ``model_scope="surface"``.
     """
     if not lm_studio_available(timeout=2.0):
         logger.warning("%s: LM Studio unavailable", log_label)

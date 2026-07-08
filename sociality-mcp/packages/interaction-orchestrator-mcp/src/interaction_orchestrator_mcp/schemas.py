@@ -208,6 +208,9 @@ class InteractionContext(BaseModel):
     prompt_summary: str
     compact_prompt_block: str
 
+    memory_bridge_lines: list[str] = Field(default_factory=list)
+    memory_bridge_keywords: list[str] = Field(default_factory=list)
+
 
 class ToneHint(BaseModel):
     warmth: float = Field(ge=0.0, le=1.0, default=0.55)

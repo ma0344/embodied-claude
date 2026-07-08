@@ -72,12 +72,12 @@ desires.json
 ## 実装順（提案）
 
 1. [x] **A3a** `write_private_reflection` gateway 直実行（`direct_actions.py` + `social_chat` intercept）
-2. [x] **A3b** `observe_room` — `camera_look_around` + `:18900` remember（`observe_room_direct`）
+2. [x] **A3b** `observe_room` — `camera_look_around`（**OBS-TICK-0**: caption/remember 停止 · desire のみ → [obs-tick-encode.md](../tracks/obs-tick-encode.md)）
 3. [x] **A3c** `miss_companion` — boundary → `talk_to_companion_direct` + `services/tts.py`
 4. [x] **A3d** 自律 tick — `POST /api/v1/autonomous-tick` + `satisfy_desire_direct`
 5. [x] **A3e** スモーク — autonomous-tick + observe_room（2026-06-14）
 6. [x] **A3f** **vision prefetch（A）** — 会話「見て」→ capture + LM Studio caption → `[vision_prefetch]` 通訳 → forward
-7. [x] **A3g** **desire see（B）** — observe_room / look_outside → MCP 同等 caption → remember + experience
+7. [x] **A3g** **desire see（B）** — `look_outside` / preset → caption → remember（`observe_room` は OBS-TICK-0 で look のみ）
 
 ### カメラ向き（named presets）
 
@@ -96,12 +96,11 @@ TAPO_DINING_PRESET=3
 | まーのデスク | 「まーのデスク見て」 | `TAPO_MADESK_PRESET` |
 | ダイニング | 「ダイニングの様子どう？」 | `TAPO_DINING_PRESET` |
 
-`look_outside` desire と会話の「外／窓／天気」は **ma-home USB webcam**（`PRESENCE_USB_CAMERA_ENABLED=1`）を優先。カメラ選択は **名前**（`USB_CAMERA_NAME=QuickCam Pro 9000` 等の部分一致）— 番号だけの `USB_CAMERA_INDEX` は名前が見つからないときの fallback。USB 失敗時のみ Tapo window preset。部屋・見渡しは Tapo のまま。
+`look_outside` desire と会話の「外／窓／天気」は **Tapo window preset**（`TAPO_WINDOW_PRESET` · `mode=window`）。USB 外カメラ経路は **廃止**（2026-07-06）。
 
 ```env
-PRESENCE_USB_CAMERA_ENABLED=1
-USB_CAMERA_NAME=QuickCam Pro 9000
-# USB_CAMERA_INDEX=0   # optional fallback if name list fails
+# 窓・外は Tapo preset のみ（USB は無効）
+TAPO_WINDOW_PRESET=<onvif-preset-id>
 ```
 
 ### 「忘れて」→ open loop を閉じる

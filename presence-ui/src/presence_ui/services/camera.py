@@ -183,23 +183,7 @@ async def capture_for_mode(mode: SeeMode, *, save_to_file: bool | None = None) -
         save_to_file = _camera_save_to_disk()
 
     if mode == "window":
-        from presence_ui.services.usb_camera import (
-            capture_usb_frame,
-            resolved_usb_camera_label,
-            usb_camera_enabled,
-        )
-
-        if usb_camera_enabled():
-            try:
-                capture = await capture_usb_frame(save_to_file=save_to_file)
-                return CaptureOutcome(
-                    ok=True,
-                    capture=capture,
-                    view_label=f"外 (USB: {resolved_usb_camera_label()})",
-                )
-            except Exception as exc:
-                msg = str(exc) or type(exc).__name__
-                logger.warning("USB outside capture failed (%s); trying Tapo window preset", msg)
+        pass  # Tapo window preset below (USB outside camera retired 2026-07-06)
 
     preset_id: str | None = None
     view_label = "current"

@@ -485,7 +485,7 @@ Report closed loops ONLY from this block. Do NOT claim tasks are done without st
 
 ```powershell
 cd presence-ui
-$env:PRESENCE_CLASSIFIER_MODEL = "google/gemma-4-e4b"
+$env:PRESENCE_CLASSIFIER_MODEL = "google/gemma-4-e4b-qat"
 uv run python scripts/ol7_classifier_poc.py --case all
 # poc_a | poc_b | poc_c
 ```

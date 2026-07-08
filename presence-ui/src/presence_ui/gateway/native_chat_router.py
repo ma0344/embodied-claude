@@ -8,7 +8,7 @@ import logging
 import uuid
 from collections.abc import AsyncIterator
 
-from claude_code_server import AgentConfig, ChatRequest
+from claude_code_server import AgentConfig
 from claude_code_server.agent import ClaudeAgent
 from claude_code_server.models import LoginRequest
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -29,12 +29,20 @@ from presence_ui.gateway.deterministic_memory import (
 )
 from presence_ui.gateway.gateway_turn_cache import gateway_turn_cache_scope
 from presence_ui.gateway.hybrid_intent import resolve_hybrid_intent
+from presence_ui.gateway.native_chat_models import NativeChatRequest
 from presence_ui.gateway.search_prefetch import prefetch_web_search_for_message
 from presence_ui.gateway.see_prefetch import prefetch_camera_for_message
 from presence_ui.gateway.social_chat import ChatInterceptResult, intercept_chat_request_async
 from presence_ui.gateway.surface_direct import use_surface_direct_path
 from presence_ui.gateway.surface_session import append_surface_turn
+from presence_ui.gateway.doc_prefetch import prefetch_doc_context_for_turn
 from presence_ui.gateway.url_prefetch import prefetch_urls_for_turn
+from presence_ui.services.chat_image import (
+    prepare_chat_image_data_url,
+    prepare_enriched_for_camera_see,
+    prepare_enriched_for_user_image,
+    user_log_text_with_image,
+)
 from presence_ui.services.llm import generate_surface_reply
 
 logger = logging.getLogger(__name__)
@@ -137,7 +145,7 @@ async def _emit_post_reply_side_effects(
 
 def _resolve_surface_session_id(
     *,
-    req: ChatRequest,
+    req: NativeChatRequest,
     intercept: ChatInterceptResult,
 ) -> str:
     for candidate in (intercept.session_id, req.session_id):
@@ -148,18 +156,40 @@ def _resolve_surface_session_id(
 
 async def _stream_surface_chat(
     *,
-    req: ChatRequest,
+    req: NativeChatRequest,
     intercept: ChatInterceptResult,
     person_id: str,
+    image_data_url: str | None = None,
+    camera_see: bool = False,
+    camera_see_mode: str = "current",
 ) -> AsyncIterator[str]:
     """Direct LM Studio surface path — no Claude Code subprocess."""
     enriched = intercept.payload or {}
     enriched_user = str(enriched.get("message") or req.prompt).strip()
     raw_user = str(req.prompt).strip()
+    user_attached_image = bool(req.image_base64 and str(req.image_base64).strip())
+    has_image = bool(image_data_url)
+    image_source = "user" if user_attached_image else ("camera" if camera_see else "user")
+    if has_image and user_attached_image:
+        enriched_user = prepare_enriched_for_user_image(enriched_user)
+        logger.info("native chat user image attached (utterance=%r)", raw_user[:80])
+    elif has_image and camera_see:
+        enriched_user = prepare_enriched_for_camera_see(enriched_user, see_mode=camera_see_mode)
+        logger.info(
+            "native chat camera see via surface 12b (mode=%s utterance=%r)",
+            camera_see_mode,
+            raw_user[:80],
+        )
     sid = _resolve_surface_session_id(req=req, intercept=intercept)
     yield _sse("session", {"session_id": sid, "claude_session": False})
+    user_context = {"enriched": enriched_user, "raw": raw_user}
+    if has_image:
+        user_context["image_attached"] = True
+        user_context["image_source"] = image_source
     if enriched_user and enriched_user != raw_user:
-        yield _sse("user_context", {"enriched": enriched_user, "raw": raw_user})
+        yield _sse("user_context", user_context)
+    elif has_image:
+        yield _sse("user_context", user_context)
 
     reply = ""
     async with _session_chat_lock(sid):
@@ -170,7 +200,13 @@ async def _stream_surface_chat(
                 enriched_user=enriched_user,
                 raw_user=raw_user,
                 ctx=intercept.ctx,
+                image_data_url=image_data_url,
+                image_source="camera" if camera_see else "user",
             )
+            if camera_see and image_data_url and reply:
+                from presence_ui.services.somatic import note_eyes_multimodal_see_ok
+
+                note_eyes_multimodal_see_ok(see_mode=camera_see_mode)
         except Exception as exc:
             logger.exception("surface direct reply failed")
             yield _sse("error", {"message": str(exc)})
@@ -183,21 +219,27 @@ async def _stream_surface_chat(
             {"cost": 0.0, "duration_ms": 0, "direct": True, "claude_session": False},
         )
 
-        if reply:
+        if reply or has_image:
             ts = utc_now()
+            log_user = user_log_text_with_image(
+                raw_user=raw_user,
+                image_attached=has_image and not camera_see,
+                camera_see=camera_see and has_image,
+            )
             append_surface_turn(
                 session_id=sid,
                 role="user",
-                text=raw_user,
+                text=log_user,
                 timestamp=ts,
-                enriched=enriched_user,
+                enriched=enriched_user if enriched_user != log_user else None,
             )
-            append_surface_turn(
-                session_id=sid,
-                role="assistant",
-                text=reply,
-                timestamp=ts,
-            )
+            if reply:
+                append_surface_turn(
+                    session_id=sid,
+                    role="assistant",
+                    text=reply,
+                    timestamp=ts,
+                )
 
     async for event in _emit_post_reply_side_effects(
         person_id=person_id,
@@ -211,7 +253,7 @@ async def _stream_surface_chat(
 
 async def _stream_agent_chat(
     *,
-    req: ChatRequest,
+    req: NativeChatRequest,
     intercept: ChatInterceptResult,
     base_config: AgentConfig,
     person_id: str,
@@ -292,19 +334,38 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
 
     @router.post("/chat")
     async def chat(
-        req: ChatRequest,
+        req: NativeChatRequest,
         _: None = Depends(_require_auth),
     ) -> StreamingResponse:
         with gateway_turn_cache_scope():
             return await _handle_native_chat(req, person_id=person_id, base_config=base)
 
     async def _handle_native_chat(
-        req: ChatRequest,
+        req: NativeChatRequest,
         *,
         person_id: str,
         base_config: AgentConfig,
     ) -> StreamingResponse:
-        list_request = detect_memory_list_request(req.prompt)
+        image_data_url: str | None = None
+        if req.image_base64 and str(req.image_base64).strip():
+            try:
+                image_data_url = prepare_chat_image_data_url(
+                    image_base64=req.image_base64,
+                    image_mime=req.image_mime,
+                )
+                logger.info(
+                    "native chat received image attachment (b64=%d, mime=%s)",
+                    len(str(req.image_base64).strip()),
+                    req.image_mime or "image/jpeg",
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        prompt_text = str(req.prompt or "").strip()
+        if not prompt_text and not image_data_url:
+            raise HTTPException(status_code=400, detail="prompt or image required")
+
+        list_request = detect_memory_list_request(prompt_text)
         if list_request:
             # Ingest utterance + progress via intercept side effects without Claude.
             await intercept_chat_request_async(
@@ -323,8 +384,9 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
             )
             return StreamingResponse(stream, media_type="text/event-stream")
 
-        hybrid = resolve_hybrid_intent(req.prompt)
+        hybrid = resolve_hybrid_intent(prompt_text)
         vision_note: str | None = None
+        camera_see_mode = hybrid.see_intent.mode if hybrid.see_intent else "current"
         web_search_note: str | None = None
         url_note: str | None = None
         calendar_note: str | None = None
@@ -332,7 +394,7 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
         search_hits = []
         search_query = ""
         try:
-            calendar_note, _cal_events = await prefetch_calendar_for_message(req.prompt)
+            calendar_note, _cal_events = await prefetch_calendar_for_message(prompt_text)
             if calendar_note:
                 logger.info("native chat calendar prefetch ok (%d chars)", len(calendar_note))
         except Exception as exc:
@@ -340,7 +402,7 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
             calendar_note = None
         try:
             web_search_note, _web_events, search_hits, search_query = (
-                await prefetch_web_search_for_message(req.prompt)
+                await prefetch_web_search_for_message(prompt_text)
             )
             if web_search_note:
                 logger.info("native chat web search prefetch ok (%d chars)", len(web_search_note))
@@ -358,18 +420,41 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
         except Exception as exc:
             logger.warning("native chat url prefetch failed: %s", exc)
             url_note = None
+        doc_note: str | None = None
+        try:
+            doc_note, _doc_events = await prefetch_doc_context_for_turn(
+                req.prompt,
+                session_id=req.session_id,
+            )
+            if doc_note:
+                logger.info("native chat doc prefetch ok (%d chars)", len(doc_note))
+        except Exception as exc:
+            logger.warning("native chat doc prefetch failed: %s", exc)
+            doc_note = None
+        camera_image_from_prefetch = False
         try:
             from presence_ui.deps import get_stores
 
-            vision_note, _prefetch_events = await prefetch_camera_for_message(
-                req.prompt,
-                see_intent=hybrid.see_intent,
-                ptz_intent=hybrid.ptz_intent,
-                stores=get_stores(),
-                person_id=person_id,
-            )
-            if vision_note:
-                logger.info("native chat camera prefetch ok (%d chars)", len(vision_note))
+            if not image_data_url:
+                use_camera_surface = use_surface_direct_path()
+                vision_note, _prefetch_events, camera_image_url = await prefetch_camera_for_message(
+                    req.prompt,
+                    see_intent=hybrid.see_intent,
+                    ptz_intent=hybrid.ptz_intent,
+                    stores=get_stores(),
+                    person_id=person_id,
+                    surface_multimodal=use_camera_surface,
+                )
+                if camera_image_url:
+                    image_data_url = camera_image_url
+                    vision_note = None
+                    camera_image_from_prefetch = True
+                    logger.info(
+                        "native chat camera surface multimodal ok (mode=%s)",
+                        camera_see_mode,
+                    )
+                elif vision_note:
+                    logger.info("native chat camera prefetch ok (%d chars)", len(vision_note))
         except Exception as exc:
             logger.warning("native chat camera prefetch failed: %s", exc)
             vision_note = None
@@ -392,6 +477,7 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
             vision_prefetch=vision_note,
             web_search_prefetch=web_search_note,
             url_prefetch=url_note,
+            doc_prefetch=doc_note,
             calendar_prefetch=calendar_note,
             calendar_write=calendar_write_note,
             hybrid=hybrid,
@@ -408,6 +494,9 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
                 req=req,
                 intercept=intercept,
                 person_id=person_id,
+                image_data_url=image_data_url,
+                camera_see=camera_image_from_prefetch,
+                camera_see_mode=camera_see_mode,
             )
         else:
             stream = _stream_agent_chat(

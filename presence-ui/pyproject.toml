@@ -25,6 +25,8 @@ dependencies = [
     "usb-webcam-mcp",
     "tts-mcp",
     "tzdata>=2024.1; sys_platform == 'win32'",
+    "numpy>=1.26.0",
+    "pymupdf>=1.24.0",
     "google-api-python-client>=2.100.0",
     "google-auth-oauthlib>=1.2.0",
     "google-auth-httplib2>=0.2.0",
@@ -41,6 +43,7 @@ dev = [
 [project.scripts]
 presence-ui = "presence_ui.main:run"
 room-nav = "presence_ui.cli.room_nav:main"
+doc-read = "presence_ui.cli.doc_read:main"
 google-oauth-consent = "presence_ui.gapi.cli:consent_main"
 gapi-calendar-smoke = "presence_ui.gapi.cli:list_smoke_main"
 gapi-calendar-write-smoke = "presence_ui.gapi.cli:write_smoke_main"

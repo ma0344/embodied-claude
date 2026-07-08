@@ -12,6 +12,7 @@
 | スクリプト | 用途 |
 |-----------|------|
 | `install-memory-daemon-task.ps1` | Memory HTTP `:18900` Task |
+| `restart-memory-mcp.ps1` | :18900 再起動（`uv sync` + health/recall 確認） |
 | `install-presence-ui-task.ps1` | presence-ui `:8090` Task |
 | `install-aivis-tts-task.ps1` | AivisSpeech TTS Task |
 | `install-embodied-watchdog-task.ps1` | 2 分間隔 Watchdog |

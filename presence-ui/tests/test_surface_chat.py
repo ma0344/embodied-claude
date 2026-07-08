@@ -6,7 +6,11 @@ import pytest
 from interaction_orchestrator_mcp.schemas import InteractionContext, ResponseContract, SessionTurn
 
 from presence_ui.gateway.surface_direct import surface_direct_enabled, surface_use_claude
-from presence_ui.services.llm import build_surface_chat_messages
+from presence_ui.services.llm import (
+    build_multimodal_user_content,
+    build_surface_chat_messages,
+    build_surface_image_turn_messages,
+)
 
 
 def _ctx(*, history: list[SessionTurn] | None = None) -> InteractionContext:
@@ -50,3 +54,47 @@ def test_build_surface_chat_messages_skips_duplicate_current_user() -> None:
     assert len(user_contents) == 2
     assert user_contents[-1].endswith("続き")
     assert "昨日の話" in user_contents[0]
+
+
+def test_build_multimodal_user_content() -> None:
+    content = build_multimodal_user_content(
+        text="[gateway]\n\n見て",
+        utterance="見て",
+        image_data_url="data:image/jpeg;base64,abc",
+    )
+    assert isinstance(content, list)
+    assert content[0]["type"] == "text"
+    assert content[1]["type"] == "image_url"
+    assert content[2]["type"] == "text"
+    assert content[2]["text"] == "見て"
+
+
+def test_build_surface_chat_messages_with_image() -> None:
+    messages = build_surface_chat_messages(
+        enriched_user="[gateway_turn_context]\nctx\n\nこの写真どう？",
+        raw_user="この写真どう？",
+        session_history=[],
+        image_data_url="data:image/jpeg;base64,abc",
+    )
+    last = messages[-1]
+    assert last["role"] == "user"
+    assert isinstance(last["content"], list)
+    assert last["content"][1]["type"] == "image_url"
+    assert last["content"][2]["text"] == "この写真どう？"
+    assert messages[0]["content"].find("attaches an image") >= 0
+
+
+def test_build_surface_image_turn_messages_minimal_user_payload() -> None:
+    messages = build_surface_image_turn_messages(
+        enriched_user="[gateway_turn_context]\nplan\n\n写真見える？",
+        raw_user="写真見える？",
+        session_history=[],
+        image_data_url="data:image/jpeg;base64,abc",
+    )
+    assert len(messages) == 2
+    user = messages[1]
+    assert user["role"] == "user"
+    assert user["content"][0]["type"] == "image_url"
+    assert user["content"][1]["text"] == "写真見える？"
+    assert "[gateway_turn_context]" in messages[0]["content"]
+    assert "\n[vision_prefetch]" not in messages[0]["content"]

@@ -27,6 +27,31 @@ def test_eye_affliction_summary_none_when_healthy() -> None:
     assert eye_affliction_summary(action="camera_look_around", vision=_vision(caption="部屋")) is None
 
 
+def test_eye_affliction_summary_none_when_capture_ok_but_no_caption() -> None:
+    """Describe failure alone must not mark eyes as failed."""
+    assert eye_affliction_summary(action="camera_look_outside", vision=_vision(caption=None)) is None
+
+
+def test_note_eyes_multimodal_see_ok_clears_failed(tmp_path, monkeypatch) -> None:
+    from presence_ui.services import body_state as bs
+    from presence_ui.services.somatic import note_eyes_multimodal_see_ok
+
+    path = tmp_path / "body_state.json"
+    monkeypatch.setattr(bs, "body_state_path", lambda: path)
+    state = bs.load_body_state()
+    bs.note_organ_affliction(
+        state,
+        organ="eyes",
+        summary="目が開かへんかった",
+        action="test",
+    )
+    bs.save_body_state(state)
+
+    assert note_eyes_multimodal_see_ok(see_mode="current") is True
+    loaded = bs.load_body_state()
+    assert loaded.organs["eyes"].status == "ok"
+
+
 def test_eye_affliction_summary_capture_failed() -> None:
     text = eye_affliction_summary(
         action="camera_look_around",

@@ -211,3 +211,39 @@ def compose_hit_rank(content: str, *, base_relevance: float, temporal: bool) -> 
         if len(content) < 280 and not is_episodic_blob(content):
             score += 0.1
     return max(0.0, min(1.0, score))
+
+
+def is_fact_like_row(content: str) -> bool:
+    """MEM-8a-lite — compact fact row heuristic (until multi-view encode lands)."""
+    text = (content or "").strip()
+    if not text or is_episodic_blob(text):
+        return False
+    if any(marker in text for marker in _EPISODE_MARKERS):
+        return False
+    if len(text) > 280 or text.count("\n") >= 2:
+        return False
+    return True
+
+
+_FACT_CATEGORIES = frozenset({"observation", "memory", "technical", "feeling", "daily"})
+
+
+def bridge_hit_rank(
+    content: str,
+    *,
+    base_relevance: float,
+    category: str | None = None,
+    importance: int | None = None,
+) -> float:
+    """Rank bridge recall hits — prefer 8a-like fact rows over narrative snippets."""
+    score = compose_hit_rank(content, base_relevance=base_relevance, temporal=False)
+    if is_fact_like_row(content):
+        score += 0.25
+    cat = (category or "").strip().lower()
+    if cat in _FACT_CATEGORIES and cat != "daily":
+        score += 0.08
+    if importance is not None and importance >= 4:
+        score += 0.05
+    if not is_fact_like_row(content) and len(content) > 180:
+        score -= 0.15
+    return max(0.0, min(1.0, score))

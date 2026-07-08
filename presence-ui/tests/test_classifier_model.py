@@ -7,7 +7,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from presence_ui.gateway.gw_silent import run_classifier_turn
-from presence_ui.services.llm import _lm_classifier_settings, _lm_studio_settings
+from presence_ui.services.llm import (
+    CLASSIFIER_MODEL_DEFAULT,
+    _lm_classifier_settings,
+    _lm_studio_settings,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -18,27 +22,28 @@ def _clear_classifier_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CLAUDE_MODEL", "google/gemma-4-12b-qat")
 
 
-def test_lm_classifier_settings_falls_back_to_surface() -> None:
+def test_lm_classifier_settings_falls_back_to_e4b_qat_default() -> None:
     base, model, _token = _lm_classifier_settings()
     chat_base, chat_model, _ = _lm_studio_settings()
     assert base == chat_base
-    assert model == chat_model
+    assert model == CLASSIFIER_MODEL_DEFAULT
+    assert model != chat_model
 
 
-def test_lm_classifier_settings_uses_e4b_override(
+def test_lm_classifier_settings_uses_e4b_qat_override(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PRESENCE_CLASSIFIER_MODEL", "google/gemma-4-e4b")
+    monkeypatch.setenv("PRESENCE_CLASSIFIER_MODEL", "google/gemma-4-e4b-qat")
     monkeypatch.setenv("PRESENCE_CLASSIFIER_BASE_URL", "http://127.0.0.1:1235")
     base, model, _token = _lm_classifier_settings()
-    assert model == "google/gemma-4-e4b"
+    assert model == "google/gemma-4-e4b-qat"
     assert base == "http://127.0.0.1:1235"
 
 
 def test_run_classifier_turn_posts_classifier_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PRESENCE_CLASSIFIER_MODEL", "google/gemma-4-e4b")
+    monkeypatch.setenv("PRESENCE_CLASSIFIER_MODEL", "google/gemma-4-e4b-qat")
     captured: dict = {}
 
     def fake_post(_self, url, *, json, headers):
@@ -66,14 +71,14 @@ def test_run_classifier_turn_posts_classifier_model(
         )
 
     assert result == '{"utterance_kind":"greeting"}'
-    assert captured["json"]["model"] == "google/gemma-4-e4b"
+    assert captured["json"]["model"] == "google/gemma-4-e4b-qat"
     assert captured["url"].endswith("/v1/chat/completions")
 
 
 def test_run_classifier_turn_surface_scope_ignores_classifier_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PRESENCE_CLASSIFIER_MODEL", "google/gemma-4-e4b")
+    monkeypatch.setenv("PRESENCE_CLASSIFIER_MODEL", "google/gemma-4-e4b-qat")
     monkeypatch.setenv("PRESENCE_LLM_MODEL", "google/gemma-4-12b-qat")
     captured: dict = {}
 

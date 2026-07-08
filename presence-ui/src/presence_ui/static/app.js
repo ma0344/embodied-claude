@@ -68,6 +68,10 @@ let roomInboundCurrent = null;
 /** A4j+: first user send after「返事する」carries inbound meta to gateway. */
 let pendingInboundReply = null;
 let episodeIdleTimer = null;
+/** @type {{ dataUrl: string, mime: string, base64: string } | null} */
+let pendingChatAttachment = null;
+const CHAT_ATTACH_MAX_BYTES = 4 * 1024 * 1024;
+const CHAT_ATTACH_MAX_SIDE = 768;
 
 function loadContextRailPins() {
   const defaults = { vision: true, status: false };
@@ -1117,6 +1121,70 @@ function renderMessageBodyHtml(msg) {
   return escapeHtml(body);
 }
 
+async function resizeChatImageFile(file) {
+  if (!file || !file.type.startsWith("image/")) {
+    throw new Error("画像ファイルじゃない");
+  }
+  if (file.size > CHAT_ATTACH_MAX_BYTES) {
+    throw new Error("画像が大きすぎる（4MBまで）");
+  }
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, CHAT_ATTACH_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    bitmap.close();
+    throw new Error("画像の変換に失敗した");
+  }
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+  if (!blob) throw new Error("画像の変換に失敗した");
+  if (blob.size > CHAT_ATTACH_MAX_BYTES) throw new Error("画像が大きすぎる（4MBまで）");
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("読み込みに失敗した"));
+    reader.readAsDataURL(blob);
+  });
+  const base64 = dataUrl.includes(",") ? dataUrl.split(",", 2)[1] : "";
+  if (!base64) throw new Error("画像の読み込みに失敗した");
+  return { dataUrl, mime: "image/jpeg", base64 };
+}
+
+function updateChatAttachPreview() {
+  const wrap = document.getElementById("chat-attach-preview");
+  const img = document.getElementById("chat-attach-preview-img");
+  if (!wrap || !img) return;
+  if (!pendingChatAttachment) {
+    wrap.hidden = true;
+    img.removeAttribute("src");
+    return;
+  }
+  wrap.hidden = false;
+  img.src = pendingChatAttachment.dataUrl;
+  img.alt = "添付画像プレビュー";
+}
+
+function clearChatAttachment() {
+  pendingChatAttachment = null;
+  updateChatAttachPreview();
+  const fileInput = document.getElementById("chat-attach-input");
+  if (fileInput) fileInput.value = "";
+}
+
+async function setChatAttachmentFromFile(file) {
+  pendingChatAttachment = await resizeChatImageFile(file);
+  updateChatAttachPreview();
+  setChatSendHint("画像を添付した — 送るとこよりに渡る");
+  const input = document.getElementById("chat-input");
+  if (input && !input.value.trim()) input.focus();
+}
+
 function setMessageBodyContent(bodyEl, msg) {
   if (!bodyEl) return;
   const html = renderMessageBodyHtml(msg);
@@ -1127,9 +1195,16 @@ function setMessageBodyContent(bodyEl, msg) {
     bodyEl.classList.remove("message-body--md");
     bodyEl.textContent = displayTextForMessage(msg);
   }
+  if (msg.image_preview_url) {
+    const img = document.createElement("img");
+    img.className = "message-body__image";
+    img.src = msg.image_preview_url;
+    img.alt = "添付画像";
+    bodyEl.appendChild(img);
+  }
 }
 
-function confirmNativeUserMessage(trimmed, timestamp, enrichedMessage) {
+function confirmNativeUserMessage(trimmed, timestamp, enrichedMessage, imagePreviewUrl) {
   const body =
     enrichedMessage && String(enrichedMessage).trim() !== String(trimmed).trim()
       ? String(enrichedMessage).trim()
@@ -1139,6 +1214,7 @@ function confirmNativeUserMessage(trimmed, timestamp, enrichedMessage) {
     message: body,
     timestamp: timestamp || new Date().toISOString(),
   };
+  if (imagePreviewUrl) userMsg.image_preview_url = imagePreviewUrl;
   chatMessages = [...chatMessages.filter((msg) => !msg._pending), userMsg];
   const root = document.getElementById("chat-log");
   const pendingEl = root?.querySelector(".message.ma.is-pending");
@@ -1413,8 +1489,10 @@ function appendActivityLine(event) {
 function setComposeEnabled(enabled) {
   const input = document.getElementById("chat-input");
   const button = document.getElementById("chat-send");
+  const attach = document.getElementById("chat-attach");
   if (input) input.disabled = !enabled;
   if (button) button.disabled = !enabled;
+  if (attach) attach.disabled = !enabled;
 }
 
 function setChatSendHint(text) {
@@ -1490,13 +1568,17 @@ function forceResetComposeIfStuck() {
   }
 }
 
-async function sendChatMessageNative(trimmed) {
+async function sendChatMessageNative(trimmed, attachmentOverride = null) {
+  const attachment = attachmentOverride ?? pendingChatAttachment;
+  const sentImage = Boolean(attachment?.base64);
+  const imagePreviewUrl = attachment?.dataUrl || null;
   const optimistic = {
     sender: "ma",
-    message: trimmed,
+    message: trimmed || (attachment ? "[image attached]" : ""),
     timestamp: new Date().toISOString(),
     _pending: true,
   };
+  if (imagePreviewUrl) optimistic.image_preview_url = imagePreviewUrl;
   chatMessages = [...chatMessages, optimistic];
   appendMessagesToDom([optimistic], { animate: true });
   if (chatPinnedToBottom) scrollChatToBottom();
@@ -1523,6 +1605,13 @@ async function sendChatMessageNative(trimmed) {
         requestPayload.inbound_nudge_id = pendingInboundReply.nudge_id;
       }
     }
+
+    if (attachment?.base64) {
+      requestPayload.image_base64 = attachment.base64;
+      requestPayload.image_mime = attachment.mime || "image/jpeg";
+    }
+
+    clearChatAttachment();
 
     const response = await postNativeChatRequest(
       requestPayload,
@@ -1561,6 +1650,9 @@ async function sendChatMessageNative(trimmed) {
         if (evt === "user_context" && data) {
           try {
             const payload = JSON.parse(data);
+            if (sentImage && !payload.image_attached) {
+              setChatSendHint("画像がサーバーに届いてへん — presence-ui を再起動して");
+            }
             if (payload.enriched) {
               nativeUserEnriched = payload.enriched;
               const pending = chatMessages.find((msg) => msg._pending && msg.sender === "ma");
@@ -1615,7 +1707,7 @@ async function sendChatMessageNative(trimmed) {
       assistantDraft = "（いまは静かにしている）";
     }
 
-    confirmNativeUserMessage(trimmed, optimistic.timestamp, nativeUserEnriched);
+    confirmNativeUserMessage(trimmed, optimistic.timestamp, nativeUserEnriched, imagePreviewUrl);
 
     if (assistantDraft.trim()) {
       appendAssistantMessage(assistantDraft);
@@ -1636,7 +1728,7 @@ async function sendChatMessageNative(trimmed) {
   } catch (err) {
     clearStreamingBubble();
     setChatThinking(false);
-    confirmNativeUserMessage(trimmed, optimistic.timestamp);
+    confirmNativeUserMessage(trimmed, optimistic.timestamp, null, imagePreviewUrl);
     pendingInboundReply = null;
     throw err;
   }
@@ -1644,7 +1736,9 @@ async function sendChatMessageNative(trimmed) {
 
 async function sendChatMessage(text) {
   const trimmed = text.trim();
-  if (!trimmed) return;
+  const chatAttachment = pendingChatAttachment;
+  const hasAttachment = Boolean(chatAttachment?.base64);
+  if (!trimmed && !hasAttachment) return;
   if (sendInProgress) {
     setChatSendHint("まだ前の送信を処理中。しばらく待つか、再読み込みしてね");
     return;
@@ -1659,7 +1753,7 @@ async function sendChatMessage(text) {
 
   try {
     if (isNativeChat()) {
-      await sendChatMessageNative(trimmed);
+      await sendChatMessageNative(trimmed, chatAttachment);
       return;
     }
 
@@ -1808,6 +1902,9 @@ async function sendChatMessage(text) {
 function setupChatCompose() {
   const form = document.getElementById("chat-form");
   const input = document.getElementById("chat-input");
+  const attachBtn = document.getElementById("chat-attach");
+  const attachInput = document.getElementById("chat-attach-input");
+  const attachRemove = document.getElementById("chat-attach-remove");
   if (!form || !input) return;
 
   form.addEventListener("submit", (event) => {
@@ -1815,10 +1912,42 @@ function setupChatCompose() {
     void sendChatMessage(input.value);
   });
 
+  if (attachBtn && attachInput) {
+    attachBtn.addEventListener("click", () => attachInput.click());
+    attachInput.addEventListener("change", () => {
+      const file = attachInput.files?.[0];
+      if (!file) return;
+      void setChatAttachmentFromFile(file).catch((err) => {
+        clearChatAttachment();
+        setChatSendHint(err?.message || "画像を添付できなかった");
+      });
+    });
+  }
+
+  if (attachRemove) {
+    attachRemove.addEventListener("click", () => clearChatAttachment());
+  }
+
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       form.requestSubmit();
+    }
+  });
+
+  input.addEventListener("paste", (event) => {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (!item.type.startsWith("image/")) continue;
+      const file = item.getAsFile();
+      if (!file) continue;
+      event.preventDefault();
+      void setChatAttachmentFromFile(file).catch((err) => {
+        clearChatAttachment();
+        setChatSendHint(err?.message || "画像を添付できなかった");
+      });
+      break;
     }
   });
 

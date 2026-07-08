@@ -18,6 +18,8 @@ from .camera import CaptureResult
 
 logger = logging.getLogger(__name__)
 
+SURFACE_VISION_MODEL_DEFAULT = "google/gemma-4-12b-qat"
+
 DEFAULT_WIFI_CAM_VISION_PROMPT = (
     "この部屋の写真。見えているものを具体的に日本語で書いてください。"
     "人物・姿勢・家具・明るさ・窓やモニタの有無。推測や見えないことは書かない。"
@@ -74,17 +76,30 @@ def vision_describe_enabled() -> bool:
     return text_only_tool_results()
 
 
+def resolve_vision_lm_model() -> str:
+    """Image caption/describe — surface 12b-qat multimodal (tick, MCP, prefetch).
+
+    ``LM_STUDIO_VISION_MODEL`` (legacy e4b slot) is intentionally ignored.
+    Override only via ``PRESENCE_VISION_MODEL`` or chat model env keys.
+    """
+    override = os.environ.get("PRESENCE_VISION_MODEL", "").strip()
+    if override:
+        return override
+    return (
+        os.environ.get("PRESENCE_LLM_MODEL")
+        or os.environ.get("CLAUDE_MODEL")
+        or os.environ.get("LMSTUDIO_MODEL")
+        or SURFACE_VISION_MODEL_DEFAULT
+    )
+
+
 def lm_studio_settings() -> tuple[str, str, str]:
     base = (
         os.environ.get("LM_STUDIO_BASE_URL")
         or os.environ.get("ANTHROPIC_BASE_URL")
         or "http://127.0.0.1:1234"
     ).rstrip("/")
-    model = (
-        os.environ.get("LM_STUDIO_VISION_MODEL")
-        or os.environ.get("CLAUDE_MODEL")
-        or "google/gemma-4-12b-qat"
-    )
+    model = resolve_vision_lm_model()
     token = os.environ.get("ANTHROPIC_AUTH_TOKEN", "").strip()
     if not token:
         token_file = os.environ.get(

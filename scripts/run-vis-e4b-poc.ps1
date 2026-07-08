@@ -14,7 +14,7 @@ param(
     [switch]$Latest,
     [string]$Image = "",
     [string]$QwenModel = "",
-    [string]$E4bModel = "google/gemma-4-e4b",
+    [string]$E4bModel = "google/gemma-4-e4b-qat",
     [string]$OutSuffix = "",
     [switch]$Isolate,
     [switch]$Json

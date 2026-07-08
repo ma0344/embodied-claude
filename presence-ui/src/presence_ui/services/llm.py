@@ -2,69 +2,29 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import httpx
 from interaction_orchestrator_mcp.schemas import InteractionContext, ResponsePlan, SessionTurn
 
 from presence_ui.gateway.ws_guard import ws_guard_stable_append
+from presence_ui.services.chat_image import (
+    image_b64_from_data_url,
+    log_prepared_chat_image,
+    split_gateway_and_utterance,
+)
+from presence_ui.services.lm_client import (
+    CLASSIFIER_MODEL_DEFAULT,  # noqa: F401  re-export
+    complete_chat,  # noqa: F401  re-export
+    lm_classifier_settings as _lm_classifier_settings,  # noqa: F401  re-export
+    lm_studio_settings as _lm_studio_settings,
+    parse_openai_chat_content as _parse_openai_chat_content,
+)
 
-
-def _lm_studio_settings() -> tuple[str, str, str]:
-    base = (
-        os.environ.get("LM_STUDIO_BASE_URL")
-        or os.environ.get("ANTHROPIC_BASE_URL")
-        or "http://127.0.0.1:1234"
-    ).rstrip("/")
-    model = (
-        os.environ.get("PRESENCE_LLM_MODEL")
-        or os.environ.get("CLAUDE_MODEL")
-        or os.environ.get("LM_STUDIO_VISION_MODEL")
-        or "google/gemma-4-12b-qat"
-    )
-    token = os.environ.get("ANTHROPIC_AUTH_TOKEN", "").strip()
-    if not token:
-        token_file = os.environ.get(
-            "LM_STUDIO_TOKEN_FILE",
-            str(Path.home() / ".config" / "embodied-claude" / "lmstudio.token"),
-        )
-        if Path(token_file).is_file():
-            token = Path(token_file).read_text(encoding="utf-8").strip()
-    if not token:
-        token = "lmstudio"
-    return base, model, token
-
-
-def _lm_classifier_settings() -> tuple[str, str, str]:
-    """OL-GATE / Stage1/2 / correction — optional split from surface chat (PFC-1)."""
-    base, surface_model, token = _lm_studio_settings()
-    override_base = os.environ.get("PRESENCE_CLASSIFIER_BASE_URL", "").strip().rstrip("/")
-    override_model = os.environ.get("PRESENCE_CLASSIFIER_MODEL", "").strip()
-    if override_base:
-        base = override_base
-    model = override_model or surface_model
-    return base, model, token
-
-
-def _parse_openai_chat_content(data: dict) -> str | None:
-    choices = data.get("choices") or []
-    if not choices:
-        return None
-    message = choices[0].get("message") or {}
-    content = message.get("content")
-    if isinstance(content, str) and content.strip():
-        return content.strip()
-    if isinstance(content, list):
-        parts = [
-            block.get("text", "")
-            for block in content
-            if isinstance(block, dict) and block.get("type") == "text"
-        ]
-        joined = "\n".join(part for part in parts if part).strip()
-        return joined or None
-    return None
+logger = logging.getLogger(__name__)
 
 
 def load_soul_excerpt(*, max_chars: int = 2200) -> str:
@@ -230,12 +190,100 @@ def surface_max_tokens() -> int:
         return 500
 
 
+def build_multimodal_user_content(
+    *,
+    text: str,
+    utterance: str | None = None,
+    image_data_url: str | None = None,
+) -> str | list[dict[str, Any]]:
+    """OpenAI chat content — gateway text, optional image, then まー's utterance."""
+    body = (text or "").strip()
+    user_line = (utterance or "").strip()
+    if not image_data_url:
+        return body
+
+    parts: list[dict[str, Any]] = []
+    if body and user_line and body.endswith(user_line):
+        prefix = body[: -len(user_line)].rstrip()
+        if prefix:
+            parts.append({"type": "text", "text": prefix})
+        parts.append({"type": "image_url", "image_url": {"url": image_data_url}})
+        parts.append({"type": "text", "text": user_line})
+        return parts
+
+    if body:
+        parts.append({"type": "text", "text": body})
+    parts.append({"type": "image_url", "image_url": {"url": image_data_url}})
+    parts.append({"type": "text", "text": user_line or "（画像を添付した）"})
+    return parts
+
+
+def build_surface_image_turn_messages(
+    *,
+    enriched_user: str,
+    raw_user: str,
+    session_history: list[SessionTurn] | None = None,
+    image_data_url: str,
+    image_source: Literal["user", "camera"] = "user",
+) -> list[dict[str, Any]]:
+    """Image turn — gateway in system; user message is image + short utterance only.
+
+    LM Studio / Gemma multimodal drops images when the same user turn also carries
+    a long gateway blob plus multi-turn history. Keep the vision payload minimal.
+    """
+    gateway_block, utterance = split_gateway_and_utterance(
+        enriched=enriched_user,
+        raw_user=raw_user,
+    )
+    if image_source == "camera":
+        image_hint = (
+            "The image is a fresh Tapo room-camera capture for this turn — describe "
+            "what you see and answer まー. Do NOT call camera tools."
+        )
+    else:
+        image_hint = (
+            "The user attached an image in chat — answer from that image together with "
+            "their message. This is NOT the room camera vision_prefetch."
+        )
+    system = (
+        f"{build_gateway_stable_append()}\n\n"
+        "Always respond in Japanese. Use Kansai dialect casual タメ口 only. "
+        "Reply as こより to まー in 1–3 short paragraphs. "
+        "Do not mention tools, APIs, gateway blocks, or being an AI.\n"
+        f"{image_hint}"
+    )
+    if gateway_block:
+        system = f"{system}\n\n{gateway_block}"
+    history_lines: list[str] = []
+    prior = list(session_history or [])
+    if len(prior) > 6:
+        prior = prior[-6:]
+    for turn in prior:
+        who = "まー" if turn.sender == "ma" else "こより"
+        line = (turn.text or "").strip().replace("\n", " ")
+        if line:
+            history_lines.append(f"{who}: {line[:240]}")
+    if history_lines:
+        system = f"{system}\n\n[recent_room_context]\n" + "\n".join(history_lines)
+    return [
+        {"role": "system", "content": system},
+        {
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": image_data_url}},
+                {"type": "text", "text": utterance},
+            ],
+        },
+    ]
+
+
 def build_surface_chat_messages(
     *,
     enriched_user: str,
     raw_user: str,
     session_history: list[SessionTurn] | None = None,
-) -> list[dict[str, str]]:
+    image_data_url: str | None = None,
+) -> list[dict[str, Any]]:
     """OpenAI-style messages for native surface chat (system + history + enriched user)."""
     system = (
         f"{build_gateway_stable_append()}\n\n"
@@ -243,7 +291,12 @@ def build_surface_chat_messages(
         "Reply as こより to まー in 1–3 short paragraphs. "
         "Do not mention tools, APIs, gateway blocks, or being an AI."
     )
-    messages: list[dict[str, str]] = [{"role": "system", "content": system}]
+    if image_data_url:
+        system += (
+            "\nWhen the user attaches an image, describe or answer from what you see "
+            "in the image together with their message."
+        )
+    messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
     prior: list[SessionTurn] = list(session_history or [])
     raw = (raw_user or "").strip()
     if prior and prior[-1].sender == "ma" and prior[-1].text.strip() == raw:
@@ -254,7 +307,17 @@ def build_surface_chat_messages(
     for turn in prior:
         role = "user" if turn.sender == "ma" else "assistant"
         messages.append({"role": role, "content": turn.text})
-    messages.append({"role": "user", "content": (enriched_user or raw).strip()})
+    user_text = (enriched_user or raw).strip()
+    messages.append(
+        {
+            "role": "user",
+            "content": build_multimodal_user_content(
+                text=user_text,
+                utterance=raw_user,
+                image_data_url=image_data_url,
+            ),
+        }
+    )
     return messages
 
 
@@ -290,12 +353,29 @@ async def generate_surface_reply(
     raw_user: str,
     ctx: InteractionContext,
     max_tokens: int | None = None,
+    image_data_url: str | None = None,
+    image_source: Literal["user", "camera"] = "user",
 ) -> str:
     """Native kiosk surface — gateway-stable system + transcript + enriched user."""
+    if image_data_url:
+        log_prepared_chat_image(image_data_url)
+        messages = build_surface_image_turn_messages(
+            enriched_user=enriched_user,
+            raw_user=raw_user,
+            session_history=ctx.session_history,
+            image_data_url=image_data_url,
+            image_source=image_source,
+        )
+        return await _post_multimodal_surface_completion(
+            messages=messages,
+            image_data_url=image_data_url,
+            max_tokens=max_tokens or surface_max_tokens(),
+        )
     messages = build_surface_chat_messages(
         enriched_user=enriched_user,
         raw_user=raw_user,
         session_history=ctx.session_history,
+        image_data_url=None,
     )
     return await _post_chat_completion(
         messages=messages,
@@ -304,32 +384,118 @@ async def generate_surface_reply(
     )
 
 
-async def _post_chat_completion(
-    *,
-    messages: list[dict[str, str]],
-    max_tokens: int,
-    model_scope: Literal["surface", "classifier"] = "surface",
-) -> str:
-    if model_scope == "classifier":
-        base, model, token = _lm_classifier_settings()
-    else:
-        base, model, token = _lm_studio_settings()
-    headers = {
+def _lm_auth_headers(token: str) -> dict[str, str]:
+    return {
         "Authorization": f"Bearer {token}",
         "x-api-key": token,
         "Content-Type": "application/json",
     }
-    payload = {
-        "model": model,
-        "max_tokens": max_tokens,
-        "temperature": 0.75,
-        "messages": messages,
-    }
-    url = f"{base}/v1/chat/completions"
+
+
+def _parse_anthropic_message_content(data: dict[str, Any]) -> str | None:
+    content = data.get("content") or []
+    if not isinstance(content, list):
+        return None
+    parts = [
+        str(block.get("text", "")).strip()
+        for block in content
+        if isinstance(block, dict) and block.get("type") == "text"
+    ]
+    joined = "\n".join(part for part in parts if part).strip()
+    return joined or None
+
+
+async def _post_multimodal_surface_completion(
+    *,
+    messages: list[dict[str, Any]],
+    image_data_url: str,
+    max_tokens: int,
+) -> str:
+    base, model, token = _lm_studio_settings()
+    headers = _lm_auth_headers(token)
+    image_b64 = image_b64_from_data_url(image_data_url)
+    errors: list[str] = []
+
     async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
-        response = await client.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        text = _parse_openai_chat_content(response.json())
-    if not text:
-        raise RuntimeError("LM Studio returned an empty reply")
-    return text
+        chat_payload = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "temperature": 0.75,
+            "messages": messages,
+        }
+        try:
+            response = await client.post(
+                f"{base}/v1/chat/completions",
+                json=chat_payload,
+                headers=headers,
+            )
+            response.raise_for_status()
+            text = _parse_openai_chat_content(response.json())
+            if text:
+                logger.info("surface image reply via /v1/chat/completions")
+                return text
+            errors.append("chat/completions returned empty text")
+        except Exception as exc:
+            logger.warning("surface image chat/completions failed: %s", exc)
+            errors.append(f"chat/completions: {exc}")
+
+        system_text = ""
+        user_text = "（画像を添付した）"
+        for msg in messages:
+            if msg.get("role") == "system":
+                system_text = str(msg.get("content") or "")
+            elif msg.get("role") == "user":
+                content = msg.get("content")
+                if isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            user_text = str(block.get("text") or user_text)
+
+        messages_payload: dict[str, Any] = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": image_b64,
+                            },
+                        },
+                        {"type": "text", "text": user_text},
+                    ],
+                }
+            ],
+        }
+        if system_text.strip():
+            messages_payload["system"] = system_text.strip()
+        try:
+            response = await client.post(
+                f"{base}/v1/messages",
+                json=messages_payload,
+                headers=headers,
+            )
+            response.raise_for_status()
+            text = _parse_anthropic_message_content(response.json())
+            if text:
+                logger.info("surface image reply via /v1/messages")
+                return text
+            errors.append("messages returned empty text")
+        except Exception as exc:
+            logger.warning("surface image /v1/messages failed: %s", exc)
+            errors.append(f"messages: {exc}")
+
+    raise RuntimeError("LM Studio multimodal reply failed: " + "; ".join(errors))
+
+
+async def _post_chat_completion(
+    *,
+    messages: list[dict[str, Any]],
+    max_tokens: int,
+    model_scope: Literal["surface", "classifier"] = "surface",
+) -> str:
+    return await complete_chat(messages, max_tokens=max_tokens, model_scope=model_scope)

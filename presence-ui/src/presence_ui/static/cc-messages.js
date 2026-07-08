@@ -20,6 +20,8 @@ const SYSTEM_BLOCK_RES = [
   /^\[\/calendar_confirm_pending\]/i,
   /^\[url_prefetch\]\s*$/i,
   /^\[\/url_prefetch\]/i,
+  /^\[doc_context\]\s*$/i,
+  /^\[\/doc_context\]/i,
   /^\[Gateway directive\b/i,
   /^\[interaction_context\]\s*$/i,
   /^\[response_contract\]\s*$/i,
@@ -55,6 +57,7 @@ const PAIRED_BLOCK_OPENERS = {
   "[calendar_write_result]": "[/calendar_write_result]",
   "[calendar_confirm_pending]": "[/calendar_confirm_pending]",
   "[url_prefetch]": "[/url_prefetch]",
+  "[doc_context]": "[/doc_context]",
 };
 
 const STM_BULLET_RE = /^- \([a-z_]+\)/i;
@@ -250,6 +253,7 @@ function stripLeadingOrphanInjectionLines(text) {
 
 function stripOneTrailingTailPrefetch(remainder) {
   const patterns = [
+    /\n\[doc_context\][\s\S]*$/i,
     /\n\[url_prefetch\][\s\S]*$/i,
     /\n\[web_search_prefetch\][\s\S]*$/i,
     /\n\[calendar_confirm_pending\][\s\S]*$/i,

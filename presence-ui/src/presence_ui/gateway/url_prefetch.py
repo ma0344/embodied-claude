@@ -6,15 +6,19 @@ import os
 import re
 from html import unescape
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 import httpx
 
 from presence_ui.gateway.room_events import progress_event
 from presence_ui.gateway.search_prefetch import extract_search_query
 from presence_ui.gateway.web_search import SearchHit
+from presence_ui.services import pdf_extract
 
 _URL_RE = re.compile(r"https?://[^\s<>\"')\]}]+", re.IGNORECASE)
+_QUOTED_PDF_RE = re.compile(r"""["'“”『「]([^"'“”『」\r\n]+?\.pdf)["'”』」]""", re.IGNORECASE)
+_WIN_PDF_RE = re.compile(r"[A-Za-z]:\\[^\r\n\"'<>|?*]+?\.pdf", re.IGNORECASE)
+_FILEURL_PDF_RE = re.compile(r"file:/{2,3}([^\s\"'<>]+?\.pdf)", re.IGNORECASE)
 _SCRIPT_STYLE_RE = re.compile(
     r"<(script|style|noscript)[^>]*>.*?</\1>",
     re.IGNORECASE | re.DOTALL,
@@ -179,6 +183,60 @@ def _looks_like_pdf(url: str, content_type: str) -> bool:
     return "application/pdf" in (content_type or "").lower()
 
 
+_PDF_STATUS_MAP = {
+    "ok": "pdf_ok",
+    "scanned": "pdf_scanned",
+    "not_found": "pdf_not_found",
+    "not_allowed": "pdf_not_allowed",
+    "too_large": "pdf_too_large",
+}
+
+
+def _pdf_result_to_excerpt(
+    result: pdf_extract.PdfExtractResult,
+    terms: list[str],
+) -> tuple[str, str]:
+    """Map a PdfExtractResult to the (excerpt, status) contract used by prefetch blocks."""
+    status = _PDF_STATUS_MAP.get(result.status, "pdf_unsupported")
+    if result.status != "ok":
+        return "", status
+    excerpt = select_excerpt(result.text, terms, max_chars=_max_excerpt_chars())
+    return (excerpt or result.text[: _max_excerpt_chars()]).strip(), status
+
+
+def extract_pdf_paths_from_message(text: str) -> list[str]:
+    """Pull local PDF file paths pasted in a message (quoted, Windows, or file:// URLs)."""
+    body = text or ""
+    seen: set[str] = set()
+    paths: list[str] = []
+
+    def _add(candidate: str) -> None:
+        cleaned = (candidate or "").strip().strip("\"'“”『」「")
+        if not cleaned or not cleaned.lower().endswith(".pdf"):
+            return
+        if cleaned not in seen:
+            seen.add(cleaned)
+            paths.append(cleaned)
+
+    for match in _QUOTED_PDF_RE.finditer(body):
+        _add(match.group(1))
+    for match in _FILEURL_PDF_RE.finditer(body):
+        _add(unquote(match.group(1)).lstrip("/"))
+    for match in _WIN_PDF_RE.finditer(body):
+        _add(match.group(0))
+    return paths
+
+
+async def fetch_local_pdf_excerpt(
+    path: str,
+    *,
+    query_terms_list: list[str] | None = None,
+) -> tuple[str, str]:
+    """Return (excerpt, status) for a local PDF path (status like pdf_ok|pdf_scanned|…)."""
+    result = pdf_extract.extract_text_from_path(path)
+    return _pdf_result_to_excerpt(result, query_terms_list or [])
+
+
 async def fetch_url_excerpt(
     url: str,
     *,
@@ -211,7 +269,9 @@ async def fetch_url_excerpt(
             response.raise_for_status()
             content_type = response.headers.get("content-type", "")
             if _looks_like_pdf(target, content_type):
-                return "", "pdf_unsupported"
+                data = response.content[: pdf_extract.max_pdf_bytes()]
+                result = pdf_extract.extract_text_from_bytes(data)
+                return _pdf_result_to_excerpt(result, query_terms_list or [])
             raw = response.content[: _max_response_bytes()]
             html = raw.decode(response.encoding or "utf-8", errors="replace")
     except (httpx.HTTPError, UnicodeError, ValueError):
@@ -252,18 +312,40 @@ def format_url_prefetch_block(
         lines.append(f"excerpt={excerpt.strip()[: _max_excerpt_chars()]}")
     lines.append("[/url_prefetch]")
     lines.append("")
-    if status == "ok" and excerpt.strip():
+    if status in {"ok", "pdf_ok"} and excerpt.strip():
+        source_word = "PDF document" if status == "pdf_ok" else "page"
         directive = (
-            "Gateway fetched this page excerpt. Describe page contents ONLY from excerpt above.\n"
+            f"Gateway extracted this {source_word} excerpt. Describe contents ONLY from excerpt "
+            "above.\n"
             "Open your reply with at least one concrete fact from the excerpt when answering "
             "まー's report or question.\n"
             "Do NOT infer details from search snippets or training data.\n"
-            "If excerpt lacks the answer, say so honestly and point to other numbered search URLs."
+            "If excerpt lacks the answer, say so honestly."
+        )
+    elif status == "pdf_scanned":
+        directive = (
+            "This PDF has no embedded text (likely a scan/image PDF). Gateway could NOT read it.\n"
+            "Do NOT invent contents. Tell まー it looks scanned and OCR/vision is not wired yet."
+        )
+    elif status == "pdf_not_found":
+        directive = (
+            "The local PDF path was not found. Do NOT claim you read it.\n"
+            "Ask まー to double-check the file path."
+        )
+    elif status == "pdf_not_allowed":
+        directive = (
+            "The local PDF path is outside the allowed directories. Gateway refused to read it.\n"
+            "Tell まー to move the file under an allowed dir or set PRESENCE_PDF_ALLOW_DIRS."
+        )
+    elif status == "pdf_too_large":
+        directive = (
+            "The PDF exceeds the size limit and was not read. Do NOT invent contents.\n"
+            "Tell まー it is too large (see PRESENCE_PDF_MAX_BYTES)."
         )
     elif status == "pdf_unsupported":
         directive = (
-            "This URL is a PDF (not fetched). Do NOT claim you read the file.\n"
-            "Tell まー to open the PDF locally or paste a HTML page URL."
+            "This PDF could not be read. Do NOT claim you read the file.\n"
+            "Tell まー honestly that reading it failed."
         )
     elif status == "blocked":
         directive = "Gateway could not access this URL (blocked). Do NOT invent page contents."
@@ -356,6 +438,24 @@ async def prefetch_urls_for_turn(
         return None, []
 
     text = (message or "").strip()
+
+    pdf_paths = extract_pdf_paths_from_message(text)[: _max_message_urls()]
+    if pdf_paths:
+        blocks: list[str] = []
+        events = [progress_event(phase="url_fetch", label="PDFを読んでる…")]
+        terms = query_terms(search_query or extract_search_query(text))
+        for path in pdf_paths:
+            excerpt, status = await fetch_local_pdf_excerpt(path, query_terms_list=terms)
+            blocks.append(
+                format_url_prefetch_block(
+                    url=path,
+                    excerpt=excerpt,
+                    status=status,
+                    source="local_pdf",
+                )
+            )
+        return _combine_blocks(blocks), events
+
     pasted = extract_urls_from_message(text)[: _max_message_urls()]
     if pasted:
         blocks: list[str] = []

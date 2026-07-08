@@ -26,9 +26,12 @@ from presence_ui.gateway.social_chat import (
     intercept_chat_request_async,
     stream_direct_action_response,
     stream_silent_response,
+    stream_surface_reply_ndjson,
 )
+from presence_ui.gateway.surface_direct import use_surface_direct_path
 from presence_ui.gateway.gateway_turn_cache import gateway_turn_cache_scope
 from presence_ui.gateway.stream_sanitize import extract_assistant_speech, stream_passthrough_chat
+from presence_ui.gateway.doc_prefetch import prefetch_doc_context_for_turn
 from presence_ui.gateway.url_prefetch import prefetch_urls_for_turn
 from presence_ui.services.vision_capture import vision_prefetch_enabled
 
@@ -118,17 +121,40 @@ async def _stream_gateway_chat_impl(
                 )
             )
 
+    doc_note: str | None = None
+    if message:
+        try:
+            doc_note, doc_events = await prefetch_doc_context_for_turn(
+                message,
+                session_id=payload.get("sessionId"),
+            )
+            gateway_events.extend(doc_events)
+        except Exception as exc:  # noqa: BLE001
+            doc_note = None
+            gateway_events.append(
+                activity_event(
+                    kind="doc_read",
+                    label="本を読み返せなかった",
+                    detail=str(exc)[:120],
+                    ok=False,
+                )
+            )
+
+    camera_image_url: str | None = None
     if message and vision_prefetch_enabled():
         see_intent = (hybrid.see_intent if hybrid else None) or detect_see_intent(message)
         if see_intent:
             progress_label = SEE_PROGRESS_LABELS.get(see_intent.mode, "見てる…")
             yield encode_event(progress_event(phase="see", label=progress_label))
         try:
-            vision_note, prefetch_events = await prefetch_camera_for_message(
+            vision_note, prefetch_events, camera_image_url = await prefetch_camera_for_message(
                 message,
                 see_intent=hybrid.see_intent if hybrid else None,
                 ptz_intent=hybrid.ptz_intent if hybrid else None,
+                surface_multimodal=use_surface_direct_path(),
             )
+            if camera_image_url:
+                vision_note = None
             gateway_events.extend(prefetch_events)
         except Exception as exc:  # noqa: BLE001
             vision_note = (
@@ -150,6 +176,7 @@ async def _stream_gateway_chat_impl(
             vision_prefetch=vision_note,
             web_search_prefetch=web_search_note,
             url_prefetch=url_note,
+            doc_prefetch=doc_note,
             calendar_prefetch=calendar_note,
             calendar_write=calendar_write_note,
             hybrid=hybrid,
@@ -182,26 +209,55 @@ async def _stream_gateway_chat_impl(
     user_text = result.user_text or str(payload.get("message") or "").strip()
     session_key = str(payload.get("sessionId")) if payload.get("sessionId") else None
     assistant_parts: list[str] = []
+    see_mode = hybrid.see_intent.mode if hybrid and hybrid.see_intent else "current"
+    enriched_message = str((result.payload or {}).get("message") or message).strip()
 
-    async for chunk in stream_passthrough_chat(
-        path="/api/chat",
-        payload=result.payload or payload,
-        user_text=user_text,
-        emit_tool_activity=True,
+    if (
+        use_surface_direct_path()
+        and camera_image_url
+        and result.ctx is not None
     ):
-        line = chunk.decode("utf-8", errors="replace").strip()
-        if line:
-            try:
-                obj = json.loads(line)
-                if isinstance(obj, dict) and obj.get("type") == "claude_json":
-                    data = obj.get("data")
-                    if isinstance(data, dict):
-                        speech = extract_assistant_speech(data)
-                        if speech:
-                            assistant_parts.append(speech)
-            except json.JSONDecodeError:
-                pass
-        yield chunk
+        async for chunk in stream_surface_reply_ndjson(
+            enriched_user=enriched_message,
+            raw_user=user_text,
+            ctx=result.ctx,
+            image_data_url=camera_image_url,
+            camera_see=True,
+            camera_see_mode=see_mode,
+        ):
+            line = chunk.decode("utf-8", errors="replace").strip()
+            if line:
+                try:
+                    obj = json.loads(line)
+                    if isinstance(obj, dict) and obj.get("type") == "claude_json":
+                        data = obj.get("data")
+                        if isinstance(data, dict):
+                            speech = extract_assistant_speech(data)
+                            if speech:
+                                assistant_parts.append(speech)
+                except json.JSONDecodeError:
+                    pass
+            yield chunk
+    else:
+        async for chunk in stream_passthrough_chat(
+            path="/api/chat",
+            payload=result.payload or payload,
+            user_text=user_text,
+            emit_tool_activity=True,
+        ):
+            line = chunk.decode("utf-8", errors="replace").strip()
+            if line:
+                try:
+                    obj = json.loads(line)
+                    if isinstance(obj, dict) and obj.get("type") == "claude_json":
+                        data = obj.get("data")
+                        if isinstance(data, dict):
+                            speech = extract_assistant_speech(data)
+                            if speech:
+                                assistant_parts.append(speech)
+                except json.JSONDecodeError:
+                    pass
+            yield chunk
 
     reply = assistant_parts[-1].strip() if assistant_parts else ""
     if reply:

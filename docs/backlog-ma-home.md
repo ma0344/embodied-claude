@@ -62,7 +62,7 @@
 | **GW** | 黙考ルート（**interpret** 層） | ✅ S1 · ✅ S2 · ✅ resume（opt-in） | [tracks/gw-silent.md](./tracks/gw-silent.md) |
 | **OL5** | 予定消化 loop close | ✅ a/b/c/6/STALE/d · 📋 OL7 return-signal | [tracks/ol5.md](./tracks/ol5.md) |
 | **MEM-8g** | compose salience · 終了スレの繰り返し抑制 | 💤 v0 運用確認 · 📋 **v1 gist 本線** | [tracks/compose-topic-retire.md](./tracks/compose-topic-retire.md) |
-| **MEM-8h** | memory bridge · Surface compact transcript | ✅ **A–C** · 📋 D | [tracks/mem-8h-memory-bridge.md](./tracks/mem-8h-memory-bridge.md) · [surface-direct-llm.md](./tracks/surface-direct-llm.md) |
+| **MEM-8h** | memory bridge · Surface compact transcript | ✅ **A–D** | [tracks/mem-8h-memory-bridge.md](./tracks/mem-8h-memory-bridge.md) · [surface-direct-llm.md](./tracks/surface-direct-llm.md) |
 
 ---
 
@@ -91,9 +91,10 @@
 | **K** | こより自身のコード | 💤 | [tracks/k-self-code.md](./tracks/k-self-code.md) |
 | **A** | 記憶・gateway 大追加 | 💤 | [platform-ma-home.md](./architecture/platform-ma-home.md) |
 | **OBS** | `/observe` フェーズ化 | 📋 | [tracks/obs.md](./tracks/obs.md) |
+| **OBS-TICK** | tick 視覚 encode（MEM-8 系） | 🔥 **0 実験** · 📋 **1 草案** | [tracks/obs-tick-encode.md](./tracks/obs-tick-encode.md) |
 | **CAM** | Tapo PTZ | 💤 | [tracks/cam-tapo-ptz.md](./tracks/cam-tapo-ptz.md) |
 | **EAR** | Surface マイク | 📋 | [tracks/ear.md](./tracks/ear.md) |
-| **VIS** | VL health · vision **e4b** | ✅ 切替済（2026-06-29） | [vis-health.md](./tracks/vis-health.md) |
+| **VIS** | VL health · vision **12b-qat** | ✅ 切替済（2026-07-06） | [vis-health.md](./tracks/vis-health.md) |
 | **V** | Surface UI 残（V4 等） | 部分済 | [tracks/surface-vision.md](./tracks/surface-vision.md) |
 | **GAPI** | Google Calendar / Drive | ✅ prep-1/2/3 · 7a/7b · **2b/2r/2r-S2/2s** · 📋 **7c** 複数件 · **7d** e4b確認 | [tracks/gapi.md](./tracks/gapi.md) · [gapi-setup.md](./ops/gapi-setup.md) |
 | **TEMP** | TEMP-1〜5 ✅ · TEMP-C3/b/c4 ✅ · **C5 📋** clock/e4b · SHIFT-R1/R2/R3 ✅ | [utterance-anchoring.md](./tracks/utterance-anchoring.md) · [interpretation-shift-routing.md](./tracks/interpretation-shift-routing.md) |

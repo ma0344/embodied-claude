@@ -259,7 +259,7 @@ flowchart TD
 
 ### LM Studio POC — 読取窓（✅ 2026-06-10 合格）
 
-**モデル**: `google/gemma-4-e4b` · **anchor**: 日本時間 2026-06-10 21:00 · 週始まり日曜（`date_resolution` と一致）
+**モデル**: `google/gemma-4-e4b-qat` · **anchor**: 日本時間 2026-06-10 21:00 · 週始まり日曜（`date_resolution` と一致）
 
 **System（検証済み）**
 

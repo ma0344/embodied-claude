@@ -10,6 +10,7 @@ import sqlite3
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TypeAlias
 
 _HOOKS = Path(__file__).resolve().parents[4] / ".claude" / "hooks"
 if _HOOKS.is_dir() and str(_HOOKS) not in sys.path:
@@ -17,8 +18,8 @@ if _HOOKS.is_dir() and str(_HOOKS) not in sys.path:
 
 import memory_auto_save as _mas  # noqa: E402
 
-RememberIntent = _mas.RememberIntent
-RememberOutcome = _mas.RememberOutcome
+RememberIntent: TypeAlias = _mas.RememberIntent
+RememberOutcome: TypeAlias = _mas.RememberOutcome
 detect_personal_fact_intent = _mas.detect_personal_fact_intent
 detect_remember_intent = _mas.detect_remember_intent
 detect_self_disclosure = _mas.detect_self_disclosure

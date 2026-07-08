@@ -42,6 +42,7 @@ class VisionCaptureResult:
     remember_ok: bool = False
     vision_corrupt: bool = False
     vision_reloaded: bool = False
+    image_base64: str | None = None
 
 
 async def capture_and_describe(*, mode: SeeMode, label: str = "") -> VisionCaptureResult:
@@ -97,6 +98,7 @@ async def capture_and_describe(*, mode: SeeMode, label: str = "") -> VisionCaptu
         file_path=capture.file_path,
         vision_corrupt=vision_corrupt,
         vision_reloaded=vision_reloaded,
+        image_base64=capture.image_base64 or None,
     )
 
 
@@ -226,6 +228,105 @@ VISION_PREFETCH_DIRECTIVE_ONLY = (
     "[Gateway directive — not for the user]\n"
     "Do NOT call mcp__wifi-cam__see or look_around (vision_prefetch is in this turn)."
 )
+
+
+def surface_vision_error_note(
+    *,
+    intent: SeeIntent,
+    user_text: str,
+    error: str,
+) -> str:
+    return (
+        "[vision_prefetch]\n"
+        f"mode={intent.mode}\n"
+        f"reason={intent.reason}\n"
+        f"user_text={user_text[:200]}\n"
+        f"error={error}\n"
+        "\n"
+        "[Gateway directive — not for the user]\n"
+        "Camera capture failed. Tell まー honestly; do NOT guess the scene.\n"
+        "Do NOT call mcp__wifi-cam__see or look_around."
+    )
+
+
+async def capture_for_surface_multimodal(
+    *,
+    mode: SeeMode,
+    label: str = "",
+    remember: bool = True,
+) -> tuple[VisionCaptureResult, str | None]:
+    """Capture Tapo frame for surface 12b multimodal — no e4b describe."""
+    outcome: CaptureOutcome = await capture_for_mode(mode)
+    view_label = outcome.view_label or label or mode
+    if not outcome.ok or not outcome.capture:
+        hint = outcome.error or camera_failure_hint() or "capture failed"
+        return (
+            VisionCaptureResult(
+                ok=False,
+                mode=mode,
+                label=view_label,
+                mcp_text="",
+                caption=None,
+                file_path=None,
+                error=hint,
+            ),
+            None,
+        )
+
+    capture = outcome.capture
+    image_b64 = getattr(capture, "image_base64", None)
+    if not image_b64:
+        return (
+            VisionCaptureResult(
+                ok=False,
+                mode=mode,
+                label=view_label,
+                mcp_text="",
+                caption=None,
+                file_path=getattr(capture, "file_path", None),
+                error="capture had no image bytes",
+            ),
+            None,
+        )
+
+    from presence_ui.services.chat_image import prepare_chat_image_data_url
+
+    try:
+        data_url = prepare_chat_image_data_url(image_base64=image_b64, image_mime="image/jpeg")
+    except ValueError as exc:
+        return (
+            VisionCaptureResult(
+                ok=False,
+                mode=mode,
+                label=view_label,
+                mcp_text="",
+                caption=None,
+                file_path=getattr(capture, "file_path", None),
+                error=str(exc),
+            ),
+            None,
+        )
+
+    mcp_text = ""
+    try:
+        from wifi_cam_mcp.vision import format_capture_text
+
+        mcp_text = format_capture_text(capture, view_label, vision_caption=None)
+    except ImportError:
+        path = getattr(capture, "file_path", None) or "unknown"
+        mcp_text = f"--- {view_label} ---\nfile={path}"
+
+    result = VisionCaptureResult(
+        ok=True,
+        mode=mode,
+        label=view_label,
+        mcp_text=mcp_text,
+        caption=None,
+        file_path=getattr(capture, "file_path", None),
+    )
+    if remember:
+        remember_vision_capture(result)
+    return result, data_url
 
 
 async def prefetch_vision_for_chat(

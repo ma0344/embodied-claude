@@ -33,17 +33,19 @@ def eye_affliction_summary(
     vision: VisionCaptureResult | None = None,
     capture_failed: bool = False,
 ) -> str | None:
-    """Japanese first-person summary when eyes are not healthy; None if OK."""
+    """Japanese first-person summary when eyes (capture path) are not healthy; None if OK.
+
+    Describe/LM caption failure is **not** treated as blindness — use note_eyes_multimodal_see_ok
+    for conversational surface multimodal see.
+    """
     if capture_failed or (vision is not None and not vision.ok):
         detail = (error or (vision.error if vision else None) or "カメラに繋がれへん").strip()
         return f"目が開かへんかった（{action}）。{detail[:160]}"
     if vision is None:
         return None
-    if vision.caption and vision.caption.strip():
-        return None
     if vision.vision_corrupt:
         return "目が曇ってた。画像の説明が ? だらけで取れへんかった"
-    return "目は開いたけど、何が見えてるか説明できへんかった"
+    return None
 
 
 def record_body_affliction(
@@ -168,7 +170,7 @@ def maybe_record_eye_ok(
     vision: VisionCaptureResult | None = None,
     note: str | None = None,
 ) -> bool:
-    """Mark eyes healthy in body_state when vision succeeded with a caption."""
+    """Mark eyes healthy when describe path produced a caption."""
     if vision is None or not vision.ok:
         return False
     caption = (vision.caption or "").strip()
@@ -176,5 +178,13 @@ def maybe_record_eye_ok(
         return False
     state = load_body_state()
     note_organ_ok(state, organ="eyes", note=(note or caption)[:120])
+    save_body_state(state)
+    return True
+
+
+def note_eyes_multimodal_see_ok(*, see_mode: str = "current") -> bool:
+    """Mark eyes OK after surface 12b multimodal see (independent of describe/caption)."""
+    state = load_body_state()
+    note_organ_ok(state, organ="eyes", note=f"会話で直接見た（{see_mode}）"[:120])
     save_body_state(state)
     return True

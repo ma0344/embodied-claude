@@ -16,7 +16,7 @@
 |---|--------|------------|
 | 設計 | 1 ツール完結 | 初手 → 5〜8 ループ → 記憶 → sociality → Edit |
 | 実装 | ✅ | チェックポイント・再開 API **なし** |
-| gateway | — | `observe_room_direct` は初手サブセットのみ |
+| gateway | — | `observe_room_direct` は初手サブセットのみ（**OBS-TICK-0**: caption/remember 停止実験 → [obs-tick-encode.md](./obs-tick-encode.md)） |
 
 ## CC slash 問題（MEM-5i）
 

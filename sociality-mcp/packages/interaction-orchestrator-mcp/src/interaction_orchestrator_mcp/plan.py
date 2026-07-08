@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .memory_bridge import append_memory_bridge_plan_constraints
 from .recall_query import (
     extract_schedule_facts,
     is_temporal_question,
@@ -411,6 +412,13 @@ def _pick_must_lists(
         must_include.append(
             "continue THIS room's thread — reference preceding turns in session_history; "
             "do not cold-start or impersonate a different persona"
+        )
+    if ctx.memory_bridge_lines:
+        append_memory_bridge_plan_constraints(
+            must_include=must_include,
+            bridge_lines=ctx.memory_bridge_lines,
+            bridge_keywords=ctx.memory_bridge_keywords,
+            primary_move=primary_move,
         )
     user_stripped = (user_text or "").strip()
     bare_greeting = _is_bare_greeting(user_stripped)

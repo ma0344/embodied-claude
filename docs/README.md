@@ -151,6 +151,7 @@ docs/
 | [surface-vision.md](./tracks/surface-vision.md)             | V1–V9 UI 残件                        |
 | [surface-direct-llm.md](./tracks/surface-direct-llm.md)     | 表層 LM 直叩き · compose/plan intercept |
 | [mem-8h-memory-bridge.md](./tracks/mem-8h-memory-bridge.md) | 跨 session 記憶 bridge · stage-1 ルート  |
+| [doc-read-discuss.md](./tracks/doc-read-discuss.md)         | 長文書（本・論文）の読解・議論 DOC-READ    |
 
 
 ---

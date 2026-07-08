@@ -6,7 +6,7 @@ Usage:
   uv run python scripts/compare_vision_models.py --capture
   uv run python scripts/compare_vision_models.py --preset window
   uv run python scripts/compare_vision_models.py --image C:\\path\\to\\frame.jpg \\
-      --models qwen/qwen2.5-vl-3b-instruct,google/gemma-4-e4b
+      --models qwen/qwen2.5-vl-3b-instruct,google/gemma-4-e4b-qat
 
 Env (same as production /see):
   WIFI_CAM_VISION_PROMPT, LM_STUDIO_BASE_URL, ANTHROPIC_AUTH_TOKEN
@@ -130,7 +130,7 @@ def _read_image_b64(path: Path) -> str:
 
 def _default_models() -> list[str]:
     qwen = os.environ.get("VIS_POC_QWEN_MODEL", "").strip()
-    e4b = os.environ.get("VIS_POC_E4B_MODEL", "google/gemma-4-e4b").strip()
+    e4b = os.environ.get("VIS_POC_E4B_MODEL", "google/gemma-4-e4b-qat").strip()
     if not qwen:
         qwen = os.environ.get("LM_STUDIO_VISION_MODEL", "qwen/qwen2.5-vl-3b-instruct").strip()
     return [m for m in (qwen, e4b) if m]
@@ -405,7 +405,7 @@ async def main() -> int:
     parser.add_argument(
         "--models",
         default="",
-        help="Comma-separated model ids (default: LM_STUDIO_VISION_MODEL + google/gemma-4-e4b)",
+        help="Comma-separated model ids (default: LM_STUDIO_VISION_MODEL + google/gemma-4-e4b-qat)",
     )
     parser.add_argument(
         "--out",

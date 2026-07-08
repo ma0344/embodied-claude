@@ -51,7 +51,7 @@ def test_append_gateway_llm_log_lms_format_with_calendar_system(
     user = "発話: 来月の入浴介助\n\n上記から start/end と search_query を JSON で返してください。"
     append_gateway_llm_log(
         log_label="GAPI-2b calendar read window",
-        model="google/gemma-4-e4b",
+        model="google/gemma-4-e4b-qat",
         system=system,
         user=user,
         output='{"search_query":"入浴介助"}',
@@ -77,7 +77,7 @@ def test_append_gateway_llm_log_json_format(
     system = "あなたはカレンダー読取のための時制・キーワード抽出器です。"
     append_gateway_llm_log(
         log_label="GAPI-2b calendar read window",
-        model="google/gemma-4-e4b",
+        model="google/gemma-4-e4b-qat",
         system=system,
         user="発話: 今後の東口の予定を全部教えて",
         output='{"search_query":"東口"}',
@@ -99,7 +99,7 @@ def test_append_gateway_llm_log_respects_disable(
 
     append_gateway_llm_log(
         log_label="TEMP-C Stage1",
-        model="google/gemma-4-e4b",
+        model="google/gemma-4-e4b-qat",
         user="task: temp_c_stage1",
         output="{}",
         ok=True,

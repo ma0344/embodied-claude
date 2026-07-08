@@ -50,7 +50,7 @@ git pull
 | ファイル | 内容 |
 |----------|------|
 | `.claude/settings.local.json` | トップの `"model"` と `env.*MODEL*` をすべて新 ID に |
-| `.mcp.json` | `mcpServers.wifi-cam.env.CLAUDE_MODEL` / `LM_STUDIO_VISION_MODEL` |
+| `.mcp.json` | `mcpServers.wifi-cam.env.CLAUDE_MODEL`（vision describe は 12b-qat · `LM_STUDIO_VISION_MODEL` 廃止） |
 
 `settings.local.json` は gitignore 済み（マシンごとのシークレット・設定）。
 
@@ -60,13 +60,18 @@ git pull
 - `CLAUDE_MODEL` / `LMSTUDIO_MODEL`
 - `ANTHROPIC_DEFAULT_SONNET_MODEL` / `OPUS` / `HAIKU`
 - `CLAUDE_CODE_SUBAGENT_MODEL`
-- `LM_STUDIO_VISION_MODEL`（wifi-cam / gateway の **画像説明専用**。チャットモデルと別 ID）
+- `PRESENCE_CLASSIFIER_MODEL`（gateway **分類専用** — OL-GATE / TEMP-C / GAPI-2b 等。既定 `google/gemma-4-e4b-qat`）
+- ~~`LM_STUDIO_VISION_MODEL`~~ — **非推奨**（2026-07-06 以降 describe は 12b-qat · `wifi_cam_mcp.vision` が無視）
 
 **重要:** トップの `"model": "...-qat"` だけ更新して `env.CLAUDE_MODEL` が古いままだと、
 API リクエストだけ非 QAT モデルになることがある。`set-lmstudio-model.ps1` か
 `sync-lmstudio-settings.ps1` で揃えること。
 
-**二モデル構成（2026-06〜）:** チャット = `google/gemma-4-12b-qat`、vision = **`google/gemma-4-e4b`**（classifier と同ロード可）。KV キャッシュを分離する。
+**三モデル構成（ma-home 2026-07-06）:** 表層 + **全 vision describe** = `google/gemma-4-12b-qat` · classifier = `google/gemma-4-e4b-qat` · native chat の see 本線 = 12b multimodal 直渡し（VIS-SD）。
+
+**VIS-12b（2026-07-06）:** tick `observe_room` / MCP `see` / legacy prefetch の caption も **12b-qat**（`wifi_cam_mcp.vision.resolve_vision_lm_model`）。`LM_STUDIO_VISION_MODEL` は **無視**。→ `.\scripts\enable-vision-12b-ma-home.ps1` → `restart-presence-ui.ps1`。
+
+**e4b-qat 統一（2026-07-05）:** classifier のみ e4b-qat。vision は 12b に移行済み（上記 VIS-12b）。
 
 **vision 切替（2026-06-29）:** Qwen2.5-VL-3B から e4b へ。手順: `.\scripts\enable-vis-e4b-ma-home.ps1` → LM Studio で Qwen unload → `restart-presence-ui.ps1`。
 
@@ -93,6 +98,10 @@ Surface Direct では非推奨。
 詳細 → [surface-direct-llm.md](../tracks/surface-direct-llm.md) · [role-persistence-ma-home.md](./role-persistence-ma-home.md)
 
 ## Vision スロット（こよりの目）
+
+**ma-home 本線（2026-07-06 · VIS-12b）:** 画像 caption / tick `observe_room` / MCP `see` / legacy prefetch は **表層と同じ `google/gemma-4-12b-qat`**（`wifi_cam_mcp.vision`）。別 vision モデルのロードは不要。native chat の「見て」は VIS-SD で 12b multimodal 直渡し。
+
+以下は **legacy（Qwen / 独立 vision スロット）** の参考。新規 ma-home では使わない。
 
 チャット（Gemma）と **別モデルを LM Studio に同時ロード**し、`:1234` の `"model"` フィールドで振り分ける。
 

@@ -14,14 +14,11 @@ from presence_ui.services.usb_camera import (
 )
 
 
-def test_usb_camera_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_usb_camera_enabled_is_always_false(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("PRESENCE_USB_CAMERA_ENABLED", raising=False)
     assert usb_camera_enabled() is False
-
-
-def test_usb_camera_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PRESENCE_USB_CAMERA_ENABLED", "1")
-    assert usb_camera_enabled() is True
+    assert usb_camera_enabled() is False
 
 
 def test_usb_camera_name_default_quickcam(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -49,38 +46,7 @@ def test_resolve_usb_camera_index_uses_name(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 @pytest.mark.asyncio
-async def test_capture_for_mode_window_uses_usb_when_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("PRESENCE_USB_CAMERA_ENABLED", "1")
-    fake = MagicMock()
-    fake.width = 640
-    fake.height = 360
-    fake.image_base64 = "abc"
-    fake.file_path = None
-    fake.timestamp = "20260620_120000"
-
-    with (
-        patch(
-            "presence_ui.services.usb_camera.capture_usb_frame",
-            new=AsyncMock(return_value=fake),
-        ),
-        patch(
-            "presence_ui.services.usb_camera.resolved_usb_camera_label",
-            return_value="Logitech QuickCam Pro 9000",
-        ),
-    ):
-        from presence_ui.services.camera import capture_for_mode
-
-        outcome = await capture_for_mode("window", save_to_file=False)
-
-    assert outcome.ok is True
-    assert outcome.capture is fake
-    assert "QuickCam" in outcome.view_label
-
-
-@pytest.mark.asyncio
-async def test_capture_for_mode_window_falls_back_to_tapo_on_usb_error(
+async def test_capture_for_mode_window_uses_tapo_preset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("PRESENCE_USB_CAMERA_ENABLED", "1")
@@ -92,21 +58,24 @@ async def test_capture_for_mode_window_falls_back_to_tapo_on_usb_error(
     tapo_result.timestamp = "20260620_120001"
 
     with (
-        patch(
-            "presence_ui.services.usb_camera.capture_usb_frame",
-            new=AsyncMock(side_effect=RuntimeError("usb busy")),
-        ),
-        patch("presence_ui.services.camera.preset_id_for_location", return_value=None),
+        patch("presence_ui.services.camera.preset_id_for_location", return_value="preset-window"),
         patch(
             "presence_ui.services.camera._capture_raw",
             new=AsyncMock(return_value=tapo_result),
         ),
-        patch("presence_ui.services.camera._get_camera", new=AsyncMock(return_value=MagicMock())),
         patch("presence_ui.services.camera._in_capture_backoff", return_value=False),
     ):
-        from presence_ui.services.camera import capture_for_mode
+        tapo_cam = MagicMock()
+        move_result = MagicMock(success=True, message="ok")
+        tapo_cam.go_to_preset = AsyncMock(return_value=move_result)
+        with patch(
+            "presence_ui.services.camera._get_camera",
+            new=AsyncMock(return_value=tapo_cam),
+        ):
+            from presence_ui.services.camera import capture_for_mode
 
-        outcome = await capture_for_mode("window", save_to_file=False)
+            outcome = await capture_for_mode("window", save_to_file=False)
 
     assert outcome.ok is True
     assert outcome.capture is tapo_result
+    assert "窓" in outcome.view_label

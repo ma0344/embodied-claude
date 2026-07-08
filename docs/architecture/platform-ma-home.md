@@ -38,7 +38,7 @@
 |------|------|
 | B2 自動ロード | 🪦 閉 — 手動 + `check-koyori-stack.ps1` 警告 |
 | Concurrent Predictions | **1**（KV） |
-| **いま** | Gemma 12B QAT（表層）+ **google/gemma-4-e4b**（vision · classifier 同族）— KV 分離 |
+| **いま** | Gemma 12B QAT（表層 + **全 vision describe** + native see multimodal）+ **e4b-qat**（classifier のみ） |
 | **ロードマップ（合意 2026-06-29）** | 表層 12B · **前頭葉 e4b**（classifier）· vision **e4b**（2026-06-29 切替） |
 
 ### モデル整理（段階）

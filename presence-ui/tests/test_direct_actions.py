@@ -128,37 +128,52 @@ async def test_observe_room_direct_with_mock_camera() -> None:
         width = 640
         height = 480
 
-    fake_vision = _vision_result()
+    class FakeOutcome:
+        ok = True
+        capture = FakeCapture()
+        error = None
 
     with (
         patch(
-            "presence_ui.services.camera.camera_look_around",
-            new=AsyncMock(return_value=[FakeCapture(), FakeCapture()]),
+            "presence_ui.services.camera.capture_for_mode",
+            new=AsyncMock(return_value=FakeOutcome()),
+        ),
+        patch(
+            "presence_ui.services.room_scene.log_room_tick_signal",
+            return_value=None,
         ),
         patch(
             "presence_ui.services.vision_capture.describe_existing_capture",
-            new=AsyncMock(return_value=fake_vision),
-        ),
+            new=AsyncMock(),
+        ) as describe_mock,
         patch(
             "presence_ui.services.vision_capture.remember_vision_capture",
-            return_value=True,
-        ),
+        ) as remember_mock,
     ):
         outcome = await direct_actions.observe_room_direct(stores, person_id="ma")
 
     assert outcome.ok is True
     assert outcome.action == "camera_look_around"
     assert outcome.desire_satisfied == "observe_room"
+    assert "OBS-TICK-0" in outcome.summary
+    describe_mock.assert_not_called()
+    remember_mock.assert_not_called()
     stores.orchestrator.record_agent_experience.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_observe_room_direct_empty_captures_shows_hint() -> None:
     stores = MagicMock()
+
+    class FailOutcome:
+        ok = False
+        capture = None
+        error = "camera unavailable (cooldown)"
+
     with (
         patch(
-            "presence_ui.services.camera.camera_look_around",
-            new=AsyncMock(return_value=[]),
+            "presence_ui.services.camera.capture_for_mode",
+            new=AsyncMock(return_value=FailOutcome()),
         ),
         patch(
             "presence_ui.services.camera.camera_failure_hint",
@@ -222,21 +237,22 @@ async def test_execute_smoke_action_observe_room() -> None:
         width = 640
         height = 480
 
+    class FakeOutcome:
+        ok = True
+        capture = FakeCapture()
+        error = None
+
     ctx = _ctx(dominant="observe_room")
     plan = _plan(move="act_autonomously", allowed=["camera_look_around"])
 
     with (
         patch(
-            "presence_ui.services.camera.camera_look_around",
-            new=AsyncMock(return_value=[FakeCapture()]),
+            "presence_ui.services.camera.capture_for_mode",
+            new=AsyncMock(return_value=FakeOutcome()),
         ),
         patch(
-            "presence_ui.services.vision_capture.describe_existing_capture",
-            new=AsyncMock(return_value=_vision_result()),
-        ),
-        patch(
-            "presence_ui.services.vision_capture.remember_vision_capture",
-            return_value=True,
+            "presence_ui.services.room_scene.log_room_tick_signal",
+            return_value=None,
         ),
         patch(
             "presence_ui.gateway.direct_actions.satisfy_desire_direct",

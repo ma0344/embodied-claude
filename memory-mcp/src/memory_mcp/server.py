@@ -1828,6 +1828,8 @@ class MemoryMCPServer:
                 "emotion": r.memory.emotion if hasattr(r, "memory") else "",
                 "score": relevance,
                 "timestamp": r.memory.timestamp if hasattr(r, "memory") else None,
+                "category": r.memory.category if hasattr(r, "memory") else "daily",
+                "importance": int(r.memory.importance) if hasattr(r, "memory") else 3,
             })
         return {"items": items}
 

@@ -1,13 +1,13 @@
-# VIS-e4b ship — vision model → google/gemma-4-e4b (ma-home 2026-06-29)
+# VIS-e4b-qat — vision describe model (ma-home 2026-07-05)
 #
-# Prerequisite: LM Studio に e4b vision をロード（classifier と同じ GGUF で可）
+# Prerequisite: LM Studio に e4b-qat をロード（classifier と同じ GGUF で可）
 #
 # Usage:
 #   .\scripts\enable-vis-e4b-ma-home.ps1
 #   .\scripts\restart-presence-ui.ps1
 
 param(
-    [string]$VisionModel = "google/gemma-4-e4b",
+    [string]$VisionModel = "google/gemma-4-e4b-qat",
     [switch]$WhatIf
 )
 
@@ -48,6 +48,6 @@ Write-Host ""
 Write-Host "Updated $LocalEnvFile : $Key=$VisionModel"
 Write-Host ""
 Write-Host "Next:"
-Write-Host "  1. LM Studio: unload Qwen2.5-VL, keep google/gemma-4-e4b loaded (Concurrent=1)"
+Write-Host "  1. LM Studio: keep google/gemma-4-e4b-qat loaded (Concurrent=1, shared with classifier OK)"
 Write-Host "  2. .\scripts\check-lmstudio-model.ps1"
 Write-Host "  3. .\scripts\restart-presence-ui.ps1"

@@ -265,6 +265,7 @@ def intercept_chat_request(
     vision_prefetch: str | None = None,
     web_search_prefetch: str | None = None,
     url_prefetch: str | None = None,
+    doc_prefetch: str | None = None,
     calendar_prefetch: str | None = None,
     calendar_write: str | None = None,
     calendar_confirm: str | None = None,
@@ -310,6 +311,7 @@ def intercept_chat_request(
         vision_prefetch=vision_prefetch,
         web_search_prefetch=web_search_prefetch,
         url_prefetch=url_prefetch,
+        doc_prefetch=doc_prefetch,
         calendar_prefetch=calendar_prefetch,
         calendar_write=write_block,
         calendar_confirm=confirm_block,
@@ -330,6 +332,7 @@ async def intercept_chat_request_async(
     vision_prefetch: str | None = None,
     web_search_prefetch: str | None = None,
     url_prefetch: str | None = None,
+    doc_prefetch: str | None = None,
     calendar_prefetch: str | None = None,
     calendar_write: str | None = None,
     calendar_confirm: str | None = None,
@@ -369,6 +372,7 @@ async def intercept_chat_request_async(
         vision_prefetch=vision_prefetch,
         web_search_prefetch=web_search_prefetch,
         url_prefetch=url_prefetch,
+        doc_prefetch=doc_prefetch,
         calendar_prefetch=calendar_prefetch,
         calendar_write=write_block,
         calendar_confirm=confirm_block,
@@ -389,6 +393,7 @@ def _finish_intercept_chat_request(
     vision_prefetch: str | None,
     web_search_prefetch: str | None,
     url_prefetch: str | None,
+    doc_prefetch: str | None = None,
     calendar_prefetch: str | None,
     calendar_write: str | None,
     calendar_confirm: str | None,
@@ -756,6 +761,8 @@ def _finish_intercept_chat_request(
         enriched_message = f"{enriched_message.rstrip()}\n\n{web_search_prefetch.strip()}"
     if url_prefetch:
         enriched_message = f"{enriched_message.rstrip()}\n\n{url_prefetch.strip()}"
+    if doc_prefetch:
+        enriched_message = f"{enriched_message.rstrip()}\n\n{doc_prefetch.strip()}"
     if calendar_prefetch:
         enriched_message = f"{enriched_message.rstrip()}\n\n{calendar_prefetch.strip()}"
     if calendar_write:
@@ -801,4 +808,45 @@ async def stream_direct_action_response(
         "summary": summary,
     }
     yield (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
+    yield b'{"type":"done"}\n'
+
+
+async def stream_surface_reply_ndjson(
+    *,
+    enriched_user: str,
+    raw_user: str,
+    ctx: InteractionContext,
+    image_data_url: str | None = None,
+    camera_see: bool = False,
+    camera_see_mode: str = "current",
+) -> AsyncIterator[bytes]:
+    """Legacy /api/chat NDJSON — surface direct multimodal (same path as native chat)."""
+    from presence_ui.services.chat_image import prepare_enriched_for_camera_see
+    from presence_ui.services.llm import generate_surface_reply
+
+    enriched = enriched_user
+    if image_data_url and camera_see:
+        enriched = prepare_enriched_for_camera_see(enriched, see_mode=camera_see_mode)
+
+    reply = await generate_surface_reply(
+        enriched_user=enriched,
+        raw_user=raw_user,
+        ctx=ctx,
+        image_data_url=image_data_url,
+        image_source="camera" if camera_see else "user",
+    )
+    if camera_see and image_data_url and reply:
+        from presence_ui.services.somatic import note_eyes_multimodal_see_ok
+
+        note_eyes_multimodal_see_ok(see_mode=camera_see_mode)
+    sdk_msg = {
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [{"type": "text", "text": reply}],
+        },
+    }
+    yield (
+        json.dumps({"type": "claude_json", "data": sdk_msg}, ensure_ascii=False) + "\n"
+    ).encode("utf-8")
     yield b'{"type":"done"}\n'

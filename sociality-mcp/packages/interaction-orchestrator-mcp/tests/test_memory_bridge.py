@@ -1,19 +1,56 @@
-"""Tests for MEM-8h-C memory bridge."""
+"""Tests for MEM-8h memory bridge (C + D)."""
 
 from __future__ import annotations
 
 from interaction_orchestrator_mcp.memory_bridge import (
     MemoryBridgeHit,
     apply_memory_bridge_to_context,
+    bridge_fact_refs,
     format_bridge_lines,
     hits_from_http_items,
     merge_bridge_hits,
 )
+from interaction_orchestrator_mcp.plan import plan_response
+from interaction_orchestrator_mcp.recall_query import bridge_hit_rank, is_fact_like_row
 from interaction_orchestrator_mcp.schemas import (
     AgentStateSummary,
     InteractionContext,
+    PlanResponseInput,
     ResponseContract,
 )
+
+
+def _ctx(**updates) -> InteractionContext:
+    base = InteractionContext(
+        ts="2026-07-03T11:00:00+00:00",
+        local_time="2026-07-03T20:00:00+09:00",
+        timezone="Asia/Tokyo",
+        agent_state=AgentStateSummary(ts="2026-07-03T11:00:00+00:00"),
+        response_contract=ResponseContract(),
+        prompt_summary="test",
+        compact_prompt_block="[interaction_context]\nold",
+    )
+    return base.model_copy(update=updates)
+
+
+def test_is_fact_like_row() -> None:
+    assert is_fact_like_row("まーが梅干しづくりを提案した")
+    assert not is_fact_like_row("【会話の区切り】\n" + ("log\n" * 20))
+
+
+def test_bridge_hit_rank_prefers_fact_over_episode_snippet() -> None:
+    fact_score = bridge_hit_rank(
+        "まーが梅干しづくりを提案",
+        base_relevance=0.6,
+        category="observation",
+        importance=4,
+    )
+    long_score = bridge_hit_rank(
+        "まーが梅干しの話を長々としていた " + ("詳細 " * 30),
+        base_relevance=0.7,
+        category="daily",
+    )
+    assert fact_score > long_score
 
 
 def test_hits_from_http_skips_episodic() -> None:
@@ -23,6 +60,8 @@ def test_hits_from_http_skips_episodic() -> None:
             "content": "まーが梅干しづくりを提案した",
             "score": 0.7,
             "timestamp": "2026-07-03T10:00:00+09:00",
+            "category": "observation",
+            "importance": 4,
         },
     ]
     hits = hits_from_http_items(items, keyword="梅干し")
@@ -55,21 +94,66 @@ def test_merge_dedupes_existing_compose_memories() -> None:
     assert merged == []
 
 
-def test_apply_memory_bridge_pins_in_compact() -> None:
-    ctx = InteractionContext(
-        ts="2026-07-03T11:00:00+00:00",
-        local_time="2026-07-03T20:00:00+09:00",
-        timezone="Asia/Tokyo",
-        agent_state=AgentStateSummary(ts="2026-07-03T11:00:00+00:00"),
-        response_contract=ResponseContract(),
-        prompt_summary="test",
-        compact_prompt_block="[interaction_context]\nold",
-    )
+def test_bridge_fact_refs_promote_compact_facts() -> None:
+    hits = [
+        MemoryBridgeHit(
+            keyword="梅干し",
+            content="まーが梅干しづくりを提案した",
+            timestamp="2026-07-03T10:00:00+09:00",
+            score=0.85,
+        )
+    ]
+    refs = bridge_fact_refs(hits, existing_contents=set())
+    assert len(refs) == 1
+    assert refs[0].use_policy == "mentionable"
+    assert refs[0].reason == "memory_bridge_fact_row"
+
+
+def test_apply_memory_bridge_pins_and_sets_ctx_fields() -> None:
+    hits = [
+        MemoryBridgeHit(
+            keyword="梅干し",
+            content="まーが梅干しづくりを提案した",
+            timestamp="2026-07-03T10:00:00+09:00",
+            score=0.85,
+        )
+    ]
     updated = apply_memory_bridge_to_context(
-        ctx,
+        _ctx(),
         bridge_lines=["- 2026-07-03: 梅干しづくりの話"],
+        bridge_keywords=["梅干し"],
+        bridge_hits=hits,
         user_text="梅干し作ろう",
         max_chars=8000,
     )
     assert "[memory_bridge" in updated.compact_prompt_block
-    assert "2026-07-03" in updated.compact_prompt_block
+    assert updated.memory_bridge_lines
+    assert updated.memory_bridge_keywords == ["梅干し"]
+    assert any(m.reason == "memory_bridge_fact_row" for m in updated.relevant_memories)
+
+
+def test_plan_soft_must_include_for_bridge() -> None:
+    ctx = _ctx(
+        memory_bridge_lines=["- 2026-07-03: 梅干しづくり"],
+        memory_bridge_keywords=["梅干し"],
+    )
+    plan = plan_response(
+        PlanResponseInput(interaction_context=ctx, user_text="梅干し作ろうかな")
+    )
+    joined = " ".join(plan.must_include)
+    assert "memory_bridge (soft)" in joined
+    assert "梅干し" in joined
+
+
+def test_plan_skips_bridge_soft_on_stay_silent() -> None:
+    ctx = _ctx(
+        memory_bridge_lines=["- 2026-07-03: 梅干し"],
+        memory_bridge_keywords=["梅干し"],
+        boundary_hints=["quiet hours are active"],
+        social_state={"availability": "do_not_interrupt", "interaction_phase": "idle"},
+    )
+    plan = plan_response(
+        PlanResponseInput(interaction_context=ctx, user_text="梅干し")
+    )
+    assert plan.primary_move in {"stay_silent", "defer"}
+    assert not any("memory_bridge (soft)" in item for item in plan.must_include)

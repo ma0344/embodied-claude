@@ -23,6 +23,11 @@ def use_surface_direct_path() -> bool:
     return surface_direct_enabled()
 
 
+def camera_vision_via_surface_enabled() -> bool:
+    """Conversational see — JPEG direct to surface 12b multimodal (no vision_prefetch caption)."""
+    return surface_direct_enabled()
+
+
 def compose_omit_session_transcript_in_compact(session_key: str | None) -> bool:
     """Whether compose should omit full session transcript (Claude Code JSONL resume path).
 

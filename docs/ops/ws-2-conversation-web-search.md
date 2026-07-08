@@ -126,6 +126,27 @@ query=松本市 地域生活支援事業 日中一時 請求様式
 
 **受け入れ（まー実例）**: 松本市 URL 貼付ターンで prefetch に「日中一時支援（補助金）」「（委託）」の語が excerpt に含まれる。含まれなければこよりは「中身まだ確認できてへん」と言う。
 
+### WS-2d — PDF 抽出（実装済 2026-07-07）
+
+**合意（まー）**: 読ませたいのは**テキスト埋め込み PDF**（論文・電子文書・行政様式）中心。パス/URL 両対応。スキャン PDF は当面スコープ外（Phase 2 で OCR/VLM フォールバック）。
+
+| 項目 | 内容 |
+|------|------|
+| ライブラリ | **PyMuPDF（fitz）** — 二段組の論文に強い。自宅利用で AGPL 問題なし |
+| 経路① URL | `fetch_url_excerpt` が PDF を検出 → 従来 `pdf_unsupported` を置換。bytes DL → `pdf_extract.extract_text_from_bytes` → `select_excerpt`（query-aware）→ status `pdf_ok` |
+| 経路② ローカル | メッセージ中の `"C:\…\x.pdf"` / 素の Windows パス / `file:///…` を `extract_pdf_paths_from_message` で検出 → `fetch_local_pdf_excerpt` → excerpt |
+| 抽出 | 純関数・無人格（感覚/前処理）。要約/解釈は表層。全文 remember しない（excerpt のみ、原文は path 参照＝L3） |
+| 境界 | ローカル読取は **allowlist**（`PRESENCE_PDF_ALLOW_DIRS`、既定は user home 配下のみ）。外は `pdf_not_allowed` で拒否 |
+| 上限 | ページ `PRESENCE_PDF_MAX_PAGES`（既定50）・文字 `PRESENCE_PDF_MAX_CHARS`（既定20000）・サイズ `PRESENCE_PDF_MAX_BYTES`（既定20MiB） |
+| 契約 | status で directive 分岐: `pdf_ok`=excerpt のみ根拠 / `pdf_scanned`=「スキャンっぽい・まだ読めへん」/ `pdf_not_found` / `pdf_not_allowed` / `pdf_too_large` / `pdf_unsupported`（捏造禁止） |
+| スキャン検出 | ページはあるが埋め込みテキスト空 → `scanned`（画像 PDF）。OCR/VLM は Phase 2 未配線 |
+
+**コード**: `services/pdf_extract.py`（`extract_text_from_bytes` / `extract_text_from_path` / `PdfExtractResult` / `is_path_allowed`）· `gateway/url_prefetch.py`（`extract_pdf_paths_from_message` / `fetch_local_pdf_excerpt` / `_pdf_result_to_excerpt` / PDF status directive）。
+**テスト**: `tests/test_pdf_extract.py`（fitz round-trip・allowlist・scanned・path 抽出・excerpt・block 整形）。
+**Phase 2（未着手）**: `scanned` のとき fitz でページ画像化 → gemma vision フォールバック → 精度要れば日本語 OCR（PaddleOCR / Qwen2.5-VL。**DeepSeek/Unlimited-OCR 系は日本語弱く不採用**）。
+
+**長文書は WS-2d では扱わない**: 本・論文のように「一度に載らない・議論/深掘りしたい」長文は、excerpt 一発ではなく **分割→地図→cue 駆動 retrieval** が要る。→ 別トラック [DOC-READ](../tracks/doc-read-discuss.md)（WS-2d の `pdf_extract` を ingest 入口として再利用）。
+
 ### WS-3 — CC ツール無効化（小）
 
 - `claude_permissions` / native chat: `WebSearch` off（`web_search` prefetch 有効時）

@@ -14,7 +14,12 @@ from presence_ui.gateway.see_intent import (
     detect_see_intent,
 )
 from presence_ui.services.camera import camera_move
-from presence_ui.services.vision_capture import prefetch_vision_for_chat, vision_prefetch_enabled
+from presence_ui.services.vision_capture import (
+    capture_for_surface_multimodal,
+    prefetch_vision_for_chat,
+    surface_vision_error_note,
+    vision_prefetch_enabled,
+)
 
 
 def ptz_prefetch_note(*, intent: PtzIntent, ok: bool, detail: str) -> str:
@@ -45,19 +50,25 @@ async def prefetch_camera_for_message(
     ptz_intent: PtzIntent | None = None,
     stores: PresenceStores | None = None,
     person_id: str = "ma",
-) -> tuple[str | None, list[dict[str, Any]]]:
-    """Run PTZ and/or vision prefetch when the user message implies camera motion or seeing."""
+    surface_multimodal: bool = False,
+) -> tuple[str | None, list[dict[str, Any]], str | None]:
+    """Run PTZ and/or vision prefetch when the user message implies camera motion or seeing.
+
+    Returns ``(vision_note, gateway_events, image_data_url)``. On surface multimodal see,
+    ``vision_note`` is omitted and ``image_data_url`` carries the Tapo JPEG for 12b.
+    """
     text = (message or "").strip()
     if not text or not direct_actions_enabled():
-        return None, []
+        return None, [], None
 
     ptz = ptz_intent or detect_ptz_intent(text)
     see: SeeIntent | None = see_intent or detect_see_intent(text)
     if not ptz and not (see and vision_prefetch_enabled()):
-        return None, []
+        return None, [], None
 
     gateway_events: list[dict[str, Any]] = []
     notes: list[str] = []
+    image_data_url: str | None = None
 
     if ptz:
         ok, detail = await camera_move(ptz.direction, ptz.degrees)
@@ -72,12 +83,28 @@ async def prefetch_camera_for_message(
         notes.append(ptz_prefetch_note(intent=ptz, ok=ok, detail=detail))
 
     if see and vision_prefetch_enabled():
+        label_map: dict[str, str] = {}
+        from presence_ui.services.camera_locations import CAMERA_LOCATIONS
+
+        label_map["current"] = "--- Current View ---"
+        label_map["look_around"] = "--- Center View (room scan) ---"
+        for key, spec in CAMERA_LOCATIONS.items():
+            label_map[key] = spec.capture_label
+        capture_label = label_map.get(see.mode, "")
         try:
-            result, vision_note = await prefetch_vision_for_chat(
-                intent=see,
-                user_text=text,
-                remember=True,
-            )
+            if surface_multimodal:
+                result, image_data_url = await capture_for_surface_multimodal(
+                    mode=see.mode,
+                    label=capture_label,
+                    remember=True,
+                )
+                vision_note = None
+            else:
+                result, vision_note = await prefetch_vision_for_chat(
+                    intent=see,
+                    user_text=text,
+                    remember=True,
+                )
             detail = result.caption or result.error or result.label
             activity_label = "見た"
             if see.mode == "window":
@@ -98,7 +125,16 @@ async def prefetch_camera_for_message(
                     ok=result.ok,
                 )
             )
-            notes.append(vision_note)
+            if vision_note:
+                notes.append(vision_note)
+            elif not result.ok:
+                notes.append(
+                    surface_vision_error_note(
+                        intent=see,
+                        user_text=text,
+                        error=result.error or "capture failed",
+                    )
+                )
             if stores is not None:
                 from presence_ui.services.somatic import maybe_record_eye_affliction
 
@@ -124,6 +160,7 @@ async def prefetch_camera_for_message(
                 activity_event(kind="see", label="見られなかった", detail=str(exc)[:120], ok=False)
             )
 
-    if not notes:
-        return None, gateway_events
-    return "\n\n".join(notes), gateway_events
+    if not notes and not image_data_url:
+        return None, gateway_events, None
+    vision_note = "\n\n".join(notes) if notes else None
+    return vision_note, gateway_events, image_data_url

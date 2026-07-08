@@ -764,17 +764,18 @@ async def observe_room_direct(
     *,
     person_id: str,
 ) -> DirectActionOutcome:
-    """Look around via TapoCamera, vision-describe center, store observation memory."""
-    from presence_ui.services.camera import camera_failure_hint, camera_look_around
-    from presence_ui.services.vision_capture import (
-        describe_existing_capture,
-        observation_summary_from_vision,
-        remember_vision_capture,
-    )
+    """Single dining-preset capture; satisfy observe_room (OBS-TICK-0/1b: no caption/remember).
 
-    captures = await camera_look_around()
-    if not captures:
-        hint = camera_failure_hint() or "no captures"
+    ルーティン tick は dining（部屋全景）preset に固定移動してから撮る。
+    こより自身が窓/デスクへ向けた後でも、tick は必ず dining 基準に戻るので信号がぶれない。
+    """
+    from presence_ui.services.camera import camera_failure_hint, capture_for_mode
+    from presence_ui.services.room_scene import DEFAULT_TICK_VIEW, log_room_tick_signal
+
+    view_id = DEFAULT_TICK_VIEW
+    capture_outcome = await capture_for_mode(view_id)
+    if not capture_outcome.ok or not capture_outcome.capture:
+        hint = capture_outcome.error or camera_failure_hint() or "no capture"
         from presence_ui.services.somatic import maybe_record_eye_affliction
 
         maybe_record_eye_affliction(
@@ -787,7 +788,7 @@ async def observe_room_direct(
         return DirectActionOutcome(
             ok=False,
             action="camera_look_around",
-            summary=f"Camera look-around failed: {hint}",
+            summary=f"Room capture failed: {hint}",
             detail=hint,
             events=[
                 activity_event(
@@ -799,55 +800,20 @@ async def observe_room_direct(
             ],
         )
 
-    paths = [c.file_path for c in captures if getattr(c, "file_path", None)]
-    vision = await describe_existing_capture(
-        captures[0],
-        mode="look_around",
-        label="--- Center View (room scan) ---",
-        extra_line=f"Room scan: {len(captures)} angles captured.",
+    capture = capture_outcome.capture
+    file_path = getattr(capture, "file_path", None)
+    signal = log_room_tick_signal(
+        view_id=view_id,
+        image_base64=capture.image_base64,
+        capture_path=file_path,
     )
-    if not vision.ok:
-        hint = vision.error or "vision describe failed"
-        from presence_ui.services.somatic import maybe_record_eye_affliction
-
-        maybe_record_eye_affliction(
-            stores,
-            person_id=person_id,
-            action="camera_look_around",
-            error=hint,
-            vision=vision,
+    summary = f"Room view: {view_id} single capture (OBS-TICK-0)"
+    if signal is not None:
+        summary = (
+            f"Room view: {view_id} single capture "
+            f"hamming={signal['hamming_baseline']} "
+            "(OBS-TICK-1b signal)"
         )
-        return DirectActionOutcome(
-            ok=False,
-            action="camera_look_around",
-            summary=f"Camera look-around vision failed: {hint}",
-            detail=hint,
-            events=[
-                activity_event(
-                    kind="see",
-                    label="部屋を見た",
-                    detail=hint[:200],
-                    ok=False,
-                )
-            ],
-        )
-
-    remember_ok = remember_vision_capture(vision)
-    summary = observation_summary_from_vision(vision)
-    if not vision.caption and len(captures) > 0:
-        summary = f"{summary}（{len(captures)} angles）"
-    from presence_ui.services.somatic import maybe_record_eye_affliction, maybe_record_eye_ok
-
-    remedy = "vision_reload" if vision.vision_reloaded else None
-    affliction = maybe_record_eye_affliction(
-        stores,
-        person_id=person_id,
-        action="camera_look_around",
-        vision=vision,
-        remedy=remedy,
-    )
-    if not affliction:
-        maybe_record_eye_ok(vision=vision, note=summary[:120])
     stores.orchestrator.record_agent_experience(
         RecordAgentExperienceInput(
             ts=utc_now(),
@@ -855,10 +821,18 @@ async def observe_room_direct(
             kind="agent_observation",
             summary=summary,
             public_summary=summary,
-            importance=3,
+            importance=2,
             privacy_level="relationship",
             related_event_ids=[],
-            artifacts=[{"capture_count": len(captures), "paths": paths[:4]}],
+            artifacts=[
+                {
+                    "view_id": view_id,
+                    "capture_count": 1,
+                    "paths": [file_path] if file_path else [],
+                    "encode": "look_only",
+                    "signal": signal,
+                }
+            ],
         )
     )
     stores.social_state.ingest_social_event(
@@ -867,19 +841,26 @@ async def observe_room_direct(
             "source": "gateway_direct",
             "kind": "scene_parse",
             "person_id": person_id,
-            "confidence": 0.7,
+            "confidence": 0.5,
             "payload": {
+                "view_id": view_id,
                 "scene_summary": summary,
-                "capture_count": len(captures),
+                "capture_count": 1,
+                "encode": "look_only",
+                "signal": signal,
             },
         }
     )
     events = [
-        progress_event(phase="see", label="部屋を見渡した"),
+        progress_event(phase="see", label="部屋を見た"),
         activity_event(
             kind="see",
             label="部屋を見た",
-            detail=f"{len(captures)} captures, remember={'ok' if remember_ok else 'fail'}",
+            detail=(
+                f"hamming={signal['hamming_baseline']}, caption=off"
+                if signal
+                else "single capture, caption=off"
+            ),
             ok=True,
         ),
     ]
@@ -887,9 +868,9 @@ async def observe_room_direct(
         ok=True,
         action="camera_look_around",
         summary=summary,
-        detail=vision.file_path or "",
+        detail=file_path or "",
         events=events,
-        desire_satisfied="observe_room" if remember_ok else None,
+        desire_satisfied="observe_room",
     )
 
 
@@ -1310,6 +1291,16 @@ async def look_preset_direct(
 
     remember_ok = remember_vision_capture(vision)
     summary = observation_summary_from_vision(vision)
+
+    if getattr(vision, "image_base64", None):
+        from presence_ui.services.room_scene import log_room_tick_signal
+
+        log_room_tick_signal(
+            view_id=location,
+            image_base64=vision.image_base64,
+            capture_path=vision.file_path,
+        )
+
     from presence_ui.services.somatic import maybe_record_eye_affliction, maybe_record_eye_ok
 
     remedy = "vision_reload" if vision.vision_reloaded else None

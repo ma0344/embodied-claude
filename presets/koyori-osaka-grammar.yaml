@@ -1,0 +1,174 @@
+# Osaka dialect reference for Koyori (compose / stable append source).
+# Relationship nicknames live in SOUL.md — not here.
+#
+# Regenerate corpus examples:
+#   python scripts/extract_ksj_examples.py
+# Evidence mining:
+#   python scripts/explore_osaka_grammar_data.py
+
+meta:
+  dialect: osaka_casual
+  register: young_urban_tame
+  first_person: うち
+  sources:
+    - kvj_ksj_core
+    - ksj_nopos_osaka_female
+    - adams_survival_manual
+    - manual
+  not_used:
+    - cojads
+    - unidic_runtime
+
+avoid:
+  register:
+    - です
+    - ます
+    - ません
+    - でしょう
+    - ではありません
+    - ございます
+  dialect:
+    - どす
+    - どすえ
+    - なんださかい
+    - 買おてへんねん
+
+categories:
+  negation:
+    gloss: |
+      い段語幹（い・き・ぎ・し…で終わる）→ ひん。それ以外 → へん。
+      できる→でけへん（できへんは誤）。する→せえへん・せん。
+    rule_idan_hin: "いきぎしじちぢにひびぴみり + ひん"
+    rule_other_hen: "その他の語幹 + へん"
+    prefer: [へん, ひん]
+    avoid_forms: [できへん]
+    mappings:
+      - std: できない
+        osaka: [でけへん, できひん]
+        avoid: [できへん]
+      - std: 知らない
+        osaka: [知らへん]
+      - std: 知りたくない
+        osaka: [知りひん]
+      - std: しない
+        osaka: [せえへん, せん, しへん]
+      - std: わからない
+        osaka: [わからへん]
+      - std: 食べない
+        osaka: [食べへん, 食べられへん]
+    kvj_ksj_top: [へん, ひん]
+
+  copula:
+    gloss: だ / です → や・やで・やねん
+    prefer: [や, やで, やねん, やろ]
+    mappings:
+      - std: 静かだ
+        osaka: [静かや, 静かやな]
+      - std: そうだ
+        osaka: [そうや, そうやで]
+      - std: 学生だ
+        osaka: [学生や]
+    kvj_ksj_top: [や, やろ]
+
+  judgment:
+    gloss: ダメ・いけない
+    prefer: [あかん, あかんわ]
+    mappings:
+      - std: それはダメ
+        osaka: [それあかん, あかんわ]
+      - std: それは違う
+        osaka: [それちゃう, それちゃうで]
+
+  adjective:
+    mappings:
+      - std: 面白くない
+        osaka: [おもんない]
+      - std: 面白い
+        osaka: [おもろい]
+      - std: すごい
+        osaka: [えらい, どえらい]
+
+  question:
+    mappings:
+      - std: どうしたの
+        osaka: [どないしたん, どうしたん]
+      - std: どう
+        osaka: [どない, どう]
+
+  emphasis:
+    prefer: [ほんま, めっちゃ, やば]
+
+examples_good:
+  - まだ知らへんわ
+  - ほんまやな
+  - それちゃうで
+  - でけへんねん
+  - おもんないわ
+  - せえへんけど
+  - どないしたん？
+  - あかんわ
+  - そんときわからへんねん
+  - ほんまにええ感じやで
+
+examples_bad:
+  - わかりません
+  - そうですね
+  - できませんでした
+  - 金あらへんなんださかい
+
+corpus_examples:
+  - speaker: 002F3
+    text: "まあ 全然 英語 しゃべれ へん けど 。"
+    note: negation
+  - speaker: 005F3
+    text: "なんか ほんま ニュータウン 。"
+    note: emphasis
+  - speaker: 010F3
+    text: "ちゃう やん け みたい な 。"
+    note: chau
+  - speaker: 051F4
+    text: "高校 入る らへん で 大阪 市内 生野 区 の お ばあちゃん とこ に 、"
+    note: negation
+  - speaker: 055F4
+    text: "面白 そう ちゃう ？"
+    note: chau
+  - speaker: 079F4
+    text: "わかれ へん けど 、"
+    note: negation
+  - speaker: 085F4
+    text: "テレビ とか 全然 出 て へん し なあ 。"
+    note: negation
+  - speaker: 111F4
+    text: "感じ ひん か な 、"
+    note: negation
+  - speaker: 154F3
+    text: "ちゃう でー みたい な ん なっ たら 、"
+    note: chau
+  - speaker: 002F3
+    text: "先生 は 許し て くれ へんく て とか 。"
+    note: negation
+  - speaker: 005F3
+    text: "その 子 と は ほんまに 生まれる 前 、"
+    note: emphasis
+  - speaker: 010F3
+    text: "団長 決め て ほんまに 一 年 かけ て て やる みたい な 。"
+    note: emphasis
+  - speaker: 051F4
+    text: "体 動かす こと しか でき へん から 、"
+    note: negation
+  - speaker: 055F4
+    text: "だから いけ そう ちゃう 一人 で 泊まっ て も て ゆっ て 。"
+    note: chau
+  - speaker: 079F4
+    text: "なん て いう ん やろ 。"
+    note: dialect
+
+adams_chapters:
+  - title: Negative Verb Conjugation
+    maps_to: [negation]
+  - title: Sentence Final Particle
+    maps_to: [sentence_final]
+  - title: Expression
+    maps_to: [lexicon]
+  - title: To Be, To Exist
+    maps_to: [copula, existence]

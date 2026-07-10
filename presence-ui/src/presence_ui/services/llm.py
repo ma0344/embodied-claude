@@ -10,6 +10,10 @@ from typing import Any, Literal
 import httpx
 from interaction_orchestrator_mcp.schemas import InteractionContext, ResponsePlan, SessionTurn
 
+from presence_ui.gateway.osaka_grammar import (
+    osaka_grammar_stable_append,
+    surface_reply_postprocess,
+)
 from presence_ui.gateway.ws_guard import ws_guard_stable_append
 from presence_ui.services.chat_image import (
     image_b64_from_data_url,
@@ -171,6 +175,9 @@ def build_gateway_stable_append() -> str:
             parts.append(SOUL_VOICE_ANCHOR)
     else:
         parts.append(SOUL_VOICE_ANCHOR)
+    og = osaka_grammar_stable_append()
+    if og:
+        parts.append(og)
     return "\n\n".join(parts)
 
 
@@ -366,10 +373,12 @@ async def generate_surface_reply(
             image_data_url=image_data_url,
             image_source=image_source,
         )
-        return await _post_multimodal_surface_completion(
-            messages=messages,
-            image_data_url=image_data_url,
-            max_tokens=max_tokens or surface_max_tokens(),
+        return surface_reply_postprocess(
+            await _post_multimodal_surface_completion(
+                messages=messages,
+                image_data_url=image_data_url,
+                max_tokens=max_tokens or surface_max_tokens(),
+            )
         )
     messages = build_surface_chat_messages(
         enriched_user=enriched_user,
@@ -377,10 +386,12 @@ async def generate_surface_reply(
         session_history=ctx.session_history,
         image_data_url=None,
     )
-    return await _post_chat_completion(
-        messages=messages,
-        max_tokens=max_tokens or surface_max_tokens(),
-        model_scope="surface",
+    return surface_reply_postprocess(
+        await _post_chat_completion(
+            messages=messages,
+            max_tokens=max_tokens or surface_max_tokens(),
+            model_scope="surface",
+        )
     )
 
 

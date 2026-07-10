@@ -11,7 +11,9 @@ import pytest
 from desire_updater import (
     DesireState,
     calculate_desire_level,
+    calculate_discomfort,
     compute_desires,
+    get_allostatic_set_point,
     get_latest_memory_timestamp,
     load_desires,
     save_desires,
@@ -99,6 +101,39 @@ class TestGetLatestMemoryTimestamp:
         coll.get.side_effect = Exception("DB error")
         result = get_latest_memory_timestamp(coll, ["外を見た"])
         assert result is None
+
+
+class TestAllostaticMissCompanion:
+    def test_inward_evening_raises_set_point(self):
+        # 22:00 JST
+        now = datetime(2026, 7, 9, 13, 0, 0, tzinfo=timezone.utc)
+        sp = get_allostatic_set_point("miss_companion", now)
+        assert sp == pytest.approx(0.85)
+        assert calculate_discomfort(1.0, sp) == pytest.approx(0.15)
+
+    def test_deep_night_does_not_lower_set_point(self):
+        # 03:00 JST
+        now = datetime(2026, 7, 9, 18, 0, 0, tzinfo=timezone.utc)
+        sp = get_allostatic_set_point("miss_companion", now)
+        assert sp == pytest.approx(0.85)
+
+    def test_daytime_uses_base_set_point(self):
+        # 13:00 JST
+        now = datetime(2026, 7, 9, 4, 0, 0, tzinfo=timezone.utc)
+        sp = get_allostatic_set_point("miss_companion", now)
+        assert sp == pytest.approx(0.3)
+
+    def test_overnight_miss_companion_not_dominant_when_reading_satisfied(self):
+        coll = MagicMock()
+        now = datetime(2026, 7, 9, 13, 0, 0, tzinfo=timezone.utc)  # 22:00 JST
+        recent_read = (now - timedelta(minutes=30)).isoformat()
+        coll.get.return_value = {
+            "documents": ["青空文庫で読んだ、羅生門"],
+            "metadatas": [{"timestamp": recent_read}],
+        }
+        state = compute_desires(coll, now)
+        assert state.desires["literary_wander"] < 0.2
+        assert state.discomforts["miss_companion"] < state.discomforts["look_outside"]
 
 
 class TestComputeDesires:

@@ -176,8 +176,9 @@ def get_allostatic_set_point(desire_name: str, now: datetime) -> float:
     """
     アロスタシス: 時間帯によるセットポイントの予測的調整。
 
-    深夜(0-5時)はsocial系欲求のセットポイントを下げる（一人でも平気）。
     夜間(20-6時)は literary_wander を強め、observe/look を弱める（LW-2）。
+    同じ inward 帯では miss_companion の SP を上げる（まー不在でも会いたさ≈1.0は当然）。
+    深夜(0-5時)は look/observe の SP を下げる。
     identity_coherenceは常に高いまま。
     """
     cfg = DESIRE_CONFIGS[desire_name]
@@ -191,6 +192,9 @@ def get_allostatic_set_point(desire_name: str, now: datetime) -> float:
     if _is_inward_evening_hour(hour):
         if desire_name == "literary_wander":
             return min(base_sp, 0.05)
+        if desire_name == "miss_companion":
+            # まーが寝てる時間帯: 会いたさが高くても当然 → SPを上げて不快度を下げる
+            return min(1.0, base_sp + 0.55)
         if desire_name in ("look_outside", "observe_room"):
             return min(1.0, base_sp + 0.2)
         if desire_name == "browse_curiosity":
@@ -198,17 +202,9 @@ def get_allostatic_set_point(desire_name: str, now: datetime) -> float:
 
     # 深夜帯（0-5時JST）の調整
     if 0 <= hour < 5:
-        if desire_name == "miss_companion":
-            # 深夜は一人でも平気: セットポイントを下げる
-            return max(0.0, base_sp - 0.15)
         if desire_name in ("look_outside", "observe_room"):
             # 深夜は外や部屋を見る欲求も落ち着く
             return max(0.0, base_sp - 0.1)
-
-    # 早朝帯（5-7時JST）: 徐々に元に戻る
-    if 5 <= hour < 7:
-        if desire_name == "miss_companion":
-            return max(0.0, base_sp - 0.05)
 
     return base_sp
 

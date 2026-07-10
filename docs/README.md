@@ -152,6 +152,9 @@ docs/
 | [surface-direct-llm.md](./tracks/surface-direct-llm.md)     | 表層 LM 直叩き · compose/plan intercept |
 | [mem-8h-memory-bridge.md](./tracks/mem-8h-memory-bridge.md) | 跨 session 記憶 bridge · stage-1 ルート  |
 | [doc-read-discuss.md](./tracks/doc-read-discuss.md)         | 長文書（本・論文）の読解・議論 DOC-READ    |
+| [osaka-grammar-data.md](./tracks/osaka-grammar-data.md)     | 大阪弁文法データ・Tier 0 rewrite           |
+| [osaka-accent-intonation.md](./tracks/osaka-accent-intonation.md) | イントネーション Tier 2（💤 保留）          |
+| [aivis-koyori-aivmx.md](./tracks/aivis-koyori-aivmx.md)     | SBV2→AIVMX 実験手順（💤 アーカイブ）       |
 
 
 ---

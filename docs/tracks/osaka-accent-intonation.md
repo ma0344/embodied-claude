@@ -1,5 +1,7 @@
 # Osaka accent / intonation（段階的方針）
 
+**状態**: 💤 **Tier 2 一時停止**（2026-07-10）— AIVMX / SBV2 実験でイントネーション品質が足りず、当面は **Tier 0–1 のみ**（文法 rewrite + Irodori ref 声質）。
+
 **参照**: [GL_22_16.pdf](../GL_22_16.pdf) — 福盛貴弘「大阪方言 2000 文」アクセント（京阪式 H/L 記法）
 
 **結論**: 2000 文を全部ルールエンジン化するのは **非現実的**。文法レイヤ（へん/ひん）と **TTS アクセント** は分離し、**段階的に**足す。
@@ -17,24 +19,29 @@
 
 ---
 
-## 次に現実的なこと（Tier 2）
+## 次に現実的なこと（Tier 2）— 💤 保留
+
+**2026-07-10**: seed と抽出脚本は残すが、**TTS 配線・AIVMX 実験は再開しない**。ピンポイント句だけ試したくなったらこの doc を参照。
 
 **高頻度フレーズだけ** PDF からアクセント型を拾い、TTS 用ミニ辞書にする。
 
 - 対象: こよりがよく言う 30–80 句（挨拶・否定・あかん・ほんまやな 等）
-- 形式: `presets/koyori-osaka-accent-phrases.yaml`（将来）
+- 形式: `presets/koyori-osaka-accent-phrases.yaml`（**seed 27 句**）
+- 更新: `python scripts/extract_osaka_accent_phrases.py`（pypdf で GL_22_16 から H/L を拾う）
 
 ```yaml
-# 例（福盛記法の要約メモ — 実装は後）
+# 例（福盛記法 — PDF から抽出）
 phrases:
-  - text: 知らへんわ
-    accent: L0+H1  # PDF から写す
-  - text: でけへんねん
-    accent: ...
+  - text: "あるもんや"
+    accent: "L0+H1→L3"
+    tag: affirm
+  - text: "でけへん"
+    accent: "H1"
+    tag: negation
 ```
 
 - **使い道**: Aivis `accent_phrases` 調整の POC（全文生成には載せない）
-- **作り方**: 必要な句だけ PDF を目視で引く（一括パースはしない）
+- **作り方**: seed リストを手で足し、PDF 一致はスクリプト。`TBD` は目視補完
 
 ---
 

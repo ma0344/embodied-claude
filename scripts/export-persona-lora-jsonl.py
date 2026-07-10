@@ -30,7 +30,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Candidates JSONL path (default: koyori-persona-candidates.jsonl)",
     )
-    parser.add_argument("--max-sessions", type=int, default=40)
+    parser.add_argument("--max-sessions", type=int, default=100)
     parser.add_argument("--max-pairs", type=int, default=2000)
     parser.add_argument(
         "--repo",

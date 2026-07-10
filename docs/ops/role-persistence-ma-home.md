@@ -43,6 +43,8 @@
 
 ## Phase 2 — Persona LoRA
 
+**状態（2026-07-10）**: export 脚本（RP-2a）は維持。**学習実行は保留** — 表層 native chat がもっと溜まってから再 export → LoRA。
+
 1. **学習データ**: `{system: SOUL.core, messages: [...]}` — tool call なしの良い会話のみ
 2. **export 脚本（RP-2a 済）**:
 
@@ -55,7 +57,7 @@ uv run python ..\scripts\export-persona-lora-jsonl.py --dry-run
 
    gateway 注入・敬語・tool 名・挨拶だけのターンは除外。**Claude CLI の `No response requested.` も除外**。**メタ報告**（括弧だけの「（今、もう一回言ったで！）」等）・**声/TTS テスト依頼**（「言ってみて」「もう一回」等）・**手続き報告**（短い「言った/試した/聞こえた」系）も除外。**近い assistant 重複**はクラスタごと全部落とす（1 件だけ残さない）。カレンダー読取が増えると「来月の〇〇の予定やね。カレンダー見たら…」のような**テンプレ返答がクラスタ化して候補が減る**のは意図どおり（LoRA に定型応答を焼かない）。
 
-   **export 窓**: 直近 **40 セッション**（`--max-sessions` で拡張可）。再 export は candidates を上書き；`koyori-persona-rejected.json` の人手除外は維持。
+   **export 窓**: 直近 **100 セッション**（`--max-sessions` で調整）。再 export は candidates を上書き；`koyori-persona-rejected.json` の人手除外は維持。**学習に進む前に** curated 件数・口調多様性を目視確認すること。
 
    **JSONL の system 行**: 1 ペアごとに SOUL.core が載るのは SFT データセットの一般的な形（学習ツールが行単位で読むため）。推論時は LM Studio の固定 system + LoRA なので**二重にはならない**。ファイルサイズを減らしたい場合は学習設定側で `system` テンプレを1回だけ指定し、export を `--messages-only` 化する拡張は RP-2b で検討可。
 

@@ -73,8 +73,8 @@ uv run python scripts/explore_osaka_grammar_data.py
 
 | ファイル | 備考 |
 |---|---|
-| `docs/Kansai-ben Survival Manual (Adams Zach 2010).pdf` | 原本 |
-| `docs/KansaibenSurvivalManual_AdamsZach2010_.html` | PDF 変換（**ルビがノイズ**） |
+| `docs/Kansai-ben Survival Manual (Adams Zach 2010).pdf` | 原本（**git 未追跡** · ローカル配置） |
+| `docs/KansaibenSurvivalManual_AdamsZach2010_.html` | PDF 変換（**ルビがノイズ** · 同上） |
 | `out/adams_plain.txt` | ルビ除去テキスト |
 | `out/adams_grammar_index.json` | 章立て + 例語トークン |
 

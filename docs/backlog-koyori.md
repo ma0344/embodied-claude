@@ -43,10 +43,18 @@
 | Phase | 内容 | 状態 |
 |-------|------|------|
 | 0–1 | SOUL.core + LM Studio system | **済** |
-| 2 | persona LoRA + JSONL export | **2a 済** |
+| 2 | persona LoRA + JSONL export | **2a 済** · **学習は保留**（表層会話がもっと溜まってから） |
 | 3 | arc → SOUL（MEM-6） | 未 |
 
 → [ops/role-persistence-ma-home.md](./ops/role-persistence-ma-home.md) · VIS 間接視覚は [vis-health.md](./tracks/vis-health.md)
+
+## 大阪弁（表層・TTS）
+
+| トラック | 内容 | 状態 |
+|---------|------|------|
+| **文法 Tier 0** | へん/ひん rewrite | ✅ [osaka-grammar-data.md](./tracks/osaka-grammar-data.md) |
+| **イントネーション Tier 2** | accent_phrases seed | 💤 [osaka-accent-intonation.md](./tracks/osaka-accent-intonation.md) |
+| **AIVMX 実験** | SBV2 → `.aivmx` | 💤 [aivis-koyori-aivmx.md](./tracks/aivis-koyori-aivmx.md) |
 
 ## WS — Web
 

@@ -51,7 +51,10 @@
 | `sync-lmstudio-settings.ps1` | env を top `model` に揃える |
 | `open-soul-core-for-lmstudio.ps1` | SOUL.core を LM Studio 用に開く |
 | `enable-rp-phase1-ma-home.ps1` | `PRESENCE_SOUL_CORE_IN_APPEND=0` |
-| `export-persona-lora-jsonl.py` | RP-2a LoRA 学習用 export |
+| `export-persona-lora-jsonl.py` | RP-2a LoRA 学習用 export（学習は表層会話蓄積後） |
+| `extract_osaka_accent_phrases.py` | GL_22_16 PDF → accent seed YAML |
+| `prepare_koyori_sbv2_input.ps1` | Irodori ref → mono WAV（SBV2 入力） |
+| `install-style-bert-vits2.ps1` | Style-Bert-VITS2 導入手順（sbv2.zip） |
 
 ---
 

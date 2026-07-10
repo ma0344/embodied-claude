@@ -108,7 +108,7 @@ try {
             $detail += " surface_tts=ready"
         } else {
             $detail += " surface_tts=DOWN"
-            Add-Down "Presence 表面 TTS" "$($h.details.surface_tts_status) — Aivis / :10101 を確認"
+            Add-Down "Presence 表面 TTS" "$($h.details.surface_tts_status) — Irodori / :8088 を確認"
         }
     }
     if ($h.status -eq "ok") {
@@ -137,12 +137,12 @@ if (-not $presTask.Present) {
     Add-Warn "タスク PresenceUI" "未登録 — .\scripts\install-presence-ui-task.ps1"
 }
 
-# ── Aivis TTS ─────────────────────────────────────────────────
-$aivis = Test-AivisHttpHealth -Port 10101
-if ($aivis.Ok) {
-    Add-Ok "Aivis TTS (:10101)" "$($aivis.Ms)ms"
+# ── Irodori TTS ───────────────────────────────────────────────
+$irodori = Test-IrodoriHttpHealth -Port 8088
+if ($irodori.Ok) {
+    Add-Ok "Irodori TTS (:8088)" "$($irodori.Ms)ms"
 } else {
-    Add-Down "Aivis TTS (:10101)" "$($aivis.Reason) — Start-ScheduledTask EmbodiedClaude-AivisTTS"
+    Add-Down "Irodori TTS (:8088)" "$($irodori.Reason) — Start-ScheduledTask EmbodiedClaude-IrodoriTTS"
 }
 
 # ── Input Leap ────────────────────────────────────────────────
@@ -253,6 +253,6 @@ Write-Host ""
 Write-Host "再起動の例:" -ForegroundColor DarkGray
 Write-Host "  .\scripts\restart-presence-ui.ps1" -ForegroundColor DarkGray
 Write-Host "  Start-ScheduledTask EmbodiedClaude-MemoryHTTP" -ForegroundColor DarkGray
-Write-Host "  Start-ScheduledTask EmbodiedClaude-AivisTTS" -ForegroundColor DarkGray
+Write-Host "  Start-ScheduledTask EmbodiedClaude-IrodoriTTS" -ForegroundColor DarkGray
 Write-Host "  Restart-Service InputLeap   # 管理者" -ForegroundColor DarkGray
 exit 1

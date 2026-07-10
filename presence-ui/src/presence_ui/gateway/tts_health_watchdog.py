@@ -1,4 +1,4 @@
-"""Periodic TTS engine health — log when Aivis/VOICEVOX goes down or recovers."""
+"""Periodic TTS engine health — log when Irodori/VOICEVOX goes down or recovers."""
 
 from __future__ import annotations
 

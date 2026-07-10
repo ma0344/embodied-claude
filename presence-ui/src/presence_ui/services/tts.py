@@ -27,12 +27,12 @@ async def speak_text(text: str, *, speaker: str = "local") -> tuple[bool, str]:
             return False, f"tts-mcp not available: {exc}"
 
         config = TTSConfig.from_env()
-        if not config.elevenlabs and not config.voicevox:
+        if not config.elevenlabs and not config.irodori and not config.voicevox:
             hint = repo_root() / "tts-mcp" / ".env"
             return (
                 False,
                 "no TTS engine configured "
-                f"(set ELEVENLABS_API_KEY or VOICEVOX_URL in {hint} "
+                f"(set ELEVENLABS_API_KEY, IRODORI_URL, or VOICEVOX_URL in {hint} "
                 "or ~/.config/embodied-claude/presence-ui.local.env)",
             )
 
@@ -44,13 +44,31 @@ async def speak_text(text: str, *, speaker: str = "local") -> tuple[bool, str]:
                 model_id=config.elevenlabs.model_id,
                 output_format=config.elevenlabs.output_format,
             )
+        elif engine_name == "irodori" and config.irodori:
+            from tts_mcp.engines.irodori import IrodoriEngine
+
+            ir = config.irodori
+            engine = IrodoriEngine(
+                url=ir.url,
+                voice=ir.voice,
+                num_steps=ir.num_steps,
+                model=ir.model,
+                timeout_sec=ir.timeout_sec,
+                seed=ir.seed,
+                cfg_scale_caption=ir.cfg_scale_caption,
+                cfg_scale_speaker=ir.cfg_scale_speaker,
+            )
         elif engine_name == "voicevox" and config.voicevox:
             from tts_mcp.engines.voicevox import VoicevoxEngine
 
             vv = config.voicevox
             engine = VoicevoxEngine(url=vv.url, speaker=vv.speaker)
         else:
-            return False, f"engine {engine_name!r} unavailable"
+            return False, (
+                f"engine {engine_name!r} unavailable "
+                "(check TTS_DEFAULT_ENGINE and matching URL/API key; "
+                "no silent fallback to another engine)"
+            )
 
         audio_bytes, audio_format = engine.synthesize(line)
         file_path = playback.save_audio(audio_bytes, audio_format, config.playback.save_dir)

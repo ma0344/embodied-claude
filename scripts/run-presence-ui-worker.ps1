@@ -49,8 +49,8 @@ if (Test-Path $SettingsLocal) {
 
 Push-Location $PresenceDir
 try {
-    Write-Log "uv sync (reinstall sociality path deps)"
-    uv sync --reinstall-package interaction-orchestrator-mcp --reinstall-package relationship-mcp 2>&1 | ForEach-Object { Write-Log $_ }
+    Write-Log "uv sync (reinstall sociality + tts-mcp path deps)"
+    uv sync --reinstall-package interaction-orchestrator-mcp --reinstall-package relationship-mcp --reinstall-package tts-mcp 2>&1 | ForEach-Object { Write-Log $_ }
 
     Write-Log "starting presence-ui port=$Port backend=$env:CLAUDE_CODE_BACKEND_URL"
     uv run presence-ui 2>&1 | ForEach-Object { Write-Log $_ }

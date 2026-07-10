@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from tts_mcp.config import (
     ElevenLabsConfig,
+    IrodoriConfig,
     PlaybackConfig,
     TTSConfig,
     VoicevoxConfig,
@@ -51,6 +52,7 @@ class TestVoicevoxConfig:
 
     @patch.dict(os.environ, {"VOICEVOX_URL": "http://localhost:50021"}, clear=False)
     def test_from_env(self):
+        os.environ.pop("VOICEVOX_SPEAKER", None)
         config = VoicevoxConfig.from_env()
         assert config is not None
         assert config.url == "http://localhost:50021"
@@ -165,6 +167,70 @@ class TestPlaybackConfig:
         assert config.go2rtc_camera_cloud_password is None
 
 
+class TestIrodoriConfig:
+    """Tests for Irodori config."""
+
+    @patch.dict(os.environ, {}, clear=False)
+    def test_from_env_defaults(self):
+        for key in (
+            "IRODORI_URL",
+            "IRODORI_VOICE",
+            "IRODORI_NUM_STEPS",
+            "IRODORI_MODEL",
+            "IRODORI_TIMEOUT_SEC",
+        ):
+            os.environ.pop(key, None)
+        config = IrodoriConfig.from_env()
+        assert config is not None
+        assert config.url == "http://127.0.0.1:8088"
+        assert config.voice == "none"
+        assert config.num_steps == 24
+        assert config.model == "irodori-tts"
+        assert config.timeout_sec == 120.0
+
+    @patch.dict(
+        os.environ,
+        {
+            "IRODORI_URL": "http://127.0.0.1:8088/",
+            "IRODORI_VOICE": "",
+            "IRODORI_NUM_STEPS": "32",
+            "IRODORI_TIMEOUT_SEC": "90",
+        },
+        clear=False,
+    )
+    def test_empty_voice_becomes_none(self):
+        config = IrodoriConfig.from_env()
+        assert config is not None
+        assert config.url == "http://127.0.0.1:8088"
+        assert config.voice == "none"
+        assert config.num_steps == 32
+        assert config.timeout_sec == 90.0
+
+    @patch.dict(os.environ, {"IRODORI_URL": ""}, clear=False)
+    def test_empty_url_disables(self):
+        config = IrodoriConfig.from_env()
+        assert config is None
+
+    @patch.dict(os.environ, {"IRODORI_NUM_STEPS": "nope"}, clear=False)
+    def test_invalid_num_steps_raises(self):
+        os.environ.pop("IRODORI_URL", None)
+        try:
+            IrodoriConfig.from_env()
+            assert False, "Should have raised ValueError"
+        except ValueError as exc:
+            assert "IRODORI_NUM_STEPS" in str(exc)
+
+    @patch.dict(os.environ, {"IRODORI_NUM_STEPS": "0"}, clear=False)
+    def test_zero_num_steps_raises(self):
+        """E-14: IRODORI_NUM_STEPS=0 → ValueError."""
+        os.environ.pop("IRODORI_URL", None)
+        try:
+            IrodoriConfig.from_env()
+            assert False, "Should have raised ValueError"
+        except ValueError as exc:
+            assert "IRODORI_NUM_STEPS" in str(exc)
+
+
 class TestTTSConfig:
     """Tests for top-level TTS config."""
 
@@ -172,32 +238,65 @@ class TestTTSConfig:
     def test_resolve_elevenlabs_default(self):
         os.environ.pop("TTS_DEFAULT_ENGINE", None)
         os.environ.pop("VOICEVOX_URL", None)
+        os.environ["IRODORI_URL"] = ""  # disable irodori auto-default
         config = TTSConfig.from_env()
         assert config.resolve_engine() == "elevenlabs"
 
-    @patch.dict(os.environ, {"VOICEVOX_URL": "http://localhost:50021"}, clear=False)
-    def test_resolve_voicevox_default(self):
+    @patch.dict(os.environ, {}, clear=False)
+    def test_resolve_irodori_default(self):
         os.environ.pop("TTS_DEFAULT_ENGINE", None)
         os.environ.pop("ELEVENLABS_API_KEY", None)
+        os.environ.pop("VOICEVOX_URL", None)
+        os.environ.pop("IRODORI_URL", None)
+        config = TTSConfig.from_env()
+        assert config.resolve_engine() == "irodori"
+
+    @patch.dict(os.environ, {"VOICEVOX_URL": "http://localhost:50021"}, clear=False)
+    def test_resolve_voicevox_when_irodori_disabled(self):
+        os.environ.pop("TTS_DEFAULT_ENGINE", None)
+        os.environ.pop("ELEVENLABS_API_KEY", None)
+        os.environ["IRODORI_URL"] = ""
         config = TTSConfig.from_env()
         assert config.resolve_engine() == "voicevox"
 
     @patch.dict(
         os.environ,
-        {"TTS_DEFAULT_ENGINE": "voicevox", "VOICEVOX_URL": "http://localhost:50021",
-         "ELEVENLABS_API_KEY": "test-key"},
+        {
+            "TTS_DEFAULT_ENGINE": "irodori",
+            "IRODORI_URL": "",
+            "VOICEVOX_URL": "http://127.0.0.1:10101",
+        },
+        clear=False,
+    )
+    def test_resolve_honors_default_even_if_irodori_disabled(self):
+        """E-06/E-07: do not silently fall back to voicevox."""
+        os.environ.pop("ELEVENLABS_API_KEY", None)
+        config = TTSConfig.from_env()
+        assert config.resolve_engine() == "irodori"
+        assert config.irodori is None
+        assert config.voicevox is not None
+
+    @patch.dict(
+        os.environ,
+        {
+            "TTS_DEFAULT_ENGINE": "voicevox",
+            "VOICEVOX_URL": "http://localhost:50021",
+            "ELEVENLABS_API_KEY": "test-key",
+        },
         clear=False,
     )
     def test_resolve_explicit_engine(self):
         config = TTSConfig.from_env()
         assert config.resolve_engine() == "voicevox"
         assert config.resolve_engine("elevenlabs") == "elevenlabs"
+        assert config.resolve_engine("irodori") == "irodori"
 
     @patch.dict(os.environ, {}, clear=False)
     def test_resolve_raises_when_no_engine(self):
         os.environ.pop("TTS_DEFAULT_ENGINE", None)
         os.environ.pop("ELEVENLABS_API_KEY", None)
         os.environ.pop("VOICEVOX_URL", None)
+        os.environ["IRODORI_URL"] = ""
         config = TTSConfig.from_env()
         try:
             config.resolve_engine()

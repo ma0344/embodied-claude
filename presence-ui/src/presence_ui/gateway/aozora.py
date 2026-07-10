@@ -163,6 +163,8 @@ class ReadingState:
     pending_followup_query: str = ""
     last_hook: str = ""
     last_reflected_passage_index: int = -1
+    reread_same_passage_index: int = -1
+    reread_same_count: int = 0
     # Legacy fields kept for migration reads only
     work_index: int = 0
     passage_indices: dict[str, int] = field(default_factory=dict)
@@ -178,6 +180,8 @@ class ReadingState:
             "pending_followup_query": self.pending_followup_query,
             "last_hook": self.last_hook,
             "last_reflected_passage_index": self.last_reflected_passage_index,
+            "reread_same_passage_index": self.reread_same_passage_index,
+            "reread_same_count": self.reread_same_count,
         }
 
     @classmethod
@@ -206,6 +210,10 @@ class ReadingState:
             last_reflected_passage_index=int(
                 data.get("last_reflected_passage_index", -1)
             ),
+            reread_same_passage_index=int(
+                data.get("reread_same_passage_index", -1)
+            ),
+            reread_same_count=int(data.get("reread_same_count") or 0),
             work_index=int(data.get("work_index") or 0),
             passage_indices={str(k): int(v) for k, v in passage_indices.items()},
         )
@@ -221,6 +229,21 @@ def sections_per_session_limit() -> int | None:
     except ValueError:
         return None
     return max(1, value)
+
+
+def reread_same_max() -> int:
+    """Max PAUSE reread_same on the same passage_index before forcing advance."""
+    raw = os.getenv("PRESENCE_AOZORA_REREAD_SAME_MAX", "2").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 2
+    return max(1, value)
+
+
+def _reset_reread_same(state: ReadingState) -> None:
+    state.reread_same_passage_index = -1
+    state.reread_same_count = 0
 
 
 def load_reading_state(path: Path | None = None) -> ReadingState:
@@ -330,6 +353,7 @@ def start_next_book(catalog: list[AozoraWork], state: ReadingState) -> AozoraWor
     state.last_passage = None
     state.pending_followup_query = ""
     state.phase = "read"
+    _reset_reread_same(state)
     return work
 
 
@@ -339,6 +363,13 @@ def _book_reached_end(started_index: int, next_index: int, total: int) -> bool:
     if next_index == 0 and started_index > 0:
         return True
     return next_index >= total
+
+
+def _last_passage_int(last: dict, key: str, fallback: int) -> int:
+    """Read int from last_passage; 0 is valid (avoid `or` falsy fallback)."""
+    if key in last and last[key] is not None:
+        return int(last[key])
+    return fallback
 
 
 def complete_reading_pause(
@@ -353,9 +384,9 @@ def complete_reading_pause(
     path = state_path or aozora_state_path()
     state = load_reading_state(path)
     last = state.last_passage or {}
-    started_index = int(last.get("passage_index") or state.passage_index)
-    next_index = int(last.get("next_passage_index") or state.passage_index)
-    total = int(last.get("total_passages") or 1)
+    started_index = _last_passage_int(last, "passage_index", state.passage_index)
+    next_index = _last_passage_int(last, "next_passage_index", state.passage_index)
+    total = _last_passage_int(last, "total_passages", 1)
 
     if hook.strip():
         state.last_hook = hook.strip()[:400]
@@ -366,16 +397,34 @@ def complete_reading_pause(
     limit = sections_per_session_limit()
     force_close = limit is not None and state.sections_this_session >= limit
 
+    if move == "reread_same" and not force_close:
+        if state.reread_same_passage_index == started_index:
+            state.reread_same_count += 1
+        else:
+            state.reread_same_passage_index = started_index
+            state.reread_same_count = 1
+        if state.reread_same_count >= reread_same_max():
+            move = "advance"
+        else:
+            state.phase = "read"
+            if reflected_passage_index is not None and reflected_passage_index >= 0:
+                state.last_reflected_passage_index = reflected_passage_index
+            save_reading_state(state, path)
+            return state
+
     if move == "close_book" or force_close:
         state.phase = "close"
+        _reset_reread_same(state)
     elif move == "reread_same":
         state.phase = "read"
     else:
         if _book_reached_end(started_index, next_index, total):
             state.phase = "close"
+            _reset_reread_same(state)
         else:
             state.passage_index = next_index
             state.phase = "read"
+            _reset_reread_same(state)
 
     if reflected_passage_index is not None and reflected_passage_index >= 0:
         state.last_reflected_passage_index = reflected_passage_index
@@ -515,8 +564,7 @@ def pick_passage(
     state = load_reading_state(path)
 
     if state.phase == "close":
-        finish_close_book(path)
-        state = load_reading_state(path)
+        return None
 
     if state.phase == "pause":
         return None

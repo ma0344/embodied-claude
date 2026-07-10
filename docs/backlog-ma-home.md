@@ -111,7 +111,8 @@
 | サービス | Task | スクリプト |
 |---------|------|-----------|
 | memory HTTP | `EmbodiedClaude-MemoryHTTP` | `install-memory-daemon-task.ps1` |
-| AivisSpeech | `EmbodiedClaude-AivisTTS` | `install-aivis-tts-task.ps1` |
+| Irodori TTS | `EmbodiedClaude-IrodoriTTS` | `install-irodori-tts-task.ps1` |
+| AivisSpeech（フォールバック） | `EmbodiedClaude-AivisTTS` | `install-aivis-tts-task.ps1`（併存非推奨） |
 | presence-ui | `EmbodiedClaude-PresenceUI` | `install-presence-ui-task.ps1` |
 | Watchdog | `EmbodiedClaude-Watchdog` | `install-embodied-watchdog-task.ps1` |
 
@@ -140,8 +141,57 @@
 | Gateway `:8090` | compose/plan + 身体直実行 + LW-READ v1（GW-S1 PAUSE）+ OL-GATE ingest（GW-S2 opt-in） |
 | **BIO** | pulse + somatic + tick — PAUSE で interpret 一部稼働 |
 | UI | Native 本線 + キオスク（`?kiosk=1`） |
-| TTS | Aivis るな + `voice_local` |
+| TTS | Irodori `:8088` + `voice_local`（Aivis はフォールバック） |
 | Outbound | 着信・15m tick・ntfy |
+
+### Irodori TTS カットオーバー（必須）
+
+**presence-ui は `mcpBehavior.toml` を読まない。** 実機の正本は `tts-mcp/.env` の `TTS_DEFAULT_ENGINE` / `IRODORI_*`（`.env.example` 準拠）。TOML の `default_engine` だけでは surface / `speak_text` は切り替わらない。
+
+```powershell
+# 1. tts-mcp/.env を .env.example 準拠に（IRODORI_* + TTS_DEFAULT_ENGINE=irodori）
+# 2. presence-ui の path dep を再インストール
+cd presence-ui; uv sync --reinstall-package tts-mcp
+#    または: .\scripts\sync-presence-deps.ps1
+# 3. Task 切替（併存非推奨）
+.\scripts\install-irodori-tts-task.ps1
+.\scripts\install-aivis-tts-task.ps1 -Uninstall   # または Disable-ScheduledTask EmbodiedClaude-AivisTTS
+Start-ScheduledTask -TaskName EmbodiedClaude-IrodoriTTS
+# 4. presence-ui 再起動
+.\scripts\restart-presence-ui.ps1
+# 5. 確認
+curl -s http://127.0.0.1:8088/health
+curl -s http://127.0.0.1:8090/api/v1/health
+# 短い発話（キオスク or miss_companion smoke）
+```
+
+### Irodori 参照声 WAV の差し替え
+
+voice 名 **`koyori`** = `Irodori-TTS-Server/voices/koyori.wav`（拡張子除いたファイル名が `IRODORI_VOICE`）。
+
+```powershell
+# 1. 新しい参照 wav を voices に上書き（パスは任意のソースで可）
+$Voices = "$env:USERPROFILE\src\Irodori-TTS-Server\voices"   # 既定 clone 先
+Copy-Item "C:\Users\ma\Desktop\rec_03.wav" (Join-Path $Voices "koyori.wav") -Force
+
+# 2. Irodori 再起動（voice 一覧は起動時に読む）
+$p = (Get-NetTCPConnection -LocalPort 8088 -State Listen -ErrorAction SilentlyContinue).OwningProcess
+if ($p) { Stop-Process -Id $p -Force }
+cd C:\Users\ma\src\embodied-claude
+.\scripts\start-irodori-tts.ps1 -Background
+
+# 3. surface TTS キャッシュ削除（wav 差し替え前の合成が残ると古い声が流れる）
+Remove-Item "$env:LOCALAPPDATA\Temp\wifi-cam-mcp\tts-surface\*" -Force -ErrorAction SilentlyContinue
+#    CAPTURE_DIR を使っている場合は %CAPTURE_DIR%\tts-surface\ も同様
+
+# 4. 確認
+curl -s http://127.0.0.1:8088/health   # voices.files >= 1
+# キオスク or 短い発話で聴く
+```
+
+**env（変更不要ならスキップ）**: `tts-mcp/.env` と `presence-ui.local.env` の `IRODORI_VOICE=koyori` / `IRODORI_SEED` / `IRODORI_CFG_SCALE_*` は [tts-mcp/.env.example](../../tts-mcp/.env.example) 参照。voice 名を変えるときだけ `IRODORI_VOICE` を新ファイル名に合わせる。
+
+**別名で追加したい場合**: `voices/別名.wav` を置き `IRODORI_VOICE=別名` に変更 → Irodori 再起動 + キャッシュ削除 + `restart-presence-ui.ps1`（env 変更時）。
 
 設備マニュアル: [CLAUDE.md](../CLAUDE.md)  
 設計・索引: [cognitive-layers.md](./architecture/cognitive-layers.md) · [archive-index.md](./archive/archive-index.md)  

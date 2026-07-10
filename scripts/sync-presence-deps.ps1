@@ -16,14 +16,15 @@ if (-not (Test-Path $PresenceDir)) {
 
 Push-Location $PresenceDir
 try {
-    Write-Host "==> sync-presence-deps (orchestrator + relationship + social-state + wifi-cam + social-core + claude-code-server)"
+    Write-Host "==> sync-presence-deps (orchestrator + relationship + social-state + wifi-cam + social-core + claude-code-server + tts-mcp)"
     uv sync --extra dev `
         --reinstall-package interaction-orchestrator-mcp `
         --reinstall-package relationship-mcp `
         --reinstall-package social-state-mcp `
         --reinstall-package wifi-cam-mcp `
         --reinstall-package social-core `
-        --reinstall-package claude-code-server
+        --reinstall-package claude-code-server `
+        --reinstall-package tts-mcp
     Write-Host "OK"
 } finally {
     Pop-Location

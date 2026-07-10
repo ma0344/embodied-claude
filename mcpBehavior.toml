@@ -12,14 +12,15 @@ capture_dir = "/tmp/wifi-cam-mcp"
 onvif_port = 2020
 
 [tts]
-default_engine = "voicevox"    # AivisSpeech Engine at VOICEVOX_URL (ma-home: :10101)
+default_engine = "irodori"     # Irodori TTS at IRODORI_URL (ma-home: :8088)
+# Fallback: AivisSpeech via VOICEVOX_URL (:10101) — set default_engine = "voicevox" if needed
 playback = "auto"              # "auto", "stream", "paplay", "ffplay"
 play_audio = true
 save_dir = "/tmp/tts-mcp"
 voice_id = "uYp2UUDeS74htH10iY2e"
 model_id = "eleven_v3"
 output_format = "mp3_44100_128"
-voicevox_speaker = 345585728   # るな・ノーマル (AivisSpeech)
+voicevox_speaker = 345585728   # るな・ノーマル (AivisSpeech fallback)
 go2rtc_stream = "tapo_cam"
 go2rtc_ffmpeg = "ffmpeg"
 go2rtc_auto_start = true

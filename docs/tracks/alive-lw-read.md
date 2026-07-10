@@ -33,6 +33,7 @@
 | PAUSE | **v1**: GW-S1 黙考（v0 テンプレは LLM 失敗時フォールバック） |
 | CLOSE | 終端 / N 節 / 飽き（`felt` に bored 可） |
 | 読み返し | READ tick 中に延長しない。PAUSE の `next_move` で判断 |
+| 読み返し上限 | 同一節の `reread_same` は **`PRESENCE_AOZORA_REREAD_SAME_MAX`（既定 2）** で `advance` 強制 |
 
 **運用メモ**: 青空は `inward_evening`（20–6）+ quiet で優先しやすいが、**夜間限定は要件ではない**（昼の `literary_wander` も将来可）。
 

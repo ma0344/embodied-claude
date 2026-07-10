@@ -19,7 +19,7 @@ param(
     [double]$CpuSampleSec = 4.0,
     [switch]$SkipRecallProbe,
     [string]$MemoryDaemonTask = "EmbodiedClaude-MemoryHTTP",
-    [string]$AivisTask = "EmbodiedClaude-AivisTTS",
+    [string]$IrodoriTask = "EmbodiedClaude-IrodoriTTS",
     [string]$LogFile = ""
 )
 
@@ -131,24 +131,24 @@ foreach ($row in $stuck) {
     }
 }
 
-# ── 5. Aivis TTS (:10101) ───────────────────────────────────────
-$aivis = Test-AivisHttpHealth
-if ($aivis.Ok) {
-    Write-WatchdogLog -Message "aivis OK ($($aivis.Ms)ms)" -LogFile $LogFile
+# ── 5. Irodori TTS (:8088) ──────────────────────────────────────
+$irodori = Test-IrodoriHttpHealth
+if ($irodori.Ok) {
+    Write-WatchdogLog -Message "irodori OK ($($irodori.Ms)ms)" -LogFile $LogFile
 } else {
-    Write-WatchdogLog -Message "aivis FAIL: $($aivis.Reason)" -LogFile $LogFile
-    Invoke-Remediate "start Aivis TTS on :10101" {
-        $task = Get-ScheduledTask -TaskName $AivisTask -ErrorAction SilentlyContinue
+    Write-WatchdogLog -Message "irodori FAIL: $($irodori.Reason)" -LogFile $LogFile
+    Invoke-Remediate "start Irodori TTS on :8088" {
+        $task = Get-ScheduledTask -TaskName $IrodoriTask -ErrorAction SilentlyContinue
         if ($task) {
-            Write-WatchdogLog -Message "Start-ScheduledTask $AivisTask" -LogFile $LogFile
-            Start-ScheduledTask -TaskName $AivisTask
+            Write-WatchdogLog -Message "Start-ScheduledTask $IrodoriTask" -LogFile $LogFile
+            Start-ScheduledTask -TaskName $IrodoriTask
         } else {
-            $starter = Join-Path $Repo "scripts\start-aivis-tts.ps1"
+            $starter = Join-Path $Repo "scripts\start-irodori-tts.ps1"
             if (Test-Path $starter) {
-                Write-WatchdogLog -Message "run start-aivis-tts.ps1 -Background (no task)" -LogFile $LogFile
+                Write-WatchdogLog -Message "run start-irodori-tts.ps1 -Background (no task)" -LogFile $LogFile
                 & $starter -Background
             } else {
-                Write-WatchdogLog -Message "WARN: Aivis task missing; run install-aivis-tts-task.ps1" -LogFile $LogFile
+                Write-WatchdogLog -Message "WARN: Irodori task missing; run install-irodori-tts-task.ps1" -LogFile $LogFile
             }
         }
         Start-Sleep -Seconds 5
@@ -163,12 +163,12 @@ if (-not $final.Ok) {
 }
 Write-WatchdogLog -Message "post-check memory OK" -LogFile $LogFile
 
-$aivisFinal = Test-AivisHttpHealth
-if (-not $aivisFinal.Ok) {
-    Write-WatchdogLog -Message "post-check aivis STILL FAIL: $($aivisFinal.Reason)" -LogFile $LogFile
+$irodoriFinal = Test-IrodoriHttpHealth
+if (-not $irodoriFinal.Ok) {
+    Write-WatchdogLog -Message "post-check irodori STILL FAIL: $($irodoriFinal.Reason)" -LogFile $LogFile
     if ($remediated) { exit 3 }
     exit 4
 }
-Write-WatchdogLog -Message "post-check aivis OK" -LogFile $LogFile
+Write-WatchdogLog -Message "post-check irodori OK" -LogFile $LogFile
 if ($remediated) { exit 1 }
 exit 0

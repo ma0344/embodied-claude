@@ -90,6 +90,23 @@ function Test-AivisHttpHealth {
     }
 }
 
+function Test-IrodoriHttpHealth {
+    param(
+        [int]$Port = 8088,
+        [double]$TimeoutSec = 3.0
+    )
+    $uri = "http://127.0.0.1:$Port/health"
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        $null = Invoke-RestMethod -Uri $uri -TimeoutSec $TimeoutSec
+        $sw.Stop()
+        return @{ Ok = $true; Ms = $sw.ElapsedMilliseconds }
+    } catch {
+        $sw.Stop()
+        return @{ Ok = $false; Reason = $_.Exception.Message; Ms = $sw.ElapsedMilliseconds }
+    }
+}
+
 function Test-MemoryHttpRecall {
     param(
         [int]$Port = 18900,

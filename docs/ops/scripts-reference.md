@@ -14,7 +14,8 @@
 | `install-memory-daemon-task.ps1` | Memory HTTP `:18900` Task |
 | `restart-memory-mcp.ps1` | :18900 再起動（`uv sync` + health/recall 確認） |
 | `install-presence-ui-task.ps1` | presence-ui `:8090` Task |
-| `install-aivis-tts-task.ps1` | AivisSpeech TTS Task |
+| `install-irodori-tts-task.ps1` | Irodori TTS Task（既定 `:8088`） |
+| `install-aivis-tts-task.ps1` | AivisSpeech TTS Task（フォールバック `:10101`・併存非推奨） |
 | `install-embodied-watchdog-task.ps1` | 2 分間隔 Watchdog |
 | `install-autonomous-tick-task.ps1` | 15m desire-updater + autonomous-tick |
 | `install-webui-task.ps1` | claude-code-webui `:8080`（**任意**） |
@@ -98,8 +99,10 @@ Get-Content $env:USERPROFILE\.config\embodied-claude\logs\autonomous-tick.log -T
 | スクリプト | 用途 |
 |-----------|------|
 | `c1-native-poc.ps1` | Native PoC ON/OFF（`-Enable` / `-Disable`） |
-| `sync-presence-deps.ps1` | presence-ui .venv へ MCP 再ビルド |
+| `sync-presence-deps.ps1` | presence-ui .venv へ MCP 再ビルド（**tts-mcp 含む**） |
 | `tts_benchmark.py` | TTS 計測 |
+
+**TTS（Irodori）**: presence-ui 再起動前に `cd presence-ui; uv sync --reinstall-package tts-mcp`（または `sync-presence-deps.ps1`）。**presence-ui は `mcpBehavior.toml` を読まない** — 正本は `tts-mcp/.env` の `TTS_DEFAULT_ENGINE` / `IRODORI_*`。カットオーバー → [backlog-ma-home.md](../backlog-ma-home.md) § Irodori TTS カットオーバー。**参照声 WAV 差し替え** → 同 § Irodori 参照声 WAV の差し替え。
 | `wifi-cam-mcp/scripts/test_ptz_probe.py` | Tapo PTZ 切り分け |
 
 ---

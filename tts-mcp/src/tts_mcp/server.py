@@ -1,4 +1,4 @@
-"""MCP Server for text-to-speech (ElevenLabs + VOICEVOX)."""
+"""MCP Server for text-to-speech (ElevenLabs + Irodori + VOICEVOX)."""
 
 from __future__ import annotations
 
@@ -47,6 +47,21 @@ class TTSMCP:
                 output_format=el.output_format,
             )
 
+        if self._config.irodori:
+            from .engines.irodori import IrodoriEngine
+
+            ir = self._config.irodori
+            self._engines["irodori"] = IrodoriEngine(
+                url=ir.url,
+                voice=ir.voice,
+                num_steps=ir.num_steps,
+                model=ir.model,
+                timeout_sec=ir.timeout_sec,
+                seed=ir.seed,
+                cfg_scale_caption=ir.cfg_scale_caption,
+                cfg_scale_speaker=ir.cfg_scale_speaker,
+            )
+
         if self._config.voicevox:
             from .engines.voicevox import VoicevoxEngine
 
@@ -58,7 +73,8 @@ class TTSMCP:
 
         if not self._engines:
             logger.warning(
-                "No TTS engine configured. Set ELEVENLABS_API_KEY or VOICEVOX_URL."
+                "No TTS engine configured. "
+                "Set ELEVENLABS_API_KEY, IRODORI_URL, or VOICEVOX_URL."
             )
 
     def _get_engine(self, requested: str | None = None) -> TTSEngine:
@@ -103,7 +119,8 @@ class TTSMCP:
                                     f"TTS engine to use ({engine_desc}). "
                                     "If omitted, uses default."
                                 ),
-                                "enum": available_engines or ["elevenlabs", "voicevox"],
+                                "enum": available_engines
+                                or ["elevenlabs", "irodori", "voicevox"],
                             },
                             "voice_id": {
                                 "type": "string",
@@ -116,6 +133,14 @@ class TTSMCP:
                             "output_format": {
                                 "type": "string",
                                 "description": "Override output format (ElevenLabs only, optional)",
+                            },
+                            "irodori_voice": {
+                                "type": "string",
+                                "description": "Irodori voice name (optional; empty/none = default)",
+                            },
+                            "irodori_num_steps": {
+                                "type": "integer",
+                                "description": "Irodori diffusion steps (optional)",
                             },
                             "voicevox_speaker": {
                                 "type": "integer",
@@ -200,6 +225,11 @@ class TTSMCP:
                     for key in ("voice_id", "model_id", "output_format"):
                         if arguments.get(key):
                             kwargs[key] = arguments[key]
+                elif engine_name == "irodori":
+                    if arguments.get("irodori_voice") is not None:
+                        kwargs["voice"] = arguments["irodori_voice"]
+                    if arguments.get("irodori_num_steps") is not None:
+                        kwargs["num_steps"] = arguments["irodori_num_steps"]
                 elif engine_name == "voicevox":
                     if arguments.get("voicevox_speaker") is not None:
                         kwargs["speaker"] = arguments["voicevox_speaker"]

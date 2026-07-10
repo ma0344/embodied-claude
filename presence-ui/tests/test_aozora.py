@@ -14,6 +14,7 @@ from presence_ui.gateway.aozora import (
     AozoraPassage,
     AozoraWork,
     ReadingState,
+    _book_reached_end,
     complete_reading_pause,
     join_passages_from,
     last_passage_index,
@@ -23,6 +24,7 @@ from presence_ui.gateway.aozora import (
     passage_reflect_stuck,
     pick_passage,
     reading_phase,
+    save_reading_state,
     split_main_text_passages,
     strip_html_text,
 )
@@ -114,6 +116,218 @@ def test_pick_passage_single_book_then_pause(tmp_path: Path) -> None:
     assert state.phase == "pause"
     assert state.active_work is not None
     assert state.active_work["work_id"] == "127"
+
+
+def test_book_reached_end_wraps_to_zero() -> None:
+    assert _book_reached_end(36, 0, 55) is True
+    assert _book_reached_end(0, 0, 55) is False
+    assert _book_reached_end(5, 6, 10) is False
+
+
+def test_pick_passage_returns_none_when_close(tmp_path: Path) -> None:
+    work = AozoraWork(
+        author_id="000879",
+        work_id="16",
+        title="侏儒の言葉",
+        author="芥川龍之介",
+        content_file="16_14570.html",
+    )
+    state_path = tmp_path / "state.json"
+    save_reading_state(
+        ReadingState(
+            phase="close",
+            active_work={
+                "author_id": "000879",
+                "work_id": "16",
+                "title": "侏儒の言葉",
+                "author": "芥川龍之介",
+            },
+        ),
+        state_path,
+    )
+    with patch("presence_ui.gateway.aozora.fetch_work_passages") as fetch_mock:
+        assert pick_passage([work], state_path=state_path) is None
+    fetch_mock.assert_not_called()
+
+
+def test_complete_reading_pause_caps_reread_same(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PRESENCE_AOZORA_REREAD_SAME_MAX", "2")
+    state_path = tmp_path / "state.json"
+    base = ReadingState(
+        phase="pause",
+        passage_index=5,
+        last_passage={
+            "passage_index": 5,
+            "next_passage_index": 6,
+            "total_passages": 10,
+            "text": "chunk",
+        },
+    )
+    save_reading_state(base, state_path)
+
+    complete_reading_pause(
+        next_move="reread_same",
+        reflected_passage_index=5,
+        state_path=state_path,
+    )
+    once = load_reading_state(state_path)
+    assert once.phase == "read"
+    assert once.passage_index == 5
+    assert once.reread_same_count == 1
+
+    once.phase = "pause"
+    save_reading_state(once, state_path)
+    complete_reading_pause(
+        next_move="reread_same",
+        reflected_passage_index=5,
+        state_path=state_path,
+    )
+    capped = load_reading_state(state_path)
+    assert capped.phase == "read"
+    assert capped.passage_index == 6
+    assert capped.reread_same_count == 0
+
+
+@pytest.mark.asyncio
+async def test_read_stuck_heal_returns_without_pick_passage() -> None:
+    stores = MagicMock()
+    stuck = ReadingState(
+        phase="pause",
+        last_passage={
+            "passage_index": 3,
+            "text": "一節目の本文",
+            "title": "侏儒の言葉",
+            "author": "芥川龍之介",
+            "next_passage_index": 4,
+            "total_passages": 10,
+        },
+        last_reflected_passage_index=3,
+    )
+    healed = ReadingState(phase="read", passage_index=4)
+
+    with (
+        patch(
+            "presence_ui.gateway.direct_actions.load_reading_state",
+            return_value=stuck,
+        ),
+        patch(
+            "presence_ui.gateway.direct_actions.complete_reading_pause",
+            return_value=healed,
+        ) as pause_mock,
+        patch(
+            "presence_ui.gateway.direct_actions.pick_passage",
+        ) as pick_mock,
+    ):
+        outcome = await direct_actions.read_aozora_passage_direct(
+            stores,
+            person_id="ma",
+            ctx=_ctx(),
+            plan=_plan(allowed=["read_aozora_passage"]),
+        )
+
+    pick_mock.assert_not_called()
+    pause_mock.assert_called_once()
+    assert outcome.ok is True
+    assert outcome.detail == "stuck_heal_advance"
+
+
+@pytest.mark.asyncio
+async def test_read_stuck_heal_chains_close_at_book_end() -> None:
+    stores = MagicMock()
+    stuck = ReadingState(
+        phase="pause",
+        last_passage={
+            "passage_index": 36,
+            "text": "最後の一節",
+            "title": "侏儒の言葉",
+            "author": "芥川龍之介",
+            "next_passage_index": 0,
+            "total_passages": 55,
+        },
+        last_reflected_passage_index=36,
+    )
+    healed_close = ReadingState(phase="close", passage_index=36)
+    close_outcome = direct_actions.DirectActionOutcome(
+        ok=True,
+        action="close_aozora_reading",
+        summary="Book closed.",
+        detail="close_ok",
+        events=[],
+    )
+
+    with (
+        patch(
+            "presence_ui.gateway.direct_actions.load_reading_state",
+            return_value=stuck,
+        ),
+        patch(
+            "presence_ui.gateway.direct_actions.complete_reading_pause",
+            return_value=healed_close,
+        ),
+        patch(
+            "presence_ui.gateway.direct_actions.close_aozora_reading_direct",
+            return_value=close_outcome,
+        ) as close_mock,
+        patch("presence_ui.gateway.direct_actions.pick_passage") as pick_mock,
+    ):
+        outcome = await direct_actions.read_aozora_passage_direct(
+            stores,
+            person_id="ma",
+            ctx=_ctx(),
+            plan=_plan(allowed=["read_aozora_passage"]),
+        )
+
+    pick_mock.assert_not_called()
+    close_mock.assert_called_once()
+    assert outcome.ok is True
+    assert "Book closed." in outcome.summary
+
+
+@pytest.mark.asyncio
+async def test_read_rejects_close_phase() -> None:
+    stores = MagicMock()
+    closing = ReadingState(phase="close", active_work={"work_id": "16"})
+
+    with patch(
+        "presence_ui.gateway.direct_actions.load_reading_state",
+        return_value=closing,
+    ):
+        outcome = await direct_actions.read_aozora_passage_direct(
+            stores,
+            person_id="ma",
+            ctx=_ctx(),
+            plan=_plan(allowed=["read_aozora_passage"]),
+        )
+
+    assert outcome.ok is False
+    assert outcome.detail == "wrong_phase_close"
+
+
+def test_complete_reading_pause_advances_to_close_at_book_end(
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / "state.json"
+    save_reading_state(
+        ReadingState(
+            phase="pause",
+            passage_index=36,
+            last_passage={
+                "passage_index": 36,
+                "next_passage_index": 0,
+                "total_passages": 55,
+                "text": "chunk",
+            },
+        ),
+        state_path,
+    )
+    after = complete_reading_pause(
+        next_move="advance",
+        reflected_passage_index=36,
+        state_path=state_path,
+    )
+    assert after.phase == "close"
 
 
 def test_load_works_env_override(monkeypatch: pytest.MonkeyPatch) -> None:

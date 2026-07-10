@@ -40,10 +40,20 @@ def surface_dir() -> Path:
     return path
 
 
-def _text_token(text: str) -> str:
+def _text_token(text: str, *, engine_name: str = "") -> str:
     collapsed = re.sub(r"\s+", " ", text.strip())
-    digest = hashlib.sha256(collapsed.encode("utf-8")).hexdigest()
+    material = f"{engine_name}:{collapsed}" if engine_name else collapsed
+    digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
     return digest[:16]
+
+
+def _resolved_engine_name() -> str:
+    from presence_ui.repo_env import load_repo_env
+
+    load_repo_env(force=True)
+    from tts_mcp.config import TTSConfig
+
+    return TTSConfig.from_env().resolve_engine(None)
 
 
 def _build_engine():
@@ -52,7 +62,6 @@ def _build_engine():
     load_repo_env(force=True)
     from tts_mcp.config import TTSConfig
     from tts_mcp.engines.elevenlabs import ElevenLabsEngine
-    from tts_mcp.engines.voicevox import VoicevoxEngine
 
     config = TTSConfig.from_env()
     engine_name = config.resolve_engine(None)
@@ -64,10 +73,30 @@ def _build_engine():
             model_id=eleven.model_id,
             output_format=eleven.output_format,
         )
+    if engine_name == "irodori" and config.irodori:
+        from tts_mcp.engines.irodori import IrodoriEngine
+
+        ir = config.irodori
+        return IrodoriEngine(
+            url=ir.url,
+            voice=ir.voice,
+            num_steps=ir.num_steps,
+            model=ir.model,
+            timeout_sec=ir.timeout_sec,
+            seed=ir.seed,
+            cfg_scale_caption=ir.cfg_scale_caption,
+            cfg_scale_speaker=ir.cfg_scale_speaker,
+        )
     if engine_name == "voicevox" and config.voicevox:
+        from tts_mcp.engines.voicevox import VoicevoxEngine
+
         vv = config.voicevox
         return VoicevoxEngine(url=vv.url, speaker=vv.speaker)
-    raise RuntimeError("no TTS engine configured")
+    raise RuntimeError(
+        f"engine {engine_name!r} unavailable "
+        "(check TTS_DEFAULT_ENGINE and matching URL/API key; "
+        "no silent fallback to another engine)"
+    )
 
 
 def surface_tts_engine_url() -> str | None:
@@ -75,6 +104,24 @@ def surface_tts_engine_url() -> str | None:
     from presence_ui.repo_env import load_repo_env
 
     load_repo_env()
+    try:
+        from tts_mcp.config import TTSConfig
+
+        config = TTSConfig.from_env()
+        name = config.resolve_engine(None)
+        if name == "irodori" and config.irodori:
+            return config.irodori.url
+        if name == "voicevox" and config.voicevox:
+            return config.voicevox.url
+        if name == "elevenlabs":
+            return "elevenlabs"
+    except Exception:
+        pass
+    irodori = os.getenv("IRODORI_URL")
+    if irodori is None:
+        return "http://127.0.0.1:8088"
+    if irodori.strip():
+        return irodori.rstrip("/")
     url = os.getenv("VOICEVOX_URL", "").strip()
     return url or None
 
@@ -98,10 +145,37 @@ def surface_tts_status() -> str:
         return "surface TTS disabled"
     url = surface_tts_engine_url()
     if not url:
-        return "TTS not configured (set VOICEVOX_URL or ELEVENLABS_API_KEY)"
+        return "TTS not configured (set IRODORI_URL, VOICEVOX_URL, or ELEVENLABS_API_KEY)"
     if surface_tts_ready():
         return f"TTS ready ({url})"
-    return f"TTS engine not running ({url}) — start Aivis: scripts/start-aivis-tts.ps1"
+    try:
+        engine_name = _resolved_engine_name()
+    except Exception:
+        engine_name = ""
+    if engine_name == "voicevox":
+        hint = "start Aivis: scripts/start-aivis-tts.ps1"
+    elif engine_name == "elevenlabs":
+        hint = "check ELEVENLABS_API_KEY"
+    else:
+        hint = "start Irodori: scripts/start-irodori-tts.ps1"
+    return f"TTS engine not running ({url}) — {hint}"
+
+
+def _engine_cache_label() -> str:
+    try:
+        engine_name = _resolved_engine_name()
+    except Exception:
+        return ""
+    if engine_name != "irodori":
+        return engine_name
+    try:
+        engine = _build_engine()
+        profile = getattr(engine, "cache_profile", None)
+        if callable(profile):
+            return f"irodori:{profile()}"
+    except Exception:
+        pass
+    return engine_name
 
 
 def synthesize_surface_audio(text: str) -> tuple[str, str, str]:
@@ -110,7 +184,8 @@ def synthesize_surface_audio(text: str) -> tuple[str, str, str]:
     if not line:
         raise ValueError("empty text")
 
-    token = _text_token(line)
+    engine_label = _engine_cache_label()
+    token = _text_token(line, engine_name=engine_label)
     surf_dir = surface_dir()
     for ext, media in _MEDIA_TYPES.items():
         candidate = surf_dir / f"{token}.{ext}"
@@ -120,13 +195,17 @@ def synthesize_surface_audio(text: str) -> tuple[str, str, str]:
     engine = _build_engine()
     try:
         audio_bytes, audio_format = engine.synthesize(line)
-    except OSError as exc:
-        url = surface_tts_engine_url() or "TTS engine"
-        raise RuntimeError(f"TTS engine not reachable at {url}: {exc}") from exc
     except Exception as exc:
-        if type(exc).__name__ == "URLError":
+        # HTTPError is an OSError subclass — catch before generic OSError so 5xx
+        # is reported as synthesis failure, not "not reachable".
+        if type(exc).__name__ == "HTTPError":
+            url = surface_tts_engine_url()
+            hint = f" ({url})" if url else ""
+            raise RuntimeError(f"TTS synthesis failed{hint}: {exc}") from exc
+        if isinstance(exc, OSError) or type(exc).__name__ == "URLError":
             url = surface_tts_engine_url() or "TTS engine"
-            raise RuntimeError(f"TTS engine not reachable at {url}: {exc.reason}") from exc
+            reason = getattr(exc, "reason", exc)
+            raise RuntimeError(f"TTS engine not reachable at {url}: {reason}") from exc
         url = surface_tts_engine_url()
         hint = f" ({url})" if url else ""
         raise RuntimeError(f"TTS synthesis failed{hint}: {exc}") from exc

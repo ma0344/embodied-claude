@@ -22,6 +22,7 @@ from social_core import utc_now
 
 from presence_ui.deps import PresenceStores
 from presence_ui.gateway.aozora import (
+    ReadingState,
     aozora_passage_max_chars,
     complete_reading_pause,
     finish_close_book,
@@ -214,11 +215,32 @@ async def read_aozora_passage_direct(
 ) -> DirectActionOutcome:
     """READ phase: one Aozora chunk → remember; reflection is PAUSE (LW-READ)."""
     state = load_reading_state()
+    if state.phase == "close":
+        return DirectActionOutcome(
+            ok=False,
+            action="read_aozora_passage",
+            summary="Book finished — close before next read.",
+            detail="wrong_phase_close",
+        )
     if state.phase == "pause":
         if passage_reflect_stuck(state):
-            complete_reading_pause(
+            last = state.last_passage or {}
+            title = str(last.get("title") or "（作品）")
+            passage = str(last.get("text") or "")
+            after = complete_reading_pause(
                 next_move="advance",
                 reflected_passage_index=last_passage_index(state),
+            )
+            return _outcome_after_pause_close_chain(
+                stores,
+                person_id=person_id,
+                ctx=ctx,
+                plan=plan,
+                after=after,
+                summary=_pause_tick_summary(title=title, passage=passage),
+                detail="stuck_heal_advance",
+                action="read_aozora_passage",
+                reflection_events=_reflect_stuck_heal_events(),
             )
         elif passage_needs_reflect(state):
             return DirectActionOutcome(
@@ -387,6 +409,55 @@ def _pause_tick_summary(*, title: str, passage: str, hook: str = "") -> str:
     return f"青空『{title}』— 一節を噛んだ"
 
 
+def _reflect_stuck_heal_events() -> list[Any]:
+    return [
+        progress_event(phase="reflect", label="青空を噛んでる"),
+        activity_event(
+            kind="reflect",
+            label="青空の咀嚼",
+            detail="phase heal → advance",
+            ok=True,
+        ),
+    ]
+
+
+def _outcome_after_pause_close_chain(
+    stores: PresenceStores,
+    *,
+    person_id: str,
+    ctx: InteractionContext,
+    plan: ResponsePlan,
+    after: ReadingState,
+    summary: str,
+    detail: str,
+    action: str,
+    events: list[Any] | None = None,
+    reflection_events: list[Any] | None = None,
+) -> DirectActionOutcome:
+    """If PAUSE advanced to close, run CLOSE in the same tick."""
+    merged = list(events or []) + list(reflection_events or [])
+    if after.phase == "close":
+        closed = close_aozora_reading_direct(
+            stores, person_id=person_id, ctx=ctx, plan=plan
+        )
+        return DirectActionOutcome(
+            ok=closed.ok,
+            action=action,
+            summary=f"{summary} → {closed.summary}",
+            detail=closed.detail or detail,
+            desire_satisfied="cognitive_load",
+            events=merged + closed.events,
+        )
+    return DirectActionOutcome(
+        ok=True,
+        action=action,
+        summary=summary,
+        detail=detail,
+        desire_satisfied="cognitive_load",
+        events=merged,
+    )
+
+
 def reflect_on_aozora_passage_direct(
     stores: PresenceStores,
     *,
@@ -428,21 +499,16 @@ def reflect_on_aozora_passage_direct(
             reflected_passage_index=passage_idx,
         )
         summary = _pause_tick_summary(title=title, passage=passage)
-        return DirectActionOutcome(
-            ok=True,
-            action="reflect_on_aozora_passage",
+        return _outcome_after_pause_close_chain(
+            stores,
+            person_id=person_id,
+            ctx=ctx,
+            plan=plan,
+            after=after,
             summary=summary,
             detail="already_reflected_heal",
-            desire_satisfied="cognitive_load",
-            events=[
-                progress_event(phase="reflect", label="青空を噛んでる"),
-                activity_event(
-                    kind="reflect",
-                    label="青空の咀嚼",
-                    detail="phase heal → read",
-                    ok=True,
-                ),
-            ],
+            action="reflect_on_aozora_passage",
+            reflection_events=_reflect_stuck_heal_events(),
         )
 
     total_passages = int(last.get("total_passages") or 1)
@@ -547,34 +613,26 @@ def reflect_on_aozora_passage_direct(
         )
     )
 
-    if after.phase == "close":
-        closed = close_aozora_reading_direct(
-            stores, person_id=person_id, ctx=ctx, plan=plan
-        )
-        return DirectActionOutcome(
-            ok=closed.ok,
-            action="reflect_on_aozora_passage",
-            summary=f"{summary} → {closed.summary}",
-            detail=closed.detail,
-            desire_satisfied="cognitive_load",
-            events=outcome.events + closed.events,
-        )
-
-    return DirectActionOutcome(
-        ok=True,
-        action="reflect_on_aozora_passage",
+    reflect_events = [
+        progress_event(phase="reflect", label="青空を噛んでる"),
+        activity_event(
+            kind="reflect",
+            label="青空の咀嚼",
+            detail=f"{title}: {(hook or body)[:80]}",
+            ok=True,
+        ),
+    ]
+    return _outcome_after_pause_close_chain(
+        stores,
+        person_id=person_id,
+        ctx=ctx,
+        plan=plan,
+        after=after,
         summary=summary,
         detail=title,
-        desire_satisfied="cognitive_load",
-        events=[
-            progress_event(phase="reflect", label="青空を噛んでる"),
-            activity_event(
-                kind="reflect",
-                label="青空の咀嚼",
-                detail=f"{title}: {(hook or body)[:80]}",
-                ok=True,
-            ),
-        ],
+        action="reflect_on_aozora_passage",
+        events=outcome.events,
+        reflection_events=reflect_events,
     )
 
 

@@ -44,4 +44,8 @@ def tts_configured() -> bool:
     load_repo_env()
     if os.getenv("ELEVENLABS_API_KEY", "").strip():
         return True
+    # Irodori defaults to :8088 when IRODORI_URL is unset; empty string disables it.
+    irodori_url = os.getenv("IRODORI_URL")
+    if irodori_url is None or irodori_url.strip():
+        return True
     return bool(os.getenv("VOICEVOX_URL", "").strip())

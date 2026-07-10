@@ -36,9 +36,9 @@ function Test-PortListening([int]$Port) {
 
 # Hidden VBS launchers exit quickly (Task → Ready) while the daemon keeps listening.
 $daemonTaskPorts = @{
-    "EmbodiedClaude-MemoryHTTP" = 18900
-    "EmbodiedClaude-PresenceUI" = 8090
-    "EmbodiedClaude-AivisTTS"    = 10101
+    "EmbodiedClaude-MemoryHTTP"  = 18900
+    "EmbodiedClaude-PresenceUI"  = 8090
+    "EmbodiedClaude-IrodoriTTS"  = 8088
 }
 
 function Test-TaskRunning([string]$Name) {
@@ -59,7 +59,7 @@ if ($webuiOptional) {
 Write-Host "`n-- Scheduled tasks --" -ForegroundColor Yellow
 $taskNames = @(
     "EmbodiedClaude-MemoryHTTP",
-    "EmbodiedClaude-AivisTTS",
+    "EmbodiedClaude-IrodoriTTS",
     "EmbodiedClaude-WebUI",
     "EmbodiedClaude-PresenceUI",
     "EmbodiedClaude-Watchdog"
@@ -79,7 +79,7 @@ foreach ($name in $taskNames) {
         Write-Host "  $name : $status (optional — Native chat)" -ForegroundColor DarkGray
         continue
     }
-    if ($name -eq "EmbodiedClaude-AivisTTS" -and $status -eq "missing") {
+    if ($name -eq "EmbodiedClaude-IrodoriTTS" -and $status -eq "missing") {
         Write-Host "  $name : missing (recommended — kiosk TTS)" -ForegroundColor Yellow
         continue
     }
@@ -101,7 +101,7 @@ foreach ($name in $taskNames) {
 Write-Host "`n-- Ports --" -ForegroundColor Yellow
 $portChecks = @(
     @{ Port = 18900; Label = "memory HTTP"; Optional = $false },
-    @{ Port = 10101; Label = "Aivis TTS"; Optional = $false },
+    @{ Port = 8088; Label = "Irodori TTS"; Optional = $false },
     @{ Port = 8080; Label = "webui"; Optional = $webuiOptional },
     @{ Port = 8090; Label = "presence-ui"; Optional = $false }
 )

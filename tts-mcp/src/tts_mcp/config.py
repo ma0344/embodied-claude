@@ -67,6 +67,83 @@ class VoicevoxConfig:
 
 
 @dataclass(frozen=True)
+class IrodoriConfig:
+    """Irodori TTS configuration (OpenAI-compatible local server)."""
+
+    url: str
+    voice: str
+    num_steps: int
+    model: str
+    timeout_sec: float
+    seed: int | None = None
+    cfg_scale_caption: float | None = None
+    cfg_scale_speaker: float | None = None
+
+    @classmethod
+    def from_env(cls) -> "IrodoriConfig | None":
+        """Create config from environment variables.
+
+        Default URL is http://127.0.0.1:8088 when unset.
+        Explicit empty IRODORI_URL disables the engine (returns None).
+        """
+        raw_url = os.getenv("IRODORI_URL")
+        if raw_url is not None and not raw_url.strip():
+            return None
+        url = (raw_url or "http://127.0.0.1:8088").rstrip("/")
+
+        voice_raw = os.getenv("IRODORI_VOICE", "none")
+        voice = voice_raw.strip() if voice_raw.strip() else "none"
+
+        steps_raw = os.getenv("IRODORI_NUM_STEPS", "24")
+        try:
+            num_steps = int(steps_raw)
+        except ValueError as exc:
+            raise ValueError(
+                f"IRODORI_NUM_STEPS must be an integer, got {steps_raw!r}"
+            ) from exc
+        if num_steps < 1:
+            raise ValueError(f"IRODORI_NUM_STEPS must be >= 1, got {num_steps}")
+
+        timeout_raw = os.getenv("IRODORI_TIMEOUT_SEC", "120")
+        try:
+            timeout_sec = float(timeout_raw)
+        except ValueError as exc:
+            raise ValueError(
+                f"IRODORI_TIMEOUT_SEC must be a number, got {timeout_raw!r}"
+            ) from exc
+
+        seed: int | None = None
+        seed_raw = os.getenv("IRODORI_SEED", "").strip()
+        if seed_raw:
+            try:
+                seed = int(seed_raw)
+            except ValueError as exc:
+                raise ValueError(
+                    f"IRODORI_SEED must be an integer, got {seed_raw!r}"
+                ) from exc
+
+        def _optional_float(key: str) -> float | None:
+            raw = os.getenv(key, "").strip()
+            if not raw:
+                return None
+            try:
+                return float(raw)
+            except ValueError as exc:
+                raise ValueError(f"{key} must be a number, got {raw!r}") from exc
+
+        return cls(
+            url=url,
+            voice=voice,
+            num_steps=num_steps,
+            model=os.getenv("IRODORI_MODEL", "irodori-tts"),
+            timeout_sec=timeout_sec,
+            seed=seed,
+            cfg_scale_caption=_optional_float("IRODORI_CFG_SCALE_CAPTION"),
+            cfg_scale_speaker=_optional_float("IRODORI_CFG_SCALE_SPEAKER"),
+        )
+
+
+@dataclass(frozen=True)
 class PlaybackConfig:
     """Playback and go2rtc configuration (shared across engines)."""
 
@@ -134,6 +211,7 @@ class TTSConfig:
 
     default_engine: str | None
     elevenlabs: ElevenLabsConfig | None
+    irodori: IrodoriConfig | None
     voicevox: VoicevoxConfig | None
     playback: PlaybackConfig
 
@@ -143,6 +221,7 @@ class TTSConfig:
         return cls(
             default_engine=os.getenv("TTS_DEFAULT_ENGINE") or None,
             elevenlabs=ElevenLabsConfig.from_env(),
+            irodori=IrodoriConfig.from_env(),
             voicevox=VoicevoxConfig.from_env(),
             playback=PlaybackConfig.from_env(),
         )
@@ -152,8 +231,9 @@ class TTSConfig:
 
         Priority:
         1. Explicit request (from tool call)
-        2. TTS_DEFAULT_ENGINE env var
-        3. Auto-detect (elevenlabs first for backward compat, then voicevox)
+        2. TTS_DEFAULT_ENGINE env var (honored even if that engine's env is missing —
+           callers must fail clearly; do not silently fall back)
+        3. Auto-detect: elevenlabs → irodori → voicevox
         """
         if requested:
             return requested
@@ -161,9 +241,14 @@ class TTSConfig:
             return self.default_engine
         if self.elevenlabs:
             return "elevenlabs"
+        if self.irodori:
+            return "irodori"
         if self.voicevox:
             return "voicevox"
-        raise ValueError("No TTS engine configured. Set ELEVENLABS_API_KEY or VOICEVOX_URL.")
+        raise ValueError(
+            "No TTS engine configured. "
+            "Set ELEVENLABS_API_KEY, IRODORI_URL, or VOICEVOX_URL."
+        )
 
 
 @dataclass(frozen=True)

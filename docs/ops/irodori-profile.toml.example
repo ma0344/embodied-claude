@@ -1,0 +1,24 @@
+# Koyori Irodori inference profile — copy to:
+#   %USERPROFILE%\.config\embodied-claude\irodori-profile.toml
+# Override path: IRODORI_PROFILE_PATH
+#
+# Connection (IRODORI_URL, TTS_DEFAULT_ENGINE) stays in tts-mcp/.env.
+# Server checkpoint / preload stays in Irodori-TTS-Server/.env.
+# Reference wav: Irodori-TTS-Server/voices/<voice>.wav
+#   → docs/backlog-ma-home.md § Irodori 参照声 WAV の差し替え
+
+[profile]
+voice = "koyori"
+seed = 8787384312565159089
+num_steps = 24
+
+[profile.cfg]
+text = 3.0
+caption = 10.0
+speaker = 2.0
+
+# VoiceDesign (600M) Style Prompt — ignored on 500M-v3 base checkpoint
+[profile.caption]
+default = """
+落ち着いた関西弁、少し早口。
+"""

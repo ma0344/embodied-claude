@@ -74,19 +74,9 @@ def _build_engine():
             output_format=eleven.output_format,
         )
     if engine_name == "irodori" and config.irodori:
-        from tts_mcp.engines.irodori import IrodoriEngine
+        from tts_mcp.config import build_irodori_engine
 
-        ir = config.irodori
-        return IrodoriEngine(
-            url=ir.url,
-            voice=ir.voice,
-            num_steps=ir.num_steps,
-            model=ir.model,
-            timeout_sec=ir.timeout_sec,
-            seed=ir.seed,
-            cfg_scale_caption=ir.cfg_scale_caption,
-            cfg_scale_speaker=ir.cfg_scale_speaker,
-        )
+        return build_irodori_engine(config.irodori)
     if engine_name == "voicevox" and config.voicevox:
         from tts_mcp.engines.voicevox import VoicevoxEngine
 
@@ -180,7 +170,9 @@ def _engine_cache_label() -> str:
 
 def synthesize_surface_audio(text: str) -> tuple[str, str, str]:
     """Return (token, audio_format, content_type). Writes cached file under surface_dir."""
-    line = text.strip()
+    from presence_ui.gateway.irodori_emoji_enrich import prepare_irodori_tts_line
+
+    line = prepare_irodori_tts_line(text.strip())
     if not line:
         raise ValueError("empty text")
 

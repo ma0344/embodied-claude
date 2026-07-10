@@ -76,33 +76,25 @@ class IrodoriConfig:
     model: str
     timeout_sec: float
     seed: int | None = None
+    cfg_scale_text: float | None = None
     cfg_scale_caption: float | None = None
     cfg_scale_speaker: float | None = None
+    caption: str | None = None
+    profile_path: str | None = None
 
     @classmethod
     def from_env(cls) -> "IrodoriConfig | None":
-        """Create config from environment variables.
+        """Create config from environment variables + optional profile TOML.
 
-        Default URL is http://127.0.0.1:8088 when unset.
-        Explicit empty IRODORI_URL disables the engine (returns None).
+        Connection (url, model, timeout) comes from env.
+        Inference recipe prefers irodori-profile.toml, then env fallbacks.
         """
+        from .irodori_profile import default_profile_path, load_irodori_profile
+
         raw_url = os.getenv("IRODORI_URL")
         if raw_url is not None and not raw_url.strip():
             return None
         url = (raw_url or "http://127.0.0.1:8088").rstrip("/")
-
-        voice_raw = os.getenv("IRODORI_VOICE", "none")
-        voice = voice_raw.strip() if voice_raw.strip() else "none"
-
-        steps_raw = os.getenv("IRODORI_NUM_STEPS", "24")
-        try:
-            num_steps = int(steps_raw)
-        except ValueError as exc:
-            raise ValueError(
-                f"IRODORI_NUM_STEPS must be an integer, got {steps_raw!r}"
-            ) from exc
-        if num_steps < 1:
-            raise ValueError(f"IRODORI_NUM_STEPS must be >= 1, got {num_steps}")
 
         timeout_raw = os.getenv("IRODORI_TIMEOUT_SEC", "120")
         try:
@@ -112,24 +104,61 @@ class IrodoriConfig:
                 f"IRODORI_TIMEOUT_SEC must be a number, got {timeout_raw!r}"
             ) from exc
 
+        profile_path = default_profile_path()
+        profile = load_irodori_profile(profile_path)
+
+        voice = "none"
+        num_steps = 24
         seed: int | None = None
-        seed_raw = os.getenv("IRODORI_SEED", "").strip()
-        if seed_raw:
+        cfg_scale_text: float | None = None
+        cfg_scale_caption: float | None = None
+        cfg_scale_speaker: float | None = None
+        caption: str | None = None
+
+        if profile is not None:
+            voice = profile.voice
+            num_steps = profile.num_steps
+            seed = profile.seed
+            cfg_scale_text = profile.cfg_scale_text
+            cfg_scale_caption = profile.cfg_scale_caption
+            cfg_scale_speaker = profile.cfg_scale_speaker
+            caption = profile.caption
+        else:
+            voice_raw = os.getenv("IRODORI_VOICE", "none")
+            voice = voice_raw.strip() if voice_raw.strip() else "none"
+            steps_raw = os.getenv("IRODORI_NUM_STEPS", "24")
             try:
-                seed = int(seed_raw)
+                num_steps = int(steps_raw)
             except ValueError as exc:
                 raise ValueError(
-                    f"IRODORI_SEED must be an integer, got {seed_raw!r}"
+                    f"IRODORI_NUM_STEPS must be an integer, got {steps_raw!r}"
                 ) from exc
+            if num_steps < 1:
+                raise ValueError(f"IRODORI_NUM_STEPS must be >= 1, got {num_steps}")
 
-        def _optional_float(key: str) -> float | None:
-            raw = os.getenv(key, "").strip()
-            if not raw:
-                return None
-            try:
-                return float(raw)
-            except ValueError as exc:
-                raise ValueError(f"{key} must be a number, got {raw!r}") from exc
+            seed_raw = os.getenv("IRODORI_SEED", "").strip()
+            if seed_raw:
+                try:
+                    seed = int(seed_raw)
+                except ValueError as exc:
+                    raise ValueError(
+                        f"IRODORI_SEED must be an integer, got {seed_raw!r}"
+                    ) from exc
+
+            def _optional_float(key: str) -> float | None:
+                raw = os.getenv(key, "").strip()
+                if not raw:
+                    return None
+                try:
+                    return float(raw)
+                except ValueError as exc:
+                    raise ValueError(f"{key} must be a number, got {raw!r}") from exc
+
+            cfg_scale_text = _optional_float("IRODORI_CFG_SCALE_TEXT")
+            cfg_scale_caption = _optional_float("IRODORI_CFG_SCALE_CAPTION")
+            cfg_scale_speaker = _optional_float("IRODORI_CFG_SCALE_SPEAKER")
+            cap_raw = os.getenv("IRODORI_CAPTION", "").strip()
+            caption = cap_raw or None
 
         return cls(
             url=url,
@@ -138,9 +167,30 @@ class IrodoriConfig:
             model=os.getenv("IRODORI_MODEL", "irodori-tts"),
             timeout_sec=timeout_sec,
             seed=seed,
-            cfg_scale_caption=_optional_float("IRODORI_CFG_SCALE_CAPTION"),
-            cfg_scale_speaker=_optional_float("IRODORI_CFG_SCALE_SPEAKER"),
+            cfg_scale_text=cfg_scale_text,
+            cfg_scale_caption=cfg_scale_caption,
+            cfg_scale_speaker=cfg_scale_speaker,
+            caption=caption,
+            profile_path=str(profile_path) if profile is not None else None,
         )
+
+
+def build_irodori_engine(config: IrodoriConfig):
+    """Construct IrodoriEngine from resolved config."""
+    from .engines.irodori import IrodoriEngine
+
+    return IrodoriEngine(
+        url=config.url,
+        voice=config.voice,
+        num_steps=config.num_steps,
+        model=config.model,
+        timeout_sec=config.timeout_sec,
+        seed=config.seed,
+        cfg_scale_text=config.cfg_scale_text,
+        cfg_scale_caption=config.cfg_scale_caption,
+        cfg_scale_speaker=config.cfg_scale_speaker,
+        caption=config.caption,
+    )
 
 
 @dataclass(frozen=True)

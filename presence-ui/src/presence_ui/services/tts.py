@@ -11,11 +11,14 @@ logger = logging.getLogger(__name__)
 async def speak_text(text: str, *, speaker: str = "local") -> tuple[bool, str]:
     """Synthesize and play text via tts-mcp engines."""
 
-    line = (text or "").strip()
-    if not line:
+    plain = (text or "").strip()
+    if not plain:
         return False, "empty text"
 
     def _run() -> tuple[bool, str]:
+        from presence_ui.gateway.irodori_emoji_enrich import prepare_irodori_tts_line
+
+        line = prepare_irodori_tts_line(plain)
         from presence_ui.repo_env import load_repo_env, repo_root
 
         load_repo_env(force=True)
@@ -45,19 +48,9 @@ async def speak_text(text: str, *, speaker: str = "local") -> tuple[bool, str]:
                 output_format=config.elevenlabs.output_format,
             )
         elif engine_name == "irodori" and config.irodori:
-            from tts_mcp.engines.irodori import IrodoriEngine
+            from tts_mcp.config import build_irodori_engine
 
-            ir = config.irodori
-            engine = IrodoriEngine(
-                url=ir.url,
-                voice=ir.voice,
-                num_steps=ir.num_steps,
-                model=ir.model,
-                timeout_sec=ir.timeout_sec,
-                seed=ir.seed,
-                cfg_scale_caption=ir.cfg_scale_caption,
-                cfg_scale_speaker=ir.cfg_scale_speaker,
-            )
+            engine = build_irodori_engine(config.irodori)
         elif engine_name == "voicevox" and config.voicevox:
             from tts_mcp.engines.voicevox import VoicevoxEngine
 

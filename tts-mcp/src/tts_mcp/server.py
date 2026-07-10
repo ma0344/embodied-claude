@@ -48,19 +48,9 @@ class TTSMCP:
             )
 
         if self._config.irodori:
-            from .engines.irodori import IrodoriEngine
+            from .config import build_irodori_engine
 
-            ir = self._config.irodori
-            self._engines["irodori"] = IrodoriEngine(
-                url=ir.url,
-                voice=ir.voice,
-                num_steps=ir.num_steps,
-                model=ir.model,
-                timeout_sec=ir.timeout_sec,
-                seed=ir.seed,
-                cfg_scale_caption=ir.cfg_scale_caption,
-                cfg_scale_speaker=ir.cfg_scale_speaker,
-            )
+            self._engines["irodori"] = build_irodori_engine(self._config.irodori)
 
         if self._config.voicevox:
             from .engines.voicevox import VoicevoxEngine

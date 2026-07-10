@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import urllib.request
@@ -24,8 +25,10 @@ class IrodoriEngine:
         timeout_sec: float = 120.0,
         *,
         seed: int | None = None,
+        cfg_scale_text: float | None = None,
         cfg_scale_caption: float | None = None,
         cfg_scale_speaker: float | None = None,
+        caption: str | None = None,
     ) -> None:
         self._url = url.rstrip("/")
         self._voice = voice if voice.strip() else "none"
@@ -33,8 +36,10 @@ class IrodoriEngine:
         self._model = model
         self._timeout_sec = timeout_sec
         self._seed = seed
+        self._cfg_scale_text = cfg_scale_text
         self._cfg_scale_caption = cfg_scale_caption
         self._cfg_scale_speaker = cfg_scale_speaker
+        self._caption = caption.strip() if caption and caption.strip() else None
 
     @property
     def engine_name(self) -> str:
@@ -42,12 +47,17 @@ class IrodoriEngine:
 
     def cache_profile(self) -> str:
         """Stable label for surface TTS cache keys (voice + inference opts)."""
+        cap_key = ""
+        if self._caption:
+            cap_key = hashlib.sha256(self._caption.encode("utf-8")).hexdigest()[:12]
         parts = [
             self._voice,
             str(self._num_steps),
             str(self._seed),
+            str(self._cfg_scale_text),
             str(self._cfg_scale_caption),
             str(self._cfg_scale_speaker),
+            cap_key,
         ]
         return ":".join(parts)
 
@@ -68,12 +78,18 @@ class IrodoriEngine:
         seed = kwargs.get("seed", self._seed)
         if seed is not None:
             payload["seed"] = int(seed)
+        cfg_text = kwargs.get("cfg_scale_text", self._cfg_scale_text)
+        if cfg_text is not None:
+            payload["cfg_scale_text"] = float(cfg_text)
         cfg_caption = kwargs.get("cfg_scale_caption", self._cfg_scale_caption)
         if cfg_caption is not None:
             payload["cfg_scale_caption"] = float(cfg_caption)
         cfg_speaker = kwargs.get("cfg_scale_speaker", self._cfg_scale_speaker)
         if cfg_speaker is not None:
             payload["cfg_scale_speaker"] = float(cfg_speaker)
+        caption = kwargs.get("caption", self._caption)
+        if caption and str(caption).strip():
+            payload["caption"] = str(caption).strip()
         return payload
 
     def synthesize(self, text: str, **kwargs: Any) -> tuple[bytes, str]:
@@ -81,10 +97,7 @@ class IrodoriEngine:
 
         Kwargs:
             voice: Override voice name (empty → none).
-            num_steps: Override diffusion steps.
-            seed: Override random seed.
-            cfg_scale_caption: Override caption CFG scale.
-            cfg_scale_speaker: Override speaker CFG scale.
+            num_steps, seed, cfg_scale_*, caption: Override profile defaults.
 
         Returns:
             Tuple of (wav_bytes, 'wav').

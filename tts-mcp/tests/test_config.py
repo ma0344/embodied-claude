@@ -170,7 +170,14 @@ class TestPlaybackConfig:
 class TestIrodoriConfig:
     """Tests for Irodori config."""
 
-    @patch.dict(os.environ, {}, clear=False)
+    @staticmethod
+    def _no_profile_env(extra: dict | None = None) -> dict:
+        env = {"IRODORI_PROFILE_PATH": "__missing__/irodori-profile.toml"}
+        if extra:
+            env.update(extra)
+        return env
+
+    @patch.dict(os.environ, _no_profile_env(), clear=False)
     def test_from_env_defaults(self):
         for key in (
             "IRODORI_URL",
@@ -187,15 +194,18 @@ class TestIrodoriConfig:
         assert config.num_steps == 24
         assert config.model == "irodori-tts"
         assert config.timeout_sec == 120.0
+        assert config.profile_path is None
 
     @patch.dict(
         os.environ,
-        {
-            "IRODORI_URL": "http://127.0.0.1:8088/",
-            "IRODORI_VOICE": "",
-            "IRODORI_NUM_STEPS": "32",
-            "IRODORI_TIMEOUT_SEC": "90",
-        },
+        _no_profile_env(
+            {
+                "IRODORI_URL": "http://127.0.0.1:8088/",
+                "IRODORI_VOICE": "",
+                "IRODORI_NUM_STEPS": "32",
+                "IRODORI_TIMEOUT_SEC": "90",
+            }
+        ),
         clear=False,
     )
     def test_empty_voice_becomes_none(self):
@@ -206,12 +216,12 @@ class TestIrodoriConfig:
         assert config.num_steps == 32
         assert config.timeout_sec == 90.0
 
-    @patch.dict(os.environ, {"IRODORI_URL": ""}, clear=False)
+    @patch.dict(os.environ, _no_profile_env({"IRODORI_URL": ""}), clear=False)
     def test_empty_url_disables(self):
         config = IrodoriConfig.from_env()
         assert config is None
 
-    @patch.dict(os.environ, {"IRODORI_NUM_STEPS": "nope"}, clear=False)
+    @patch.dict(os.environ, _no_profile_env({"IRODORI_NUM_STEPS": "nope"}), clear=False)
     def test_invalid_num_steps_raises(self):
         os.environ.pop("IRODORI_URL", None)
         try:
@@ -220,7 +230,7 @@ class TestIrodoriConfig:
         except ValueError as exc:
             assert "IRODORI_NUM_STEPS" in str(exc)
 
-    @patch.dict(os.environ, {"IRODORI_NUM_STEPS": "0"}, clear=False)
+    @patch.dict(os.environ, _no_profile_env({"IRODORI_NUM_STEPS": "0"}), clear=False)
     def test_zero_num_steps_raises(self):
         """E-14: IRODORI_NUM_STEPS=0 → ValueError."""
         os.environ.pop("IRODORI_URL", None)
@@ -229,6 +239,39 @@ class TestIrodoriConfig:
             assert False, "Should have raised ValueError"
         except ValueError as exc:
             assert "IRODORI_NUM_STEPS" in str(exc)
+
+    def test_from_env_loads_profile(self, tmp_path):
+        path = tmp_path / "irodori-profile.toml"
+        path.write_text(
+            """
+[profile]
+voice = "koyori"
+seed = 42
+num_steps = 16
+[profile.cfg]
+text = 3.5
+caption = 10.0
+speaker = 2.0
+[profile.caption]
+default = "関西弁"
+""".strip(),
+            encoding="utf-8",
+        )
+        with patch.dict(
+            os.environ,
+            {"IRODORI_PROFILE_PATH": str(path), "IRODORI_URL": "http://127.0.0.1:8088"},
+            clear=False,
+        ):
+            config = IrodoriConfig.from_env()
+        assert config is not None
+        assert config.voice == "koyori"
+        assert config.seed == 42
+        assert config.num_steps == 16
+        assert config.cfg_scale_text == 3.5
+        assert config.cfg_scale_caption == 10.0
+        assert config.cfg_scale_speaker == 2.0
+        assert config.caption == "関西弁"
+        assert config.profile_path == str(path)
 
 
 class TestTTSConfig:

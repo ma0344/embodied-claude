@@ -40,6 +40,7 @@ def test_synthesize_surface_audio_caches(tmp_path, monkeypatch: pytest.MonkeyPat
     monkeypatch.setenv("PRESENCE_TTS_SURFACE_DIR", str(tmp_path))
     monkeypatch.setenv("TTS_DEFAULT_ENGINE", "irodori")
     monkeypatch.setenv("IRODORI_URL", "http://127.0.0.1:8088")
+    monkeypatch.setenv("PRESENCE_IRODORI_EMOJI_ENRICH", "0")
     calls: list[str] = []
 
     class FakeEngine:

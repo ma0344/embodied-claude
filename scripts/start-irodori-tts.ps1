@@ -7,6 +7,10 @@
 # Background (logon task / watchdog):
 #   .\scripts\start-irodori-tts.ps1 -Background
 #
+# Model switch + restart (updates Irodori-TTS-Server/.env, stops :8088, starts again):
+#   .\scripts\restart-irodori-tts-500m.ps1
+#   .\scripts\restart-irodori-tts-600m.ps1
+#
 # Log (background): %USERPROFILE%\.config\embodied-claude\logs\irodori-tts.log
 #
 # 参照声 WAV: voices/<voice_id>.wav（例: koyori.wav）。差し替え → docs/backlog-ma-home.md § Irodori 参照声 WAV の差し替え

@@ -189,7 +189,7 @@ curl -s http://127.0.0.1:8088/health   # voices.files >= 1
 # キオスク or 短い発話で聴く
 ```
 
-**env（変更不要ならスキップ）**: `tts-mcp/.env` と `presence-ui.local.env` の `IRODORI_VOICE=koyori` / `IRODORI_SEED` / `IRODORI_CFG_SCALE_*` は [tts-mcp/.env.example](../../tts-mcp/.env.example) 参照。voice 名を変えるときだけ `IRODORI_VOICE` を新ファイル名に合わせる。
+**env（変更不要ならスキップ）**: 合成レシピは **`%USERPROFILE%\.config\embodied-claude\irodori-profile.toml`**（例: [irodori-profile.toml.example](ops/irodori-profile.toml.example)）。接続だけ `tts-mcp/.env` の `IRODORI_URL` / `TTS_DEFAULT_ENGINE`。voice 名を変えるときは profile の `voice` と `voices/<voice>.wav` を揃える。
 
 **別名で追加したい場合**: `voices/別名.wav` を置き `IRODORI_VOICE=別名` に変更 → Irodori 再起動 + キャッシュ削除 + `restart-presence-ui.ps1`（env 変更時）。
 

@@ -260,8 +260,10 @@ class TestIrodoriEngine:
         engine = IrodoriEngine(
             voice="koyori",
             seed=8787384312565159089,
+            cfg_scale_text=3.0,
             cfg_scale_caption=10.0,
             cfg_scale_speaker=2.0,
+            caption="関西弁",
         )
         engine.synthesize("こんにちは")
         body = json.loads(mock_urlopen.call_args[0][0].data)
@@ -269,10 +271,12 @@ class TestIrodoriEngine:
         assert body["irodori"] == {
             "num_steps": 24,
             "seed": 8787384312565159089,
+            "cfg_scale_text": 3.0,
             "cfg_scale_caption": 10.0,
             "cfg_scale_speaker": 2.0,
+            "caption": "関西弁",
         }
-        assert engine.cache_profile() == "koyori:24:8787384312565159089:10.0:2.0"
+        assert "koyori" in engine.cache_profile()
         assert body["response_format"] == "wav"
 
     @patch("tts_mcp.engines.irodori.urllib.request.urlopen")

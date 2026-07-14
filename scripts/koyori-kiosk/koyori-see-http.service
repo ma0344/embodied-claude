@@ -1,0 +1,24 @@
+[Unit]
+Description=koyori near-eye JPEG HTTP (Surface front camera)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ma
+Group=video
+Environment=KOYORI_SEE_HOST=0.0.0.0
+Environment=KOYORI_SEE_PORT=8765
+Environment=KOYORI_LATEST_JPG=/var/lib/koyori/latest.jpg
+Environment=KOYORI_CAPTURE_BIN=/usr/local/bin/koyori-capture
+Environment=KOYORI_CAPTURE_LOCK=/var/lib/koyori/capture.lock
+# Dark-room AE settle (optional overrides in /etc/default/koyori-see)
+Environment=KOYORI_PICK_FRAME=4
+Environment=KOYORI_CAPTURE_TIMEOUT=8
+EnvironmentFile=-/etc/default/koyori-see
+ExecStart=/usr/local/bin/koyori-see-http
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

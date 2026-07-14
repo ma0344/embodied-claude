@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodically refresh koyori near-eye latest.jpg
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Unit=koyori-capture-refresh.service
+
+[Install]
+WantedBy=timers.target

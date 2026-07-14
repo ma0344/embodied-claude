@@ -11,7 +11,7 @@
 #   KOYORI_CAPTURE_TIMEOUT=10 ./scripts/koyori-capture.sh
 #
 # Do not use cam+ffmpeg raw dump on IPU3; IPA processing needs GStreamer.
-# Architecture / ma-home integration: docs/koyori-near-eye.md
+# Architecture / ma-home integration: docs/ops/koyori-near-eye.md
 
 set -euo pipefail
 

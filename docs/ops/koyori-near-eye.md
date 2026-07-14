@@ -56,28 +56,59 @@ KOYORI_PICK_FRAME=12 KOYORI_CAPTURE_TIMEOUT=18 koyori-capture /var/lib/koyori/la
 
 ---
 
-## 実装ロードマップ（これから作る部分）
+## 実装ロードマップ
 
-### Phase 1 — koyori 上で JPEG を公開
+### Phase 1 — koyori 上で JPEG を公開 ✅
 
 koyori が **最新1枚** を保持し、HTTP で返す。
 
 ```
 koyori-capture → /var/lib/koyori/latest.jpg
        ↑
-systemd timer / path unit（例: 30s ごと、または on-demand）
+systemd timer（既定 30s）+ GET /see 同期 capture
        ↓
-軽量 HTTP（例: Python http.server ラッパー、caddy、nginx）
+koyori-see-http (:8765)
+  GET http://koyori.local:8765/health
   GET http://koyori.local:8765/latest.jpg
   GET http://koyori.local:8765/see        → capture してから返す（同期）
 ```
 
-配置案:
+配置:
 
-- `/var/lib/koyori/latest.jpg` — 直近キャプチャ
-- `/etc/systemd/system/koyori-capture.timer` — 定期更新（暗所なら interval 長め）
-- `/usr/local/bin/koyori-see-http` — `see` 要求時に capture + 返却
+| パス | 役割 |
+|------|------|
+| `/usr/local/bin/koyori-capture` | GStreamer JPEG キャプチャ |
+| `/usr/local/bin/koyori-see-http` | HTTP + `--refresh` |
+| `/var/lib/koyori/latest.jpg` | 直近キャプチャ |
+| `/etc/default/koyori-see` | 任意 override（暗所用 timeout 等） |
+| `koyori-see-http.service` | HTTP 常駐 |
+| `koyori-capture-refresh.timer` | 30s ごと refresh |
 
+**koyori への install:**
+
+```bash
+cd ~/src/embodied-claude
+git pull
+cd scripts/koyori-kiosk
+sudo ./install-koyori-near-eye.sh
+```
+
+**確認（ma-home から）:**
+
+```bash
+curl -fsS http://koyori.local:8765/health
+curl -fsS -o latest.jpg http://koyori.local:8765/latest.jpg
+curl -fsS -o see.jpg http://koyori.local:8765/see   # 数秒待つ
+```
+
+暗所で暗いときだけ `/etc/default/koyori-see` に:
+
+```bash
+KOYORI_PICK_FRAME=12
+KOYORI_CAPTURE_TIMEOUT=18
+```
+
+→ `sudo systemctl restart koyori-see-http.service`
 ### Phase 2 — ma-home から取得
 
 **推奨:** ma-home 上の新 MCP（または `wifi-cam-mcp` 拡張）が koyori HTTP を pull。
@@ -138,6 +169,8 @@ systemd timer / path unit（例: 30s ごと、または on-demand）
 
 ## 関連ファイル
 
-- [`scripts/koyori-capture.sh`](../scripts/koyori-capture.sh) — 近目 JPEG キャプチャ
-- [`wifi-cam-mcp`](../wifi-cam-mcp/) — 遠目 + vision describe 参考実装
-- [`CLAUDE.md`](../CLAUDE.md) — MCP・Heartbeat 全体
+- [`scripts/koyori-capture.sh`](../../scripts/koyori-capture.sh) — 近目 JPEG キャプチャ
+- [`scripts/koyori-kiosk/koyori-see-http.py`](../../scripts/koyori-kiosk/koyori-see-http.py) — Phase 1 HTTP
+- [`scripts/koyori-kiosk/install-koyori-near-eye.sh`](../../scripts/koyori-kiosk/install-koyori-near-eye.sh) — install
+- [`wifi-cam-mcp`](../../wifi-cam-mcp/) — 遠目 + vision describe 参考実装
+- [`CLAUDE.md`](../../CLAUDE.md) — MCP・Heartbeat 全体

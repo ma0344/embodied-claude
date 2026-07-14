@@ -99,6 +99,27 @@ Get-Content $env:USERPROFILE\.config\embodied-claude\logs\autonomous-tick.log -T
 
 ---
 
+## koyori 近目（Phase 1）
+
+koyori 上（一度だけ）:
+
+```bash
+cd ~/src/embodied-claude && git pull
+cd scripts/koyori-kiosk
+sudo ./install-koyori-near-eye.sh
+```
+
+ma-home から確認:
+
+```powershell
+curl.exe -fsS http://koyori.local:8765/health
+curl.exe -fsS -o $env:TEMP\koyori-latest.jpg http://koyori.local:8765/latest.jpg
+```
+
+詳細 → [koyori-near-eye.md](./koyori-near-eye.md)
+
+---
+
 ## 開発・PoC
 
 | スクリプト | 用途 |

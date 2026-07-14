@@ -1,0 +1,16 @@
+[Unit]
+Description=Refresh koyori near-eye latest.jpg
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=ma
+Group=video
+Environment=KOYORI_LATEST_JPG=/var/lib/koyori/latest.jpg
+Environment=KOYORI_CAPTURE_BIN=/usr/local/bin/koyori-capture
+Environment=KOYORI_CAPTURE_LOCK=/var/lib/koyori/capture.lock
+Environment=KOYORI_PICK_FRAME=4
+Environment=KOYORI_CAPTURE_TIMEOUT=8
+EnvironmentFile=-/etc/default/koyori-see
+ExecStart=/usr/local/bin/koyori-see-http --refresh
+Nice=10

@@ -932,6 +932,25 @@ async def observe_room_direct(
     )
 
 
+_OUTBOUND_PING_USER_TEXT = (
+    "（まーに短く一声だけ。居るか軽く確認。1文、多くて2文。関西弁。"
+    "見張り・執着・依存っぽい言い方はしない。）"
+)
+_OUTBOUND_PING_MUST_AVOID: tuple[str, ...] = (
+    "implying you watched まー all day or stayed physically beside them",
+    "clingy or possessive lines (ずっと隣, どっか行くな, 離れんな, ずっと見てた)",
+    "longing, loneliness, or 会いたさ monologue",
+    "checking if まー is awake repeatedly or sounding like surveillance",
+)
+
+
+def _outbound_ping_reply_plan(plan: ResponsePlan) -> tuple[str, ResponsePlan]:
+    """Prompt + plan constraints for autonomous room pings (miss_companion)."""
+    merged_avoid = [*plan.must_avoid, *_OUTBOUND_PING_MUST_AVOID]
+    say_plan = plan.model_copy(update={"must_avoid": merged_avoid})
+    return _OUTBOUND_PING_USER_TEXT, say_plan
+
+
 async def talk_to_companion_direct(
     stores: PresenceStores,
     *,
@@ -965,10 +984,11 @@ async def talk_to_companion_direct(
     if not line:
         from presence_ui.services.llm import generate_koyori_reply
 
+        ping_user_text, ping_plan = _outbound_ping_reply_plan(plan)
         line = await generate_koyori_reply(
-            user_text="（まーに短く一声。居るかどうかわからん。1〜2文。関西弁。）",
+            user_text=ping_user_text,
             ctx=ctx,
-            plan=plan,
+            plan=ping_plan,
             max_tokens=120,
         )
 
@@ -978,6 +998,7 @@ async def talk_to_companion_direct(
         person_id=person_id,
         text=line,
         speak=outbound_nudge_speak_enabled(want_speak=True),
+        kiosk_say=True,
         channels=channels,
         desire="miss_companion",
         skip_cooldown=skip_cooldown,
@@ -1005,15 +1026,6 @@ async def talk_to_companion_direct(
     speak_detail = ""
     if voice_local_enabled() and should_deliver_pc_local():
         spoke_local, speak_detail = await speak_text(line, speaker="local")
-
-    try:
-        from presence_ui.services.kiosk_say import deliver_speak_to_kiosk
-        from presence_ui.services.outbound_kiosk import kiosk_primary_active
-
-        if kiosk_primary_active():
-            deliver_speak_to_kiosk(line, source="talk")
-    except Exception as exc:
-        logger.warning("kiosk talk say failed: %s", exc)
 
     stores.orchestrator.record_agent_experience(
         RecordAgentExperienceInput(
@@ -1137,6 +1149,7 @@ async def remind_commitment_direct(
         person_id=person_id,
         text=line,
         speak=outbound_nudge_speak_enabled(want_speak=use_say),
+        kiosk_say=use_say,
         channels=channels,
         desire="reminder",
         skip_cooldown=True,
@@ -1164,16 +1177,6 @@ async def remind_commitment_direct(
     speak_detail = ""
     if use_say and voice_local_enabled() and should_deliver_pc_local():
         spoke_local, speak_detail = await speak_text(line, speaker="local")
-
-    if use_say:
-        try:
-            from presence_ui.services.kiosk_say import deliver_speak_to_kiosk
-            from presence_ui.services.outbound_kiosk import kiosk_primary_active
-
-            if kiosk_primary_active():
-                deliver_speak_to_kiosk(line, source="reminder")
-        except Exception as exc:
-            logger.warning("kiosk reminder say failed: %s", exc)
 
     commitment_id = commitment.commitment_id
     if commitment_id:

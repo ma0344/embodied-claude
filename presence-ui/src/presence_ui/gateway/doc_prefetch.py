@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any
 
 from presence_ui.gateway.room_events import progress_event
@@ -21,7 +22,9 @@ from presence_ui.services import doc_memory, doc_read
 
 # Bounded cue vocabulary to (re)open 本モード with the active/sticky book when the
 # title is not spoken. Deterministic gate only (regex 方針: ゲートまで).
-_CUE_WORDS = ("本", "著作", "続き", "章", "エピローグ", "プロローグ", "この前の話")
+# 「本」単字は book 確定不能のため cue から除外（doc-read Phase E e4b で確認）。
+_CUE_PHRASES = ("著作", "続き", "エピローグ", "プロローグ", "この前の話")
+_CHAPTER_CUE_RE = re.compile(r"第[0-9０-９一二三四五六七八九十百]+章")
 
 
 def doc_context_enabled() -> bool:
@@ -99,36 +102,72 @@ def _set_sticky(session_id: str | None, doc_id: str | None, remaining: int) -> N
 
 
 def _has_cue(text: str) -> bool:
-    return any(word in text for word in _CUE_WORDS)
+    body = (text or "").strip()
+    if not body:
+        return False
+    if any(phrase in body for phrase in _CUE_PHRASES):
+        return True
+    return _CHAPTER_CUE_RE.search(body) is not None
 
 
-def resolve_doc_for_turn(message: str, session_id: str | None) -> tuple[str | None, str]:
-    """Return (doc_id, reason). reason ∈ title|cue|sticky|none — for logging/tests."""
+def _resolve_doc_candidate(message: str, session_id: str | None) -> tuple[str | None, str]:
+    """Deterministic candidate selection. reason ∈ title|cue|sticky|none."""
     text = (message or "").strip()
     if not text:
         return None, "none"
 
-    # 1) explicit book by title/alias (works across sessions)
     by_title = doc_read.resolve_doc_by_text(text)
     if by_title:
-        _set_sticky(session_id, by_title, _sticky_turns())
         return by_title, "title"
 
     sticky_doc, remaining = _get_sticky(session_id)
 
-    # 2) cue word reopens the sticky/active book
     if _has_cue(text):
         doc_id = sticky_doc or doc_read.active_doc_id()
         if doc_id:
-            _set_sticky(session_id, doc_id, _sticky_turns())
             return doc_id, "cue"
 
-    # 3) sticky continuation (中断しながら継続 → decay)
     if sticky_doc and remaining > 0:
-        _set_sticky(session_id, sticky_doc, remaining - 1)
         return sticky_doc, "sticky"
 
     return None, "none"
+
+
+def _apply_open(doc_id: str, session_id: str | None, *, reason: str) -> None:
+    if reason in {"title", "cue"}:
+        _set_sticky(session_id, doc_id, _sticky_turns())
+    elif reason == "sticky":
+        sticky_doc, remaining = _get_sticky(session_id)
+        if sticky_doc == doc_id and remaining > 0:
+            _set_sticky(session_id, doc_id, remaining - 1)
+
+
+def resolve_doc_for_turn(
+    message: str,
+    session_id: str | None,
+    *,
+    skip_e4b: bool = False,
+) -> tuple[str | None, str]:
+    """Return (doc_id, reason). Sync helper — skips e4b when skip_e4b=True (tests)."""
+    doc_id, reason = _resolve_doc_candidate(message, session_id)
+    if not doc_id:
+        return None, "none"
+    if reason == "sticky":
+        _apply_open(doc_id, session_id, reason=reason)
+        return doc_id, reason
+    if skip_e4b:
+        _apply_open(doc_id, session_id, reason=reason)
+        return doc_id, reason
+    from presence_ui.gateway.doc_prefetch_stage import confirm_registered_book_open
+
+    if not confirm_registered_book_open(
+        utterance=message,
+        doc_id=doc_id,
+        gate_reason=reason,
+    ):
+        return None, "none"
+    _apply_open(doc_id, session_id, reason=reason)
+    return doc_id, reason
 
 
 def _trim(text: str, limit: int) -> str:

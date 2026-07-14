@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import uuid
@@ -12,6 +13,8 @@ from typing import Any, Literal
 from social_core import utc_now
 
 from presence_ui.deps import PresenceStores
+
+logger = logging.getLogger(__name__)
 
 OutboundChannel = Literal["chat_push", "voice_surface", "voice_local", "silent"]
 
@@ -161,6 +164,7 @@ def enqueue_outbound_nudge(
     person_id: str,
     text: str,
     speak: bool = True,
+    kiosk_say: bool = False,
     channels: list[OutboundChannel] | None = None,
     desire: str | None = None,
     experience_id: str | None = None,
@@ -202,7 +206,7 @@ def enqueue_outbound_nudge(
                 ts,
                 person_id,
                 line,
-                1 if speak else 0,
+                1 if (speak or kiosk_say) else 0,
                 json.dumps(channel_list, ensure_ascii=False),
                 desire,
                 nudge_text_fingerprint(line),
@@ -239,6 +243,14 @@ def enqueue_outbound_nudge(
         channels=channel_list,
         desire=desire,
     )
+
+    if kiosk_say:
+        try:
+            from presence_ui.services.kiosk_say import deliver_speak_to_kiosk
+
+            deliver_speak_to_kiosk(line, source=desire or "outbound")
+        except Exception as exc:
+            logger.warning("kiosk outbound say failed: %s", exc)
 
     return OutboundEnqueueResult(
         ok=True,

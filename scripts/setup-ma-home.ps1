@@ -13,7 +13,7 @@ Write-Host "    repo: $Repo"
 # uv
 if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     Write-Host "Installing uv..."
-    irm https://astral.sh/uv/install.ps1 | iex
+    Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
     $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
 }
 

@@ -47,6 +47,19 @@ def calendar_search_cache_key(utterance: str) -> tuple[str, str]:
     return ("calendar_search", (utterance or "").strip())
 
 
+def doc_intent_cache_key(utterance: str, doc_id: str, gate_reason: str) -> tuple[str, str, str, str]:
+    return (
+        "doc_intent",
+        (utterance or "").strip(),
+        (doc_id or "").strip(),
+        (gate_reason or "").strip(),
+    )
+
+
+def doc_hon_cache_key(utterance: str) -> tuple[str, str]:
+    return ("doc_hon", (utterance or "").strip())
+
+
 @contextmanager
 def gateway_turn_cache_scope():
     """Activate gateway dedup for one chat turn (prefetch + ingest + gates)."""

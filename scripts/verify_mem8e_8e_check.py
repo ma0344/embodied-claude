@@ -161,7 +161,7 @@ def main() -> int:
             bool(schedule_memories)
             and not is_episode_content(schedule_memories[0])
             and ("水曜" in schedule_memories[0] or "午前" in schedule_memories[0]),
-            f"memories={len(schedule_memories)} top={(schedule_memories[0][:60]+'...') if schedule_memories else 'none'}",
+            f"memories={len(schedule_memories)} top={(schedule_memories[0][:60] + '...') if schedule_memories else 'none'}",
         ),
         (
             "STM self_disclosure ≥1",

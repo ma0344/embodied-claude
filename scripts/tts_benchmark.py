@@ -229,19 +229,6 @@ def bench_irodori() -> EngineResult:
             sec, nbytes = synth_irodori()
             result.warm_synth_sec.append(sec)
             print(f"    warm {i + 1}: {sec:.2f}s ({nbytes} bytes)")
-            if i == 0:
-                OUT_DIR.mkdir(exist_ok=True)
-                # keep one warm sample for listening
-                body = json.dumps(
-                    {
-                        "model": "irodori-tts",
-                        "input": PHRASE,
-                        "voice": "none",
-                        "response_format": "wav",
-                        "irodori": {"num_steps": 24},
-                    }
-                ).encode()
-                # already synthesized; skip duplicate write
     finally:
         stop_port(8088)
         proc.wait(timeout=60)

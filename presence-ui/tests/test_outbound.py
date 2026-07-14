@@ -52,6 +52,42 @@ def test_enqueue_and_list_pending(tmp_path) -> None:
     assert "chat_push" in pending[0].channels
 
 
+def test_enqueue_kiosk_say_even_when_sse_speak_suppressed(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db = SocialDB(tmp_path / "social.db")
+    stores = _minimal_stores(db)
+    calls: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        "presence_ui.services.kiosk_say.deliver_speak_to_kiosk",
+        lambda text, *, source: calls.append((text, source)) or (0, "say_x", None),
+    )
+    monkeypatch.setattr(
+        "presence_ui.services.outbound.publish_enqueued_nudge",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "presence_ui.services.outbound_push.send_outbound_push",
+        lambda **kwargs: (False, "no push targets configured"),
+    )
+
+    result = enqueue_outbound_nudge(
+        stores,
+        person_id="ma",
+        text="まー、おる？",
+        speak=False,
+        kiosk_say=True,
+        desire="miss_companion",
+    )
+    assert result.ok is True
+    assert calls == [("まー、おる？", "miss_companion")]
+
+    pending = list_pending_outbound(stores, person_id="ma", client_id="kiosk")
+    assert len(pending) == 1
+    assert pending[0].speak is True
+
+
 def test_cooldown_blocks_duplicate_text(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PRESENCE_OUTBOUND_COOLDOWN_TEXT_MINUTES", "240")
     monkeypatch.setenv("PRESENCE_OUTBOUND_COOLDOWN_MIN_INTERVAL_MINUTES", "0")

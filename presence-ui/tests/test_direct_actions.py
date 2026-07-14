@@ -272,6 +272,18 @@ async def test_execute_smoke_action_observe_room() -> None:
 
 
 @pytest.mark.asyncio
+async def test_outbound_ping_reply_plan_avoids_clingy_tone() -> None:
+    plan = _plan(move="act_autonomously", allowed=["talk_to_companion"])
+    user_text, say_plan = direct_actions._outbound_ping_reply_plan(plan)
+
+    assert "会いたさ" not in user_text
+    assert "見張り" in user_text
+    assert plan.must_avoid == []
+    assert len(say_plan.must_avoid) == len(direct_actions._OUTBOUND_PING_MUST_AVOID)
+    assert any("clingy or possessive" in item for item in say_plan.must_avoid)
+
+
+@pytest.mark.asyncio
 async def test_execute_smoke_action_miss_companion_boundary_deny() -> None:
     stores = MagicMock()
     stores.boundary.evaluate_action.return_value = MagicMock(
@@ -367,10 +379,6 @@ async def test_remind_commitment_direct_kiosk_primary_skips_outbound_speak() -> 
             "presence_ui.services.outbound_kiosk.kiosk_primary_active",
             return_value=True,
         ),
-        patch(
-            "presence_ui.services.kiosk_say.deliver_speak_to_kiosk",
-            return_value=(1, "say_1", "/api/v1/tts/surface/abc"),
-        ) as kiosk_say_mock,
     ):
         outcome = await direct_actions.remind_commitment_direct(
             stores,
@@ -382,7 +390,7 @@ async def test_remind_commitment_direct_kiosk_primary_skips_outbound_speak() -> 
     assert outcome.ok is True
     enqueue_mock.assert_called_once()
     assert enqueue_mock.call_args.kwargs["speak"] is False
-    kiosk_say_mock.assert_called_once_with("まー、時間やで", source="reminder")
+    assert enqueue_mock.call_args.kwargs["kiosk_say"] is True
 
 
 @pytest.mark.asyncio
@@ -415,6 +423,10 @@ async def test_remind_commitment_direct_uses_speak_line_metadata() -> None:
             "presence_ui.gateway.direct_actions.voice_local_enabled",
             return_value=False,
         ),
+        patch(
+            "presence_ui.services.outbound_kiosk.kiosk_primary_active",
+            return_value=False,
+        ),
     ):
         outcome = await direct_actions.remind_commitment_direct(
             stores,
@@ -428,6 +440,7 @@ async def test_remind_commitment_direct_uses_speak_line_metadata() -> None:
     enqueue_mock.assert_called_once()
     assert enqueue_mock.call_args.kwargs["text"] == "まー、時間やで！！"
     assert enqueue_mock.call_args.kwargs["speak"] is True
+    assert enqueue_mock.call_args.kwargs["kiosk_say"] is True
 
 
 @pytest.mark.asyncio
@@ -518,4 +531,3 @@ async def test_remind_commitment_direct_nudge_only_skips_say() -> None:
     enqueue_mock.assert_called_once()
     assert enqueue_mock.call_args.kwargs["speak"] is False
     speak_mock.assert_not_called()
-

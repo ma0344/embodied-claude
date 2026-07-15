@@ -32,6 +32,8 @@ _SYSTEM_BLOCK_RES = (
     re.compile(r"^\[/calendar_write_result\]", re.I),
     re.compile(r"^\[calendar_confirm_pending\]\s*$", re.I),
     re.compile(r"^\[/calendar_confirm_pending\]", re.I),
+    re.compile(r"^\[ws5c_search_offer\]\s*$", re.I),
+    re.compile(r"^\[/ws5c_search_offer\]", re.I),
     re.compile(r"^\[url_prefetch\]\s*$", re.I),
     re.compile(r"^\[/url_prefetch\]", re.I),
     re.compile(r"^\[Gateway directive\b", re.I),
@@ -63,6 +65,8 @@ _DIRECTIVE_BLOCK_RES = (
     re.compile(r"^\[/calendar_write_result\]", re.I),
     re.compile(r"^\[calendar_confirm_pending\]\s*$", re.I),
     re.compile(r"^\[/calendar_confirm_pending\]", re.I),
+    re.compile(r"^\[ws5c_search_offer\]\s*$", re.I),
+    re.compile(r"^\[/ws5c_search_offer\]", re.I),
     re.compile(r"^\[url_prefetch\]\s*$", re.I),
     re.compile(r"^\[/url_prefetch\]", re.I),
     re.compile(r"^\[Gateway directive\b", re.I),
@@ -90,6 +94,7 @@ _TAIL_PREFETCH_RES = (
     re.compile(r"\n\[calendar_prefetch\][\s\S]*$", re.I),
     re.compile(r"\n\[calendar_write_result\][\s\S]*$", re.I),
     re.compile(r"\n\[calendar_confirm_pending\][\s\S]*$", re.I),
+    re.compile(r"\n\[ws5c_search_offer\][\s\S]*$", re.I),
     re.compile(r"\n\[vision_prefetch\][\s\S]*$", re.I),
 )
 

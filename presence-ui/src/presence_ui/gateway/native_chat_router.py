@@ -402,7 +402,10 @@ def create_native_chat_router(*, person_id: str) -> APIRouter:
             calendar_note = None
         try:
             web_search_note, _web_events, search_hits, search_query = (
-                await prefetch_web_search_for_message(prompt_text)
+                await prefetch_web_search_for_message(
+                    prompt_text,
+                    person_id=person_id,
+                )
             )
             if web_search_note:
                 logger.info("native chat web search prefetch ok (%d chars)", len(web_search_note))

@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ（ダッシュボード）
 
-**最終更新**: 2026-07-01（GAPI-2 読取パイプライン ma-home E2E）  
+**最終更新**: 2026-07-15（SOUL 距離感・outbound 動機を様子見へ）  
 **詳細の正（アーカイブ）**: [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md)  
 **完了一覧**: [backlog-archive-ma-home.md](./backlog-archive-ma-home.md)
 
@@ -98,7 +98,8 @@
 | **V** | Surface UI 残（V4 等） | 部分済 | [tracks/surface-vision.md](./tracks/surface-vision.md) |
 | **GAPI** | Google Calendar / Drive | ✅ prep-1/2/3 · 7a/7b · **2b/2r/2r-S2/2s** · 📋 **7c** 複数件 · **7d** e4b確認 | [tracks/gapi.md](./tracks/gapi.md) · [gapi-setup.md](./ops/gapi-setup.md) |
 | **TEMP** | TEMP-1〜5 ✅ · TEMP-C3/b/c4 ✅ · **C5 📋** clock/e4b · SHIFT-R1/R2/R3 ✅ | [utterance-anchoring.md](./tracks/utterance-anchoring.md) · [interpretation-shift-routing.md](./tracks/interpretation-shift-routing.md) |
-| **WS** | 会話 Web 検索 | ✅ WS-5 v0 · 📋 v1 e4b | [ws-2](./ops/ws-2-conversation-web-search.md) · [ws-5](./ops/ws-5-spontaneous-search.md) |
+| **WS** | 会話 Web 検索 | ✅ WS-5 v0 · ✅ **5b 天気気温自動**（2026-07-15）· 📋 **5c 調べよか？** · 📋 v1 e4b | [ws-2](./ops/ws-2-conversation-web-search.md) · [ws-5](./ops/ws-5-spontaneous-search.md) |
+| **SOUL-D** | SOUL 距離感 · 友人化 · Say動機（介助犬保留） | 💤 | [tracks/soul-distance.md](./tracks/soul-distance.md) |
 
 トピック索引: [backlog-koyori.md](./backlog-koyori.md)
 

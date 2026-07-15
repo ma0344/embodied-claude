@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 _CACHE: dict[str, tuple[float, list[SearchHit], str, str, str]] = {}
 _ws5_last_fetch_at: float = 0.0
+_ws5b_last_fetch_at: float = 0.0
 
 _JMA_TSUYU = "https://www.data.jma.go.jp/cpd/bosai/season/tsuyu_index.html"
 _JMA_QUAKE = "https://www.data.jma.go.jp/multi/quake/index.html"
@@ -39,6 +40,15 @@ def ws5_cooldown_sec() -> int:
         return max(0, min(int(raw), 600))
     except ValueError:
         return 90
+
+
+def ws5b_cooldown_sec() -> int:
+    """Separate from WS-5 so weather spam does not starve disaster prefetch."""
+    raw = os.getenv("PRESENCE_WS5B_COOLDOWN_SEC", "60").strip()
+    try:
+        return max(0, min(int(raw), 600))
+    except ValueError:
+        return 60
 
 
 def get_cached(query: str) -> tuple[list[SearchHit], str, str, str] | None:
@@ -94,6 +104,27 @@ def reset_ws5_cooldown() -> None:
     """Test helper — allow immediate WS-5 fetch."""
     global _ws5_last_fetch_at
     _ws5_last_fetch_at = 0.0
+
+
+def ws5b_should_skip_fetch(query: str) -> bool:
+    """Throttle WS-5b weather fetches (independent of WS-5 disaster cooldown)."""
+    if get_cached(query):
+        return False
+    cooldown = ws5b_cooldown_sec()
+    if cooldown <= 0:
+        return False
+    return (time.monotonic() - _ws5b_last_fetch_at) < cooldown
+
+
+def ws5b_record_fetch() -> None:
+    global _ws5b_last_fetch_at
+    _ws5b_last_fetch_at = time.monotonic()
+
+
+def reset_ws5b_cooldown() -> None:
+    """Test helper — allow immediate WS-5b fetch."""
+    global _ws5b_last_fetch_at
+    _ws5b_last_fetch_at = 0.0
 
 
 def direct_url_candidates(query: str) -> list[str]:

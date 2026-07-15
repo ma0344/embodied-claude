@@ -576,7 +576,12 @@ def _finish_intercept_chat_request(
         pass
 
     prefetch_fact_check = bool(
-        web_search_prefetch and "trigger=ws5" in web_search_prefetch
+        web_search_prefetch
+        and (
+            "trigger=ws5b" in web_search_prefetch
+            or "trigger=ws5\n" in web_search_prefetch
+            or web_search_prefetch.rstrip().endswith("trigger=ws5")
+        )
     )
 
     ctx = compose_interaction_context(
@@ -692,16 +697,25 @@ def _finish_intercept_chat_request(
             session_id=session_key,
         )
 
+    from presence_ui.gateway.ws5c_offer import (
+        is_ws5c_offer_block,
+        is_ws5c_offer_pending_block,
+    )
+
+    ws5c_offer = is_ws5c_offer_pending_block(web_search_prefetch)
+    # Offer/decline blocks are not search results — don't mark prefetch_done.
+    prefetch_block = None if is_ws5c_offer_block(web_search_prefetch) else web_search_prefetch
     turn_delta = build_social_turn_delta(ctx=ctx, plan=plan)
     effective = merge_intent_with_plan(
         intent=user_intent,
         plan=plan,
         vision_prefetch_done=bool(vision_prefetch),
-        web_search_prefetch_done=bool(web_search_prefetch),
+        web_search_prefetch_done=bool(prefetch_block),
         url_prefetch_done=bool(url_prefetch),
         calendar_prefetch_done=bool(calendar_prefetch),
         calendar_write_done=bool(calendar_write),
         calendar_confirm_pending=bool(calendar_confirm),
+        ws5c_offer_pending=ws5c_offer,
         remember_saved=remember_saved,
     )
     gateway_speak = ibf_gateway_speak_enabled() and effective.gateway_speak_after_reply

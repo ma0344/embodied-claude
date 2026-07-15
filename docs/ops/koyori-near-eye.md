@@ -16,7 +16,7 @@ Tailscale / LAN で koyori ↔ ma-home を接続する。
 ### 利用スコープ（確定 2026-07-14 · B'）
 
 **本命は speak / miss_companion の在席信号。** 観察・記憶の主ソースにはしない。
-`miss_companion` の動機は「会いたさ」ではなく **軽い接触 / 生活介助犬**（在席ゲート通過後は不在確認 ping しない）。
+`miss_companion` の動機表示は「会いたさ」ではなく **軽い接触**（在席ゲート通過後は不在確認 ping しない）。**介助犬／見守る／隣人→友人／端末内存在／Say 条件の距離語は未決** → [soul-distance.md](../tracks/soul-distance.md) 💤。
 
 | 項目 | 決め |
 |------|------|

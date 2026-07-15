@@ -25,6 +25,7 @@
 | **Surface direct LLM** | ✅ v0 + 8h-A/C（compact transcript · memory bridge） | [tracks/surface-direct-llm.md](./tracks/surface-direct-llm.md) · [mem-8h-memory-bridge.md](./tracks/mem-8h-memory-bridge.md) |
 | **BIO-8** | ✅ | [heartbeat-loop.md](./architecture/heartbeat-loop.md) § Somatic |
 | **Outbound** | ✅ | [architecture/outbound-channels.md](./architecture/outbound-channels.md) |
+| **SOUL-D** | 💤 距離感 · 友人化 · Say動機 | [tracks/soul-distance.md](./tracks/soul-distance.md) |
 | **プラットフォーム** | ✅ | [architecture/platform-ma-home.md](./architecture/platform-ma-home.md) |
 
 ## ADHD body double（構想 · 2026-07-07）
@@ -33,7 +34,7 @@
 
 こより＝まーの **body double**（デスクトップで脱線にそっと気づいて一声かける相棒）。まーが ADHD であるという属性から生まれた発想（隠している属性ではなく、そこから来る必要）。
 
-- **方針**: 監視官ではなく「気にかけてくれる同居人」。[VISION.md](./VISION.md) の「汎用アシスタントではない隣人こより」と整合させる（監視・強制はしない前提）
+- **方針**: 監視官ではない（距離語・Say条件は未決 → [soul-distance.md](./tracks/soul-distance.md)）。[VISION.md](./VISION.md) の関係性前提と後で揃える（監視・強制はしない）
 - **技術の当たり**: 主役は **前景ウィンドウ/プロセス名検知**（Win32 · 軽量・確実・日本語問題なし）。**OCR は補助**に降格。Unlimited-OCR は日本語 OCR で撃沈（2026-07-07 実測）→ この路線に依存しなくて正解。将来 OCR が要る場合は日本語強い VLM（Qwen2.5-VL 等）を別途評価
 - **進め方**: [obs-tick-encode.md](./tracks/obs-tick-encode.md) と同じ **measure-first**。Phase 0＝脱線パターンをログるだけ → データを見てから介入設計。介入は boundary / cadence / quiet hours / OFF 可能とセット（うるさい見守りは逆効果）
 - **未決（熟成対象）**: 「脱線」の定義、声かけの強度と頻度、こよりの人格での言い方、プライバシー境界

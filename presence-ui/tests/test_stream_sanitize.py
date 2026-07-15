@@ -101,6 +101,24 @@ def test_strip_enriched_user_prompt_with_tail_calendar_prefetch_crlf() -> None:
     )
 
 
+def test_strip_enriched_user_prompt_with_tail_ws5c_offer() -> None:
+    raw = (
+        "[gateway_turn_context person=ma]\n"
+        "compose body\n"
+        "\n"
+        "松本市の様式の提出窓口ってどこ？\n"
+        "\n"
+        "[ws5c_search_offer]\n"
+        "status=pending\n"
+        "suggested_query=松本市 様式 提出窓口\n"
+        "[/ws5c_search_offer]\n"
+        "\n"
+        "[Gateway directive — not for the user]\n"
+        "Ask whether to look it up.\n"
+    )
+    assert strip_enriched_user_prompt(raw) == "松本市の様式の提出窓口ってどこ？"
+
+
 def test_strip_enriched_user_prompt_with_tail_web_search_prefetch() -> None:
     """Regression: tail prefetch after utterance must not hide まー's line in UI."""
     raw = """[gateway_turn_context — not for the user]

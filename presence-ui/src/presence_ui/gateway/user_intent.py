@@ -123,6 +123,7 @@ def merge_intent_with_plan(
     calendar_prefetch_done: bool = False,
     calendar_write_done: bool = False,
     calendar_confirm_pending: bool = False,
+    ws5c_offer_pending: bool = False,
     remember_saved: bool = False,
 ) -> EffectiveTurnBody:
     """Combine まーの要求 with plan/boundary — plan can veto gateway body actions."""
@@ -181,6 +182,14 @@ def merge_intent_with_plan(
             "Ask まー to confirm or clarify; do NOT write until gateway returns "
             "[calendar_write_result] with status=ok on a later turn. "
             "Do NOT say 入れた/入れといた/入れとく/変更した/ずらした/登録した without that block."
+        )
+
+    if ws5c_offer_pending:
+        notes.append(
+            "[Action] Gateway has a pending WS-5c search offer in [ws5c_search_offer]. "
+            "Say you don't know for sure and ask if you should look it up "
+            "(例: わからへん、調べようか？). "
+            "Do NOT invent facts or Sources; do NOT claim you already searched."
         )
 
     if remember_saved:

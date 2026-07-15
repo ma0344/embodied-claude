@@ -88,7 +88,10 @@ async def _stream_gateway_chat_impl(
             yield encode_event(progress_event(phase="web_search", label="ネットを調べてる…"))
         try:
             web_search_note, web_events, search_hits, search_query = (
-                await prefetch_web_search_for_message(message)
+                await prefetch_web_search_for_message(
+                    message,
+                    person_id=person_id,
+                )
             )
             gateway_events.extend(web_events)
         except Exception as exc:  # noqa: BLE001

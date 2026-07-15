@@ -200,7 +200,8 @@
 6. **WS-5b 軽い問い（天気・気温）** ✅ 実装メモ（2026-07-15）— 直球でも自動 prefetch（確認なし）。気象庁 forecast JSON 直優先、SERP はバックアップ。地域未指定は松本デフォルト。「外暑い？」級まで。助言・因果・雑談は対象外。  
 7. **WS-5c 調べるか確認** ✅ minimal（2026-07-15）— resolve miss + 狭い事実問い（手続き/数値等）で offer。同意で WS-2 相当 prefetch。天気は 5b、明示「調べて」は WS-2。full e4b は非対象。
 
-**方針（2026-07-15）**: **Authority／API 直（既存 L0–L2・天気API）で答えが取れるなら確認なし自動**。Brave SERP（L3）や開いた検索は **5c 確認**または WS-2 明示。
+**方針（2026-07-15）**: **Authority／API 直（既存 L0–L2・天気API）で答えが取れるなら確認なし自動**。Brave SERP（L3）や開いた検索は **5c 確認**または WS-2 明示。  
+フリーAPI候補カタログ: [public-apis/public-apis](https://github.com/public-apis/public-apis)（Auth 列注意 · キー要のこともある）。
 
 **v0（済）**: 災害・天気・「〜らしいよ」+ 日付/地域ヒューリスティクス → prefetch（`ws5_spontaneous.py`）  
 **v1 候補**: GW 系 stateless 分類器（OL-GATE / LW interpret と同型 · 許可型フレーミング）  

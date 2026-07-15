@@ -26,6 +26,7 @@
 | **BIO-8** | ✅ | [heartbeat-loop.md](./architecture/heartbeat-loop.md) § Somatic |
 | **Outbound** | ✅ | [architecture/outbound-channels.md](./architecture/outbound-channels.md) |
 | **SOUL-D** | 💤 距離感 · 友人化 · Say動機 | [tracks/soul-distance.md](./tracks/soul-distance.md) |
+| **VL-ID** | 💤 VL 同一人物（まー認識実験） | [tracks/vl-same-person.md](./tracks/vl-same-person.md) |
 | **プラットフォーム** | ✅ | [architecture/platform-ma-home.md](./architecture/platform-ma-home.md) |
 
 ## ADHD body double（構想 · 2026-07-07）

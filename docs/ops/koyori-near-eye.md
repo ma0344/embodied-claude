@@ -30,7 +30,7 @@ Tailscale / LAN で koyori ↔ ma-home を接続する。
 **やらない:** 自律 tick の定常 `look_near`、near を「見て」既定 / joint attention / 記憶の主ソース、`/see-near` MCP、ゲート経路の自動 remember。
 
 次の実装スライス: ✅ speak / miss_companion 在席ゲート（near fresh struct present → far 救済 · fail-closed）。
-やらない当面: 自律の定常 look_near、会話「見て」近目既定、ゲート自動 remember、chat TTS / remind へのゲート拡張。
+**やらない当面:** 自律の定常 look_near、会話「見て」近目既定、ゲート自動 remember、chat TTS / remind へのゲート拡張、**VL 同一人物で在席ゲート置き換え**（💤 → [vl-same-person.md](../tracks/vl-same-person.md)）。
 
 ---
 
@@ -192,7 +192,7 @@ curl.exe -X POST http://127.0.0.1:8090/api/v1/autonomous-tick `
 ゲート用・明示観察は `PRESENCE_NEAR_LOOK_FRESH=1`（`/see`）を既定にする想定。
 
 **次の実装スライス:** ✅ speak / miss_companion 在席ゲート（near fresh struct present → far 救済 · fail-closed）。
-やらない当面: 自律の定常 `look_near`、会話「見て」近目既定、ゲート自動 remember、chat TTS / remind へのゲート拡張。
+やらない当面: 自律の定常 `look_near`、会話「見て」近目既定、ゲート自動 remember、chat TTS / remind へのゲート拡張、**VL 同一人物で在席ゲート置き換え**（💤 → [vl-same-person.md](../tracks/vl-same-person.md)）。
 
 ### Phase 4 — フロントエンド UI（任意）
 

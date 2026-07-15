@@ -934,14 +934,18 @@ async def observe_room_direct(
 
 _OUTBOUND_PING_USER_TEXT = (
     "（まーはもう居るので不在確認（おる？・居るか）はしない。"
-    "生活介助犬の姿勢で短く: 軽い挨拶・一言シェア・空気を渡すくらい。"
-    "困ってそうかちらっと見る程度。寂しさ埋め・見張り自慢・所有は出さない。"
+    "生活介助犬の姿勢で短く: 軽い挨拶か、今気になった話の一言シェアまで。"
+    "困ってそうかちらっと見る程度。"
+    "隣にいる安心・そばにいるだけで落ち着く・一緒にいる感謝などの関係コダは付けない。"
+    "寂しさ埋め・見張り自慢・所有は出さない。"
     "1文、多くて2文。関西弁。）"
 )
 _OUTBOUND_PING_MUST_AVOID: tuple[str, ...] = (
     "absence checks like おる？ / 居るか / いる？ (companion already present)",
     "implying you watched まー all day or stayed physically beside them",
     "clingy or possessive lines (ずっと隣, どっか行くな, 離れんな, ずっと見てた)",
+    "comfort-from-proximity (隣におるだけで落ち着く, そばにいると安心, 隣にいるだけで)",
+    "relationship codas after a content share (closing with how being near まー soothes you)",
     "longing, loneliness, or 会いたさ monologue",
     "clingy monitor-bragging or ownership talk",
     "checking if まー is awake repeatedly or sounding like surveillance",

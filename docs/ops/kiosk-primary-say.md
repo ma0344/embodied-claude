@@ -44,3 +44,4 @@ curl -X POST http://127.0.0.1:8090/api/v1/tts/room-say `
 - **画面タップ前は無音** — ブラウザの自動再生ポリシー（OS 音量とは別）。タップ後に急に聞こえ始めるのはこれ
 - Surface **システム音量が 0** → API は `routed to kiosk` でも無音
 - **物理音量ボタンで OSD が出ない** — Edge 全画面などでは出ないことがある。設定 → サウンド、または音量ミキサーで **Microsoft Edge** のスライダーを確認
+- **二重再生（エコー）** — `kiosk_say` 経路は `room_say` のみで TTS。outbound `speak` と同時だと同一文が2回鳴る（`enqueue` は `speak=False` + `kiosk_say=True` で整合）

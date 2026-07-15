@@ -85,7 +85,8 @@ def test_enqueue_kiosk_say_even_when_sse_speak_suppressed(
 
     pending = list_pending_outbound(stores, person_id="ma", client_id="kiosk")
     assert len(pending) == 1
-    assert pending[0].speak is True
+    # speak=False + kiosk_say: modal/text ok, TTS is room_say only (no poll echo)
+    assert pending[0].speak is False
 
 
 def test_cooldown_blocks_duplicate_text(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:

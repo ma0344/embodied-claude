@@ -206,7 +206,8 @@ def enqueue_outbound_nudge(
                 ts,
                 person_id,
                 line,
-                1 if (speak or kiosk_say) else 0,
+                # kiosk_say → room_say TTS only; keep speak=0 or poll also plays (echo).
+                1 if speak else 0,
                 json.dumps(channel_list, ensure_ascii=False),
                 desire,
                 nudge_text_fingerprint(line),

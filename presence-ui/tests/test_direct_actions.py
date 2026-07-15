@@ -329,9 +329,11 @@ async def test_outbound_ping_reply_plan_avoids_clingy_tone() -> None:
     assert "不在確認" in user_text
     assert "在席ソース=present_near" in user_text
     assert "生活介助犬" in user_text
+    assert "関係コダ" in user_text or "隣にいる安心" in user_text
     assert plan.must_avoid == []
     assert len(say_plan.must_avoid) == len(direct_actions._OUTBOUND_PING_MUST_AVOID)
     assert any("clingy or possessive" in item for item in say_plan.must_avoid)
+    assert any("comfort-from-proximity" in item for item in say_plan.must_avoid)
     assert any("おる？" in item or "absence" in item for item in say_plan.must_avoid)
 
 

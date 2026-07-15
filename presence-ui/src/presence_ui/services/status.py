@@ -13,7 +13,6 @@ from interaction_orchestrator_mcp.schemas import ComposeInteractionContextInput,
 from system_temperature_mcp.server import get_all_temperatures
 
 from presence_ui.deps import get_stores
-from presence_ui.services.somatic_context import enrich_interaction_context
 from presence_ui.heartbeat.pulse_state import load_pulse_state
 from presence_ui.heartbeat.schedule import policy_timezone, seconds_until_wake
 from presence_ui.schemas import (
@@ -29,6 +28,7 @@ from presence_ui.schemas import (
     TemperatureReading,
     TemperatureView,
 )
+from presence_ui.services.somatic_context import enrich_interaction_context
 
 _CPU_NAME_HINTS = ("cpu", "package", "core", "tctl", "ccd", "processor")
 _PLAN_PREVIEW_TTL_SEC = 45.0
@@ -58,7 +58,7 @@ _INJECTION_MARKERS = (
 
 _DESIRE_PHRASES: dict[str, str] = {
     "look_outside": "外の様子が、ちょっと気になる",
-    "miss_companion": "まーの近くに、もう少しいたいな",
+    "miss_companion": "まーの様子、ちらっと気になる",
     "observe_room": "部屋の様子を、静かに見ていたい",
     "cognitive_load": "頭の中で、何かを整理している",
     "identity_coherence": "自分が自分でいられるか、確かめたい",

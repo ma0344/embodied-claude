@@ -319,13 +319,92 @@ async def test_look_near_direct_records_near_eye_scene() -> None:
 @pytest.mark.asyncio
 async def test_outbound_ping_reply_plan_avoids_clingy_tone() -> None:
     plan = _plan(move="act_autonomously", allowed=["talk_to_companion"])
-    user_text, say_plan = direct_actions._outbound_ping_reply_plan(plan)
+    user_text, say_plan = direct_actions._outbound_ping_reply_plan(
+        plan, presence_reason="present_near"
+    )
 
     assert "会いたさ" not in user_text
-    assert "見張り" in user_text
+    assert "会いた" not in user_text
+    assert "おる？" in user_text  # forbidden as example in prompt
+    assert "不在確認" in user_text
+    assert "在席ソース=present_near" in user_text
+    assert "生活介助犬" in user_text
     assert plan.must_avoid == []
     assert len(say_plan.must_avoid) == len(direct_actions._OUTBOUND_PING_MUST_AVOID)
     assert any("clingy or possessive" in item for item in say_plan.must_avoid)
+    assert any("おる？" in item or "absence" in item for item in say_plan.must_avoid)
+
+
+@pytest.mark.asyncio
+async def test_outbound_ping_reply_plan_includes_present_far() -> None:
+    plan = _plan(move="act_autonomously", allowed=["talk_to_companion"])
+    user_text, _ = direct_actions._outbound_ping_reply_plan(
+        plan, presence_reason="present_far"
+    )
+    assert "在席ソース=present_far" in user_text
+    assert "不在確認" in user_text
+
+
+@pytest.mark.asyncio
+async def test_talk_to_companion_passes_presence_reason_to_generate() -> None:
+    stores = MagicMock()
+    stores.orchestrator.record_agent_experience = MagicMock()
+    stores.social_state.ingest_social_event = MagicMock()
+    ctx = _ctx(dominant="miss_companion")
+    plan = _plan(move="act_autonomously", allowed=["talk_to_companion"])
+    present = MagicMock()
+    present.present = True
+    present.reason = "present_far"
+
+    with (
+        patch(
+            "presence_ui.services.speak_presence.companion_present_for_speak",
+            new_callable=AsyncMock,
+            return_value=present,
+        ),
+        patch(
+            "presence_ui.gateway.direct_actions.boundary_allows",
+            return_value=(True, []),
+        ),
+        patch(
+            "presence_ui.services.llm.generate_koyori_reply",
+            new_callable=AsyncMock,
+            return_value="まー、様子どう？",
+        ) as generate,
+        patch(
+            "presence_ui.gateway.direct_actions.enqueue_outbound_nudge",
+            return_value=MagicMock(
+                ok=True, nudge_id="n1", channels=["kiosk"], reason=None
+            ),
+        ),
+        patch(
+            "presence_ui.gateway.direct_actions.voice_local_enabled",
+            return_value=False,
+        ),
+        patch(
+            "presence_ui.gateway.direct_actions.default_surface_channels",
+            return_value=["kiosk"],
+        ),
+        patch(
+            "presence_ui.gateway.direct_actions.outbound_nudge_speak_enabled",
+            return_value=False,
+        ),
+    ):
+        outcome = await direct_actions.talk_to_companion_direct(
+            stores,
+            person_id="ma",
+            ctx=ctx,
+            plan=plan,
+            text=None,
+        )
+
+    assert outcome.ok is True
+    generate.assert_awaited_once()
+    kwargs = generate.await_args.kwargs
+    assert "在席ソース=present_far" in kwargs["user_text"]
+    assert "不在確認" in kwargs["user_text"]
+    assert "会いたさ" not in kwargs["user_text"]
+    assert any("おる？" in item or "absence" in item for item in kwargs["plan"].must_avoid)
 
 
 @pytest.mark.asyncio

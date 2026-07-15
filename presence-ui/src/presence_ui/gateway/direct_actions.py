@@ -933,22 +933,35 @@ async def observe_room_direct(
 
 
 _OUTBOUND_PING_USER_TEXT = (
-    "（まーに短く一声だけ。居るか軽く確認。1文、多くて2文。関西弁。"
-    "見張り・執着・依存っぽい言い方はしない。）"
+    "（まーはもう居るので不在確認（おる？・居るか）はしない。"
+    "生活介助犬の姿勢で短く: 軽い挨拶・一言シェア・空気を渡すくらい。"
+    "困ってそうかちらっと見る程度。寂しさ埋め・見張り自慢・所有は出さない。"
+    "1文、多くて2文。関西弁。）"
 )
 _OUTBOUND_PING_MUST_AVOID: tuple[str, ...] = (
+    "absence checks like おる？ / 居るか / いる？ (companion already present)",
     "implying you watched まー all day or stayed physically beside them",
     "clingy or possessive lines (ずっと隣, どっか行くな, 離れんな, ずっと見てた)",
     "longing, loneliness, or 会いたさ monologue",
+    "clingy monitor-bragging or ownership talk",
     "checking if まー is awake repeatedly or sounding like surveillance",
 )
 
 
-def _outbound_ping_reply_plan(plan: ResponsePlan) -> tuple[str, ResponsePlan]:
+def _outbound_ping_reply_plan(
+    plan: ResponsePlan,
+    *,
+    presence_reason: str = "",
+) -> tuple[str, ResponsePlan]:
     """Prompt + plan constraints for autonomous room pings (miss_companion)."""
     merged_avoid = [*plan.must_avoid, *_OUTBOUND_PING_MUST_AVOID]
     say_plan = plan.model_copy(update={"must_avoid": merged_avoid})
-    return _OUTBOUND_PING_USER_TEXT, say_plan
+    reason = (presence_reason or "").strip()
+    if reason:
+        user_text = f"（在席ソース={reason}）{_OUTBOUND_PING_USER_TEXT}"
+    else:
+        user_text = _OUTBOUND_PING_USER_TEXT
+    return user_text, say_plan
 
 
 async def talk_to_companion_direct(
@@ -1004,7 +1017,9 @@ async def talk_to_companion_direct(
     if not line:
         from presence_ui.services.llm import generate_koyori_reply
 
-        ping_user_text, ping_plan = _outbound_ping_reply_plan(plan)
+        ping_user_text, ping_plan = _outbound_ping_reply_plan(
+            plan, presence_reason=presence.reason
+        )
         line = await generate_koyori_reply(
             user_text=ping_user_text,
             ctx=ctx,

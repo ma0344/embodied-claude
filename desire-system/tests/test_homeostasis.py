@@ -33,6 +33,11 @@ class TestDesireConfig:
         for name, cfg in DESIRE_CONFIGS.items():
             assert cfg.label, f"{name} missing label"
 
+    def test_miss_companion_label_is_light_contact(self):
+        label = DESIRE_CONFIGS["miss_companion"].label
+        assert "会いた" not in label
+        assert "軽い接触" in label
+
     def test_identity_coherence_exists(self):
         assert "identity_coherence" in DESIRE_CONFIGS
 
@@ -180,15 +185,15 @@ class TestComputeDesiresWithHomeostasis:
 # ──────────────────────────────────────────────
 
 class TestAllostasis:
-    def test_late_night_reduces_social_set_point(self):
-        """深夜はmiss_companionのセットポイントが下がる（一人でも平気）"""
+    def test_late_night_increases_miss_companion_set_point(self):
+        """深夜はmiss_companionのセットポイントが上がる（軽い接触の欲求SP増）"""
         from datetime import timezone as tz
         jst = tz(timedelta(hours=9))
         late_night_jst = datetime(2026, 4, 8, 3, 0, 0, tzinfo=jst)
 
         base_sp = DESIRE_CONFIGS["miss_companion"].set_point
         adjusted = get_allostatic_set_point("miss_companion", late_night_jst)
-        assert adjusted < base_sp
+        assert adjusted > base_sp
 
     def test_daytime_keeps_base_set_point(self):
         """日中はセットポイントが基本値のまま"""

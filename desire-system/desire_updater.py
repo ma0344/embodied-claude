@@ -39,7 +39,7 @@ load_dotenv()
 # 欲求レベル出力先
 DESIRES_PATH = Path(os.getenv("DESIRES_PATH", str(Path.home() / ".claude" / "desires.json")))
 
-# 一緒にいる人の名前（miss_companion 欲求で使う）
+# 一緒にいる人の名前（miss_companion = 軽い接触の相手）
 COMPANION_NAME = os.getenv("COMPANION_NAME", "あなた")
 
 # JST timezone
@@ -79,7 +79,7 @@ DESIRE_CONFIGS: dict[str, DesireConfig] = {
             f"{COMPANION_NAME}の顔を見た", f"{COMPANION_NAME}を見た",
             f"{COMPANION_NAME}がいた", f"{COMPANION_NAME}を確認した",
         ],
-        label=f"{COMPANION_NAME}に会いたい",
+        label=f"{COMPANION_NAME}と軽い接触",
     ),
     "observe_room": DesireConfig(
         satisfaction_hours=float(os.getenv("DESIRE_OBSERVE_ROOM_HOURS", "0.167")),
@@ -177,7 +177,8 @@ def get_allostatic_set_point(desire_name: str, now: datetime) -> float:
     アロスタシス: 時間帯によるセットポイントの予測的調整。
 
     夜間(20-6時)は literary_wander を強め、observe/look を弱める（LW-2）。
-    同じ inward 帯では miss_companion の SP を上げる（まー不在でも会いたさ≈1.0は当然）。
+    同じ inward 帯では miss_companion の SP を上げる
+    （まー不在でも軽い接触欲求≈1.0は当然・介助犬姿勢）。
     深夜(0-5時)は look/observe の SP を下げる。
     identity_coherenceは常に高いまま。
     """
@@ -193,7 +194,7 @@ def get_allostatic_set_point(desire_name: str, now: datetime) -> float:
         if desire_name == "literary_wander":
             return min(base_sp, 0.05)
         if desire_name == "miss_companion":
-            # まーが寝てる時間帯: 会いたさが高くても当然 → SPを上げて不快度を下げる
+            # まーが寝てる時間帯: 軽い接触の欲求が高くても当然 → SPを上げて不快度を下げる
             return min(1.0, base_sp + 0.55)
         if desire_name in ("look_outside", "observe_room"):
             return min(1.0, base_sp + 0.2)

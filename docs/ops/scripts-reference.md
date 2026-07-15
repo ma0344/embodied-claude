@@ -114,6 +114,11 @@ ma-home から確認:
 ```powershell
 curl.exe -fsS http://koyori.local:8765/health
 curl.exe -fsS -o $env:TEMP\koyori-latest.jpg http://koyori.local:8765/latest.jpg
+# Phase 2（presence-ui 経由）
+curl.exe -fsS http://127.0.0.1:8090/api/v1/near-camera/health
+curl.exe -fsS "http://127.0.0.1:8090/api/v1/near-camera/snapshot"
+# Phase 3 look_near smoke
+curl.exe -X POST http://127.0.0.1:8090/api/v1/autonomous-tick -H "Content-Type: application/json" -d '{"smoke_action":"look_near"}'
 ```
 
 詳細 → [koyori-near-eye.md](./koyori-near-eye.md)

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Install koyori near-eye Phase 1: capture binary + JPEG HTTP + refresh timer.
+# Install koyori near-eye Phase 1: capture binary + JPEG HTTP.
+# Refresh timer units are installed but NOT enabled (Surface LED; on-demand /see).
 #
 # Run on koyori (Surface Go):
 #   cd ~/src/embodied-claude/scripts/koyori-kiosk
@@ -7,7 +8,6 @@
 #
 # Verify from ma-home:
 #   curl -fsS http://koyori.local:8765/health
-#   curl -fsS -o latest.jpg http://koyori.local:8765/latest.jpg
 #   curl -fsS -o see.jpg http://koyori.local:8765/see
 #
 
@@ -63,11 +63,13 @@ fi
 
 systemctl daemon-reload
 systemctl enable --now koyori-see-http.service
-systemctl enable --now koyori-capture-refresh.timer
-# Seed latest.jpg once (may take several seconds)
+# Policy B': do not enable periodic capture (camera LED). Units remain for optional use.
+systemctl disable --now koyori-capture-refresh.timer 2>/dev/null || true
+# Seed latest.jpg once so /latest.jpg is not empty until first /see
 systemctl start koyori-capture-refresh.service || true
 
-echo "Installed near-eye Phase 1."
+echo "Installed near-eye Phase 1 (refresh timer disabled by default)."
 echo "  curl -fsS http://127.0.0.1:8765/health"
+echo "  curl -fsS -o see.jpg http://127.0.0.1:8765/see"
 echo "  systemctl status koyori-see-http.service --no-pager"
-echo "  systemctl list-timers koyori-capture-refresh.timer --no-pager"
+echo "  # optional periodic refresh: systemctl enable --now koyori-capture-refresh.timer"

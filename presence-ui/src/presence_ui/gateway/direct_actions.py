@@ -961,6 +961,26 @@ async def talk_to_companion_direct(
     skip_cooldown: bool = False,
 ) -> DirectActionOutcome:
     """Speak to まー when boundary allows (miss_companion)."""
+    from presence_ui.services.speak_presence import companion_present_for_speak
+
+    presence = await companion_present_for_speak()
+    if not presence.present:
+        return DirectActionOutcome(
+            ok=False,
+            action="talk_to_companion",
+            summary="Companion not present for speak.",
+            detail=presence.reason,
+            desire_satisfied=None,
+            events=[
+                activity_event(
+                    kind="say",
+                    label="声をかけられなかった",
+                    detail=presence.reason[:200],
+                    ok=False,
+                )
+            ],
+        )
+
     allowed, reasons = boundary_allows(
         stores, action_type="say", person_id=person_id, urgency="low"
     )
@@ -1291,6 +1311,7 @@ SMOKE_ACTIONS = frozenset(
         "look_outside",
         "look_desk",
         "look_dining",
+        "look_near",
         "miss_companion",
         "write_private_reflection",
         "web_search",
@@ -1415,6 +1436,111 @@ async def look_outside_direct(
     return await look_preset_direct(stores, person_id=person_id, location="window")
 
 
+async def look_near_direct(
+    stores: PresenceStores,
+    *,
+    person_id: str,
+    fresh: bool | None = None,
+) -> DirectActionOutcome:
+    """Near-eye — Surface/koyori front camera pull + describe (Phase 3).
+
+    Does not satisfy miss_companion / talk. Scene parse carries sensor=near_eye
+    for later presence gating.
+    """
+    from presence_ui.gateway.deterministic_memory import RememberIntent, persist_remember_intent
+    from presence_ui.services.near_camera import (
+        fetch_near_camera_snapshot,
+        near_look_fresh_default,
+        save_near_camera_jpeg,
+    )
+
+    use_fresh = near_look_fresh_default() if fresh is None else fresh
+    snap = await fetch_near_camera_snapshot(fresh=use_fresh, describe=True)
+    if snap.error or not snap.image_base64:
+        hint = snap.error or "near-camera empty"
+        return DirectActionOutcome(
+            ok=False,
+            action="look_near",
+            summary=f"Near-eye capture failed: {hint}",
+            detail=hint,
+            events=[
+                activity_event(
+                    kind="see",
+                    label="近目を見た",
+                    detail=hint[:200],
+                    ok=False,
+                )
+            ],
+        )
+
+    file_path = save_near_camera_jpeg(snap.image_base64)
+    caption = (snap.caption or "").strip() or "(caption empty)"
+    summary = f"Near-eye (koyori{snap.path}): {caption[:280]}"
+    remember_body = (
+        f"[near_eye source=koyori path={snap.path}]\n{caption}"
+    )
+    remember_ok = persist_remember_intent(
+        RememberIntent(content=remember_body, category="observation")
+    ).ok
+
+    stores.orchestrator.record_agent_experience(
+        RecordAgentExperienceInput(
+            ts=utc_now(),
+            person_id=person_id,
+            kind="agent_observation",
+            summary=summary,
+            public_summary=summary,
+            importance=3,
+            privacy_level="relationship",
+            related_event_ids=[],
+            artifacts=[
+                {
+                    "sensor": "near_eye",
+                    "source": "koyori",
+                    "path": snap.path,
+                    "file_path": file_path,
+                    "width": snap.width,
+                    "height": snap.height,
+                    "remember_ok": remember_ok,
+                }
+            ],
+        )
+    )
+    stores.social_state.ingest_social_event(
+        {
+            "ts": utc_now(),
+            "source": "gateway_direct",
+            "kind": "scene_parse",
+            "person_id": person_id,
+            "confidence": 0.55 if caption and caption != "(caption empty)" else 0.35,
+            "payload": {
+                "sensor": "near_eye",
+                "source": "koyori",
+                "path": snap.path,
+                "scene_summary": summary,
+                "caption": caption[:500],
+                "file_path": file_path,
+            },
+        }
+    )
+    return DirectActionOutcome(
+        ok=True,
+        action="look_near",
+        summary=summary,
+        detail=file_path or snap.url or "",
+        desire_satisfied=None,
+        events=[
+            progress_event(phase="see", label="近目を見た"),
+            activity_event(
+                kind="see",
+                label="近目を見た",
+                detail=summary[:160],
+                ok=True,
+            ),
+        ],
+    )
+
+
 async def execute_smoke_action(
     stores: PresenceStores,
     *,
@@ -1439,6 +1565,8 @@ async def execute_smoke_action(
             outcome.desire_satisfied = "observe_room"
     elif key == "look_outside":
         outcome = await look_outside_direct(stores, person_id=person_id)
+    elif key == "look_near":
+        outcome = await look_near_direct(stores, person_id=person_id)
     elif key in _PRESET_SMOKE:
         outcome = await look_preset_direct(
             stores,

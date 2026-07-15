@@ -29,6 +29,7 @@ from presence_ui.schemas import (
     NativeHideSessionResponse,
     NativeSessionListResponse,
     NativeSessionMessagesResponse,
+    NearCameraSnapshotResponse,
     OutboundAckRequest,
     OutboundAckResponse,
     OutboundPendingItem,
@@ -756,6 +757,30 @@ def create_app() -> FastAPI:
     @app.get("/api/v1/camera/snapshot", response_model=CameraSnapshotResponse)
     async def get_camera_snapshot() -> CameraSnapshotResponse:
         return await fetch_camera_snapshot()
+
+    @app.get("/api/v1/near-camera/health")
+    async def get_near_camera_health() -> JSONResponse:
+        """Proxy koyori near-eye /health (Surface front camera Phase 1)."""
+        from presence_ui.services.near_camera import fetch_koyori_near_health
+
+        return utf8_json(await fetch_koyori_near_health())
+
+    @app.get("/api/v1/near-camera/snapshot", response_model=NearCameraSnapshotResponse)
+    async def get_near_camera_snapshot(
+        fresh: int | None = None,
+        describe: int | None = None,
+    ) -> NearCameraSnapshotResponse:
+        """Pull Surface/koyori near-eye JPEG (Phase 2).
+
+        Query: fresh=1 → koyori /see (slow sync capture); describe=1 → LM vision caption.
+        Omitted query falls back to PRESENCE_NEAR_CAMERA_REFRESH / _DESCRIBE.
+        """
+        from presence_ui.services.near_camera import fetch_near_camera_snapshot
+
+        return await fetch_near_camera_snapshot(
+            fresh=None if fresh is None else bool(fresh),
+            describe=None if describe is None else bool(describe),
+        )
 
     @app.post("/api/v1/heartbeat/compose-plan")
     async def post_heartbeat_compose_plan(request: Request) -> JSONResponse:

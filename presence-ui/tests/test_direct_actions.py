@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import base64
+import io
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from interaction_orchestrator_mcp.schemas import (
     CommitmentSummary,
     InteractionContext,
     ResponseContract,
     ResponsePlan,
 )
+from PIL import Image
+
 from presence_ui.gateway import direct_actions, social_chat
+from presence_ui.schemas import NearCameraSnapshotResponse
 from presence_ui.services.llm import build_social_turn_delta
 from presence_ui.services.vision_capture import VisionCaptureResult
 
@@ -272,6 +276,47 @@ async def test_execute_smoke_action_observe_room() -> None:
 
 
 @pytest.mark.asyncio
+async def test_look_near_direct_records_near_eye_scene() -> None:
+    stores = MagicMock()
+    stores.orchestrator.record_agent_experience.return_value = {"experience_id": "e1"}
+    stores.social_state.ingest_social_event.return_value = {"event_id": "s1"}
+
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 64), color=(10, 20, 30)).save(buf, format="JPEG")
+    snap = NearCameraSnapshotResponse(
+        timestamp="2026-07-14T05:00:00+00:00",
+        image_base64=base64.standard_b64encode(buf.getvalue()).decode("ascii"),
+        width=64,
+        height=64,
+        source="koyori",
+        path="/latest.jpg",
+        caption="眼鏡の男性が座っている",
+        url="http://koyori.test:8765/latest.jpg",
+    )
+
+    with (
+        patch(
+            "presence_ui.services.near_camera.fetch_near_camera_snapshot",
+            new=AsyncMock(return_value=snap),
+        ),
+        patch(
+            "presence_ui.gateway.deterministic_memory.persist_remember_intent",
+        ) as remember,
+    ):
+        remember.return_value = MagicMock(ok=True)
+        outcome = await direct_actions.look_near_direct(stores, person_id="ma")
+
+    assert outcome.ok is True
+    assert outcome.action == "look_near"
+    assert outcome.desire_satisfied is None
+    assert "Near-eye" in outcome.summary
+    stores.social_state.ingest_social_event.assert_called_once()
+    payload = stores.social_state.ingest_social_event.call_args.args[0]["payload"]
+    assert payload["sensor"] == "near_eye"
+    assert payload["source"] == "koyori"
+
+
+@pytest.mark.asyncio
 async def test_outbound_ping_reply_plan_avoids_clingy_tone() -> None:
     plan = _plan(move="act_autonomously", allowed=["talk_to_companion"])
     user_text, say_plan = direct_actions._outbound_ping_reply_plan(plan)
@@ -293,14 +338,22 @@ async def test_execute_smoke_action_miss_companion_boundary_deny() -> None:
     ctx = _ctx(dominant="miss_companion")
     plan = _plan(move="act_autonomously", allowed=["talk_to_companion"])
 
-    outcome = await direct_actions.execute_smoke_action(
-        stores,
-        person_id="ma",
-        ctx=ctx,
-        plan=plan,
-        smoke_action="miss_companion",
-        speech_text="test",
-    )
+    present = MagicMock()
+    present.present = True
+    present.reason = "present_near"
+    with patch(
+        "presence_ui.services.speak_presence.companion_present_for_speak",
+        new_callable=AsyncMock,
+        return_value=present,
+    ):
+        outcome = await direct_actions.execute_smoke_action(
+            stores,
+            person_id="ma",
+            ctx=ctx,
+            plan=plan,
+            smoke_action="miss_companion",
+            speech_text="test",
+        )
     assert outcome.ok is False
     assert outcome.action == "talk_to_companion"
 

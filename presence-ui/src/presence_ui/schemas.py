@@ -293,6 +293,20 @@ class CameraSnapshotResponse(BaseModel):
     error: str | None = None
 
 
+class NearCameraSnapshotResponse(BaseModel):
+    """Surface / koyori near-eye snapshot (Phase 2 pull from :8765)."""
+
+    timestamp: str
+    image_base64: str | None = None
+    width: int | None = None
+    height: int | None = None
+    source: str = "koyori"
+    path: str = "/latest.jpg"
+    url: str | None = None
+    caption: str | None = None
+    error: str | None = None
+
+
 class HealthResponse(BaseModel):
     status: str
     version: str

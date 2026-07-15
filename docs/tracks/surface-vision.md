@@ -14,7 +14,7 @@
 | 中 | V1 | 感情色の部屋（`Emotion` 連動背景） | 未 |
 | 低 | V2 | イントロ演出（スプラッシュ・GIF） | 未 |
 | 低 | V3 | 発話ビジュアル（るな再生中波形） | 未 |
-| 中 | V4 | **see_near** — Surface 内蔵カメラ → caption / 記憶（遠目=Tapo） | Phase 1 HTTP ✅ · Phase 2+ 未 → [koyori-near-eye.md](../ops/koyori-near-eye.md) |
+| 中 | V4 | **see_near** — 近目（方針 B': 在席ゲート主 · 観察は明示時） | Phase 1–3a ✅ · timer 既定OFF · **次=speakゲート near→far** → [koyori-near-eye.md](../ops/koyori-near-eye.md#利用スコープ確定-2026-07-14--b) |
 | 高 | V5 | Windows KB をキオスクで共有（Input Leap） | ✅ 2026-06-26 |
 | 低 | V6 | 家族・関係サイドバー | 未 |
 | 低 | V7 | enriched user 履歴後処理削除（JSONL 純発話後） | 未 |

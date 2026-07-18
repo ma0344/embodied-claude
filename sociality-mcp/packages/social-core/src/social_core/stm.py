@@ -221,6 +221,12 @@ class StmStore:
         importance = int(row["importance"])
         if not self.should_mirror_experience(kind=kind, importance=importance):
             return None
+        summary = str(row["summary"] or "")
+        from social_core.literary_surface import is_literary_agent_surface
+
+        # LW-READ dumps stay on experience/しおり — not conversational STM.
+        if is_literary_agent_surface(summary):
+            return None
         existing = self.db.fetchone(
             "SELECT entry_id FROM stm_entries WHERE experience_id = ? LIMIT 1",
             (experience_id,),
@@ -235,7 +241,7 @@ class StmStore:
             open_loops=self._open_loops_for_person(person_id),
         )
         return self.append(
-            summary=str(row["summary"]),
+            summary=summary,
             kind=kind,
             source="experience_mirror",
             ts=str(row["ts"]),
@@ -460,6 +466,33 @@ def _summary_for_prompt(entry: StmEntry) -> str:
     return entry.summary
 
 
+# Surface chat already has room transcript (events + messages[]).
+# episode_close dialogue dumps and tick templates only confuse [stm_recent].
+_STM_SURFACE_SKIP_KINDS = frozenset({"episode_close"})
+_STM_SURFACE_SKIP_MARKERS = (
+    "Autonomous tick with a dominant desire",
+    "[interaction_context]",
+    "[gateway_turn_context",
+)
+
+
+def should_skip_stm_surface_inject(*, kind: str, summary: str) -> bool:
+    """True when an STM row should not appear in compose ``[stm_recent]``.
+
+    DB encode / Dreaming still keep the row. Only the chat inject path skips.
+    """
+    if kind in _STM_SURFACE_SKIP_KINDS:
+        return True
+    from social_core.literary_surface import is_literary_agent_surface
+
+    cleaned = (summary or "").strip()
+    if not cleaned:
+        return True
+    if is_literary_agent_surface(cleaned):
+        return True
+    return any(marker in cleaned for marker in _STM_SURFACE_SKIP_MARKERS)
+
+
 def _row_to_entry(row: Any) -> StmEntry:
     keys = row.keys() if hasattr(row, "keys") else []
     metadata = row["metadata_json"] if "metadata_json" in keys else None
@@ -487,12 +520,19 @@ def build_stm_prompt_block(entries: list[StmEntry], *, max_chars: int = 2000) ->
         return ""
     lines = ["[stm_recent]"]
     total = len("[stm_recent]\n[/stm_recent]")
-    for entry in entries[:12]:
+    # Scan beyond 12 so skips (episode_close / tick templates) do not empty the block.
+    for entry in entries[:24]:
+        if should_skip_stm_surface_inject(kind=entry.kind, summary=entry.summary):
+            continue
         summary = _summary_for_prompt(entry)
         line = f"- ({entry.kind}) {summary[:200]}"
         if total + len(line) + 1 > max_chars:
             break
         lines.append(line)
         total += len(line) + 1
+        if len(lines) >= 14:  # header + up to 12 bullets
+            break
     lines.append("[/stm_recent]")
+    if len(lines) <= 2:
+        return ""
     return "\n".join(lines)

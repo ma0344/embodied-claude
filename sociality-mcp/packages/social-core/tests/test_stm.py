@@ -232,3 +232,71 @@ def test_build_stm_prompt_block():
     block = build_stm_prompt_block(entries)
     assert "[stm_recent]" in block
     assert "こんにちは" in block
+
+
+def test_build_stm_prompt_block_skips_episode_close_and_tick_templates():
+    from social_core.stm import should_skip_stm_surface_inject
+
+    assert should_skip_stm_surface_inject(
+        kind="episode_close",
+        summary="【会話の一区切り】\nこより: おはよう。\nまー: こんにちは",
+    )
+    assert should_skip_stm_surface_inject(
+        kind="agent_private_reflection",
+        summary="（自律の思考メモ）\n\nAutonomous tick with a dominant desire — one bounded action fits.",
+    )
+    entries = [
+        StmEntry(
+            entry_id="stm_ep",
+            ts="2026-07-18T10:00:00+09:00",
+            local_day="2026-07-18",
+            person_id="ma",
+            source="episode_summary",
+            kind="episode_close",
+            summary="【会話の一区切り】\nこより: おはよう。\nまー: こんにちは",
+            session_id="s1",
+            experience_id=None,
+            turn_index=None,
+            importance=4,
+            dreamed_at=None,
+            created_at="2026-07-18T10:00:00+09:00",
+        ),
+        StmEntry(
+            entry_id="stm_tick",
+            ts="2026-07-18T11:00:00+09:00",
+            local_day="2026-07-18",
+            person_id="ma",
+            source="experience_mirror",
+            kind="agent_private_reflection",
+            summary=(
+                "（自律の思考メモ）\n\n"
+                "Autonomous tick with a dominant desire — one bounded action fits.\n\n"
+                "[interaction_context]\nCalendar …"
+            ),
+            session_id=None,
+            experience_id="exp1",
+            turn_index=None,
+            importance=4,
+            dreamed_at=None,
+            created_at="2026-07-18T11:00:00+09:00",
+        ),
+        StmEntry(
+            entry_id="stm_ok",
+            ts="2026-07-18T12:00:00+09:00",
+            local_day="2026-07-18",
+            person_id="ma",
+            source="manual",
+            kind="open_loop_progress",
+            summary="ねっとわんの請求を確認した",
+            session_id=None,
+            experience_id=None,
+            turn_index=None,
+            importance=4,
+            dreamed_at=None,
+            created_at="2026-07-18T12:00:00+09:00",
+        ),
+    ]
+    block = build_stm_prompt_block(entries)
+    assert "episode_close" not in block
+    assert "Autonomous tick" not in block
+    assert "ねっとわん" in block

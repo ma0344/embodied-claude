@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from social_core.literary_surface import is_literary_agent_surface
 from social_core.stm import StmEntry
 from social_core.stm_episode import sanitize_episode_summary_text
 from social_core.stm_scoring import (
@@ -67,7 +68,12 @@ def _dedupe_open_loop_entries(entries: list[StmEntry]) -> list[StmEntry]:
 
 def select_episodic_digest_entries(entries: list[StmEntry]) -> list[StmEntry]:
     """Filter + order STM rows for outward-facing [dream_digest] (MEM-5e)."""
-    filtered = [e for e in entries if e.kind not in DIGEST_EXCLUDE_KINDS]
+    filtered = [
+        e
+        for e in entries
+        if e.kind not in DIGEST_EXCLUDE_KINDS
+        and not is_literary_agent_surface(e.summary)
+    ]
     filtered = _dedupe_open_loop_entries(filtered)
     return sorted(filtered, key=lambda e: (_digest_priority(e), e.ts))
 

@@ -220,6 +220,7 @@ async def close_episode_for_session(
         timezone=tz,
         salience=_episode_salience_metadata(person_id=person_id, summary=summary),
     )
+    food_facts = _encode_food_topic_facts(turns, timezone=tz)
     return {
         "ok": True,
         "closed": entry is not None,
@@ -228,7 +229,36 @@ async def close_episode_for_session(
         "entry_id": entry.entry_id if entry else None,
         "summary": entry.summary if entry else summary,
         "local_day": entry.local_day if entry else None,
+        "food_topic_facts": food_facts,
     }
+
+
+def _encode_food_topic_facts(
+    turns: list[dict[str, str | None]],
+    *,
+    timezone: str,
+) -> list[str]:
+    """Write dated meal-record hints to LTM for bridge (no episode dump)."""
+    from presence_ui.gateway.food_topic_encode import (
+        food_topic_encode_enabled,
+        food_topic_facts_from_turns,
+    )
+    from presence_ui.gateway.memory_http import http_remember
+
+    if not food_topic_encode_enabled():
+        return []
+    facts = food_topic_facts_from_turns(turns, tz_name=timezone)
+    written: list[str] = []
+    for fact in facts[:3]:
+        result = http_remember(
+            content=fact,
+            category="observation",
+            importance=3,
+            emotion="neutral",
+        )
+        if isinstance(result, dict) and result.get("ok") is not False and "error" not in result:
+            written.append(fact)
+    return written
 
 
 def _turns_from_chat_messages(messages: list) -> list[dict[str, str | None]]:

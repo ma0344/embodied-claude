@@ -127,12 +127,15 @@ def enrich_interaction_context(
     )
     from presence_ui.services.memory_context import enrich_memory_context
 
-    return enrich_memory_context(
+    ctx = enrich_memory_context(
         ctx,
         person_id=ctx.person_id or "ma",
         channel=channel,
         user_text=user_text,
     )
+    from presence_ui.gateway.calendar_expectations import inject_calendar_expectations
+
+    return inject_calendar_expectations(ctx, user_text=user_text, channel=channel)
 
 
 def apply_somatic_plan_side_effects(

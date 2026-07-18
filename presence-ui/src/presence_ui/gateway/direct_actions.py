@@ -277,20 +277,9 @@ async def read_aozora_passage_direct(
     work = picked.work
     passage = picked.text[: aozora_passage_max_chars()]
     title = work.title
-    author = work.author
-    memory_line = (
-        f"青空文庫で読んだ『{title}』（{author}）— {passage[:400]}"
-    )
-    remember_result = await asyncio.to_thread(
-        http_remember,
-        content=memory_line,
-        category="feeling",
-        emotion="moved",
-        importance=4,
-    )
-    remember_ok = bool(remember_result.get("ok"))
-
-    summary = f"青空『{title}』— {passage[:220]}"
+    # 会話表層（STM / digest / LTM）には本文を載せない。private_summary にだけ残す。
+    # docs/tracks/alive-lw-read.md · 2026-07-18
+    summary = f"青空『{title}』を読んだ"
     stores.orchestrator.record_agent_experience(
         RecordAgentExperienceInput(
             ts=utc_now(),
@@ -307,7 +296,8 @@ async def read_aozora_passage_direct(
                     "source_url": picked.source_url,
                     "work_id": work.work_id,
                     "passage_index": picked.passage_index,
-                    "remember_ok": remember_ok,
+                    "ltm_remember": False,
+                    "stm_mirror": False,
                     "lw_read_phase": "read",
                 }
             ],
@@ -350,22 +340,7 @@ def close_aozora_reading_direct(
         sections_read=sections,
         last_hook=state.last_hook,
     )
-    outcome = write_private_reflection_direct(
-        stores,
-        person_id=person_id,
-        ctx=ctx,
-        plan=plan,
-        body=body,
-    )
-    if not outcome.ok:
-        return DirectActionOutcome(
-            ok=False,
-            action="close_aozora_reading",
-            summary="Could not save book-close note.",
-            detail=outcome.detail,
-            events=outcome.events,
-        )
-
+    # CLOSE note stays on experience.private_summary — not private_reflections.
     finish_close_book()
     summary = f"青空『{title}』を閉じた（{sections} 節）"
     stores.orchestrator.record_agent_experience(
@@ -379,7 +354,13 @@ def close_aozora_reading_direct(
             importance=4,
             privacy_level="private",
             related_event_ids=[],
-            artifacts=[{"lw_read_phase": "close", "title": title}],
+            artifacts=[
+                {
+                    "lw_read_phase": "close",
+                    "title": title,
+                    "private_reflections_skip": True,
+                }
+            ],
         )
     )
     return DirectActionOutcome(
@@ -400,13 +381,9 @@ def close_aozora_reading_direct(
 
 
 def _pause_tick_summary(*, title: str, passage: str, hook: str = "") -> str:
-    source = hook.strip() or passage.strip()
-    excerpt = source.replace("\n", " ")[:48]
-    if len(source) > 48:
-        excerpt += "…"
-    if excerpt:
-        return f"青空『{title}』— {excerpt}"
-    return f"青空『{title}』— 一節を噛んだ"
+    # Passage/hook stay in private_summary — surface summary is title-only.
+    _ = (passage, hook)
+    return f"青空『{title}』を噛んだ"
 
 
 def _reflect_stuck_heal_events() -> list[Any]:
@@ -563,22 +540,8 @@ def reflect_on_aozora_passage_direct(
             sections_this_session=state.sections_this_session,
         )
 
-    outcome = write_private_reflection_direct(
-        stores,
-        person_id=person_id,
-        ctx=ctx,
-        plan=plan,
-        body=body,
-    )
-    if not outcome.ok:
-        return DirectActionOutcome(
-            ok=False,
-            action="reflect_on_aozora_passage",
-            summary="Pause reflection failed.",
-            detail=outcome.detail,
-            events=outcome.events,
-        )
-
+    # PAUSE chew stays on experience.private_summary / しおり — do not fill
+    # private_reflections (overnight / LoRA surface pollution).
     after = complete_reading_pause(
         next_move=next_move,
         hook=hook,
@@ -591,6 +554,7 @@ def reflect_on_aozora_passage_direct(
         "title": title,
         "pause_engine": pause_detail,
         "next_move": next_move,
+        "private_reflections_skip": True,
     }
     if hook:
         artifacts["hook"] = hook[:200]
@@ -631,7 +595,6 @@ def reflect_on_aozora_passage_direct(
         summary=summary,
         detail=title,
         action="reflect_on_aozora_passage",
-        events=outcome.events,
         reflection_events=reflect_events,
     )
 
@@ -949,6 +912,7 @@ _OUTBOUND_PING_MUST_AVOID: tuple[str, ...] = (
     "longing, loneliness, or 会いたさ monologue",
     "clingy monitor-bragging or ownership talk",
     "checking if まー is awake repeatedly or sounding like surveillance",
+    "bringing up calendar or schedule items from [calendar_expectations]",
 )
 
 
@@ -1332,6 +1296,7 @@ SMOKE_ACTIONS = frozenset(
         "look_dining",
         "look_near",
         "miss_companion",
+        "check_open_loop",
         "write_private_reflection",
         "web_search",
         "read_aozora",
@@ -1600,6 +1565,17 @@ async def execute_smoke_action(
             plan=plan,
             text=speech_text,
             skip_cooldown=True,
+        )
+    elif key == "check_open_loop":
+        from presence_ui.gateway.ol6_outbound import check_open_loop_outbound_direct
+
+        outcome = await check_open_loop_outbound_direct(
+            stores,
+            person_id=person_id,
+            ctx=ctx,
+            plan=plan,
+            text=speech_text,
+            skip_presence=True,
         )
     elif key == "web_search":
         outcome = await web_search_direct(

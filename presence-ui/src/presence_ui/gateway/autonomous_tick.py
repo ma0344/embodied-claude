@@ -86,6 +86,16 @@ async def run_autonomous_tick(
 
     stores = get_stores()
     try:
+        from presence_ui.gateway.calendar_expectations import (
+            calendar_lookahead_enabled,
+            refresh_calendar_expectations,
+        )
+
+        if calendar_lookahead_enabled():
+            refresh_calendar_expectations()
+    except Exception:
+        pass
+    try:
         stores.relationship.close_stale_open_loops(
             person_id=person_id,
             as_of=utc_now(),
@@ -136,14 +146,26 @@ async def run_autonomous_tick(
         )
         primary = f"smoke:{smoke_action}"
     else:
-        outcome = await execute_autonomous_plan(
+        from presence_ui.gateway.ol6_outbound import maybe_fire_ol6_outbound
+
+        ol6_outcome = await maybe_fire_ol6_outbound(
             stores,
             person_id=person_id,
             ctx=ctx,
             plan=plan,
-            speech_text=speech_text,
         )
-        primary = plan.primary_move
+        if ol6_outcome is not None and ol6_outcome.ok:
+            outcome = ol6_outcome
+            primary = "check_open_loop"
+        else:
+            outcome = await execute_autonomous_plan(
+                stores,
+                person_id=person_id,
+                ctx=ctx,
+                plan=plan,
+                speech_text=speech_text,
+            )
+            primary = plan.primary_move
 
     pulse = apply_pulse_schedule(
         channel="autonomous",

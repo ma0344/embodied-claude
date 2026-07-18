@@ -28,6 +28,11 @@ from presence_ui.services.overnight_inner_voice import synthesize_overnight_inne
 
 logger = logging.getLogger(__name__)
 
+def _skip_literary_ltm_promote(summary: str) -> bool:
+    from social_core.literary_surface import is_literary_agent_surface
+
+    return is_literary_agent_surface(summary)
+
 
 @dataclass(slots=True)
 class DreamingResult:
@@ -92,6 +97,12 @@ def run_dreaming_job(
     promote = entries_to_promote(entries)
     remembered = 0
     for entry in promote:
+        if _skip_literary_ltm_promote(entry.summary):
+            logger.info(
+                "Dreaming skip literary LTM promote entry_id=%s",
+                entry.entry_id,
+            )
+            continue
         result = http_remember(
             content=entry.summary,
             category=memory_category_for_stm(entry),

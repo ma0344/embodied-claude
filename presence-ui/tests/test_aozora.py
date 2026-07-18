@@ -420,7 +420,7 @@ async def test_read_aozora_passage_direct_remembers_and_reflects() -> None:
         patch(
             "presence_ui.gateway.direct_actions.http_remember",
             return_value={"ok": True, "id": "m-aozora"},
-        ),
+        ) as remember_mock,
         patch(
             "presence_ui.gateway.direct_actions.satisfy_desire_direct",
             return_value=(True, "literary_wander"),
@@ -440,6 +440,9 @@ async def test_read_aozora_passage_direct_remembers_and_reflects() -> None:
     assert outcome.ok is True
     assert outcome.action == "read_aozora_passage"
     assert outcome.desire_satisfied == "literary_wander"
+    remember_mock.assert_not_called()
     satisfy_mock.assert_called_once()
     stores.orchestrator.append_private_reflection.assert_not_called()
     stores.orchestrator.record_agent_experience.assert_called_once()
+    exp_call = stores.orchestrator.record_agent_experience.call_args.args[0]
+    assert exp_call.artifacts and exp_call.artifacts[0].get("ltm_remember") is False

@@ -2,7 +2,7 @@
 
 **状態**: 🔥 LW-READ v1 GW-S1 運用中 → **LW-7 ON**（`PRESENCE_LW7_ENABLED=1` · 運用確認）  
 **ダッシュボード**: [backlog-ma-home.md](../backlog-ma-home.md)  
-**関連**: [gw-silent.md](./gw-silent.md)、[architecture/gateway-direct-actions.md](../architecture/gateway-direct-actions.md)、[architecture/heartbeat-loop.md](../architecture/heartbeat-loop.md)
+**関連**: [spontaneity.md](./spontaneity.md)（自発性二軸の正本）、[gw-silent.md](./gw-silent.md)、[architecture/gateway-direct-actions.md](../architecture/gateway-direct-actions.md)、[architecture/heartbeat-loop.md](../architecture/heartbeat-loop.md)
 
 ---
 
@@ -38,12 +38,14 @@
 **運用メモ**: 青空は `inward_evening`（20–6）+ quiet で優先しやすいが、**夜間限定は要件ではない**（昼の `literary_wander` も将来可）。
 
 ```
-tick wake → phase=read → READ（一節・remember）
+tick wake → phase=read → READ（一節 · experience / しおりのみ · **LTM 本文は書かない**）
   → phase=pause → reflect（GW-S1 / v0 fallback）
   → [advance | reread_same | close_book]
   → … → CLOSE → 次の 1 冊
   → [LW-7] followup_query → Web / 朝 compose
 ```
+
+**表層方針（2026-07-18）**: 読書本文を会話用 **LTM / STM / dream_digest / recent_experiences / memory_bridge / private_reflections / overnight_inner_voice** に載せない。PAUSE/CLOSE の咀嚼は `experience.private_summary` としおりのみ。既存汚染: `scripts/purge-literary-ltm.py` · `scripts/purge-literary-social.py`（`--reflections-only` 可）。
 
 ---
 
@@ -66,7 +68,7 @@ tick wake → phase=read → READ（一節・remember）
 | ID | 層 | 内容 | 状態 |
 |----|-----|------|------|
 | **LW-0** | 方針 | 希望/恐れ・動機整理（上節） | ✅ |
-| **LW-1** | 実行 | gateway `read_aozora_passage` — 節取得・`remember`（咀嚼は PAUSE へ分離） | ✅（LW-READ v0 で更新） |
+| **LW-1** | 実行 | gateway `read_aozora_passage` — 節取得・experience（**LTM 本文 remember は停止 2026-07-18** · 咀嚼は PAUSE） | ✅（LW-READ v0 で更新） |
 | **LW-2** | 動機 | `literary_wander` + inward_evening plan + satisfy 回路 | ✅ 2026-06-25 |
 | **LW-2d** | 運用 | 段落バンドル最大 3200 字（2026-07-08: 1600→3200）、`PRESENCE_AOZORA_PASSAGE_MAX_CHARS` | ✅ |
 | **LW-3** | 判断 | plan: 読むだけ黙る vs 短く共有 / `evaluate_action` | 📋 |

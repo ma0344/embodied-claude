@@ -108,6 +108,10 @@ def build_overnight_inner_voice_block(*, local_time: str, timezone: str) -> str:
     record = load_dream_digest()
     if record is None or not (record.inner_voice_summary or "").strip():
         return ""
+    from social_core.literary_surface import is_literary_overnight_contaminated
+
+    if is_literary_overnight_contaminated(record.inner_voice_summary or ""):
+        return ""
     dreamed = _parse_local_ts(record.dreamed_at, timezone)
     if dreamed is None:
         return ""

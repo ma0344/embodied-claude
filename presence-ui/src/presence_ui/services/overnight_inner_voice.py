@@ -41,6 +41,8 @@ def _collect_private_reflection_bodies(
     local_day: str,
     timezone: str,
 ) -> list[str]:
+    from social_core.literary_surface import is_literary_agent_surface
+
     since, until = _day_bounds_iso(local_day, timezone)
     stores = get_stores()
     rows = stores.db.fetchall(
@@ -57,8 +59,9 @@ def _collect_private_reflection_bodies(
         title = str(row["title"] or "").strip()
         body = strip_reflection_noise(str(row["body"] or ""))
         chunk = body or title
-        if chunk:
-            bodies.append(chunk[:600])
+        if not chunk or is_literary_agent_surface(chunk):
+            continue
+        bodies.append(chunk[:600])
     return bodies
 
 
@@ -70,11 +73,13 @@ def collect_overnight_reflection_sources(
     timezone: str,
 ) -> tuple[list[str], list[str]]:
     """Return (reflection texts, interpretation shift texts) for one dreaming day."""
+    from social_core.literary_surface import is_literary_agent_surface
+
     reflections: list[str] = []
     for entry in entries:
         if entry.kind == "agent_private_reflection":
             cleaned = strip_reflection_noise(entry.summary)
-            if cleaned:
+            if cleaned and not is_literary_agent_surface(cleaned):
                 reflections.append(cleaned[:600])
 
     db_reflections = _collect_private_reflection_bodies(

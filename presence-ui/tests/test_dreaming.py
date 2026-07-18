@@ -91,6 +91,45 @@ def test_run_dreaming_job_skips_private_reflection(dream_env):
     assert "散歩" in result.digest_summary
 
 
+def test_run_dreaming_skips_literary_ltm_promote(dream_env):
+    _db_path, db, getter = dream_env
+    stm = StmStore(db)
+    stm.append(
+        summary="青空『羅生門』— 下人は、老婆をつき放すと",
+        kind="agent_autonomous_action",
+        source="experience_mirror",
+        person_id="ma",
+        ts="2026-06-16T22:00:00+09:00",
+        timezone="Asia/Tokyo",
+        metadata={"emotion_tag": "moved", "importance": 4},
+    )
+    stm.append(
+        summary="まーと散歩の約束をした",
+        kind="episode_close",
+        source="episode_summary",
+        person_id="ma",
+        session_id="sess_lit",
+        ts="2026-06-16T20:00:00+09:00",
+        timezone="Asia/Tokyo",
+    )
+
+    with (
+        patch(
+            "presence_ui.services.dreaming.http_remember",
+            return_value={"ok": True, "memory_id": "m1"},
+        ) as remember_mock,
+        patch(
+            "presence_ui.services.dreaming.http_consolidate",
+            return_value={"ok": True, "stats": {}},
+        ),
+    ):
+        result = run_dreaming_job(person_id="ma", local_day="2026-06-16", force=True)
+
+    assert remember_mock.call_count == 1
+    assert "散歩" in remember_mock.call_args.kwargs["content"]
+    assert result.remembered_count == 1
+
+
 def test_run_dreaming_job_promotes_and_marks(dream_env):
     _db_path, db, getter = dream_env
     stm = StmStore(db)

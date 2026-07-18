@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -12,6 +13,9 @@ from interaction_orchestrator_mcp.recall_query import (
     bridge_hit_rank,
     is_episodic_blob,
     is_fact_like_row,
+    is_legacy_food_talk_fact,
+    is_literary_agent_passage,
+    is_vision_bridge_noise,
 )
 from interaction_orchestrator_mcp.schemas import InteractionContext, PrimaryMove, RelevantMemoryRef
 
@@ -65,9 +69,91 @@ def bridge_fact_refs_max() -> int:
 
 
 def extract_bridge_keywords(user_text: str) -> list[str]:
-    from interaction_orchestrator_mcp.memory_retrieve_route import bridge_topic_keywords
+    """Cue phrases for MEM-8h — punctuation clauses only (no JP bigrams).
 
-    return bridge_topic_keywords(user_text)[: bridge_max_keywords()]
+    Bigrams like ``家に`` / ``類か`` / ``ラー`` were feeding weak vector hits
+    (vision dumps) after strong episodic matches were correctly filtered.
+    Semantic HTTP recall works better on longer clause cues.
+    """
+    base = _bridge_clause_keywords(user_text)
+    return _expand_food_bridge_keywords(base)[: bridge_max_keywords()]
+
+
+_FOOD_BRIDGE_EXPAND = (
+    "冷たいラーメン",
+    "ざる蕎麦",
+    "かけ蕎麦",
+    "ラーメン",
+    "うどん",
+    "蕎麦",
+    "そば",
+    "麺類",
+    "カレー",
+)
+
+
+def _expand_food_bridge_keywords(keywords: list[str]) -> list[str]:
+    """If a clause mentions a dish family, also query the allowlisted token."""
+    blob = "".join(keywords)
+    out = list(keywords)
+    seen = {k.lower() for k in keywords}
+    for food in _FOOD_BRIDGE_EXPAND:
+        if food not in blob:
+            continue
+        label = "蕎麦" if food == "そば" else food
+        if label.lower() in seen:
+            continue
+        seen.add(label.lower())
+        out.append(label)
+    return out
+
+
+_BRIDGE_STOP = frozenset(
+    {
+        "の",
+        "を",
+        "に",
+        "が",
+        "は",
+        "で",
+        "と",
+        "も",
+        "な",
+        "か",
+        "ね",
+        "よ",
+        "わ",
+        "ある",
+        "する",
+        "いる",
+        "なる",
+        "れる",
+        "かな",
+        "かなぁ",
+        "かなあ",
+    }
+)
+_BRIDGE_CLAUSE_SPLIT = re.compile(r"[\s\.,/!?？。、:;\-\(\)\[\]「」『』…‥]+")
+
+
+def _bridge_clause_keywords(text: str) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in _BRIDGE_CLAUSE_SPLIT.split(text or ""):
+        tok = raw.strip()
+        if len(tok) < 2:
+            continue
+        # Allow 2-char content (麺類) but reject particle crumbs (家に) and tiny kana.
+        if len(tok) < 3 and not re.search(
+            r"[\u4e00-\u9fff]{2}|[\u30a0-\u30ff]{3,}", tok
+        ):
+            continue
+        low = tok.lower()
+        if low in _BRIDGE_STOP or low in seen:
+            continue
+        seen.add(low)
+        out.append(tok)
+    return out
 
 
 def _format_bridge_date(timestamp: str | None, *, tz_name: str) -> str:
@@ -100,7 +186,13 @@ def hits_from_http_items(
         if not isinstance(item, dict):
             continue
         content = str(item.get("content") or "").strip()
-        if not content or is_episodic_blob(content):
+        if (
+            not content
+            or is_episodic_blob(content)
+            or is_literary_agent_passage(content)
+            or is_vision_bridge_noise(content)
+            or is_legacy_food_talk_fact(content)
+        ):
             continue
         score_raw = float(item.get("score") or 0.0)
         category = str(item.get("category") or "daily")

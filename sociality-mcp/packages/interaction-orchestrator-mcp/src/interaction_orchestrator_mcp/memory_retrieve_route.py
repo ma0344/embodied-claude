@@ -75,6 +75,7 @@ def bridge_topic_keywords(text: str) -> list[str]:
 
 def looks_like_memory_bridge_cue(text: str) -> bool:
     """Cross-session kw bridge 候補（C で実際に recall する）。"""
+    from interaction_orchestrator_mcp.memory_bridge import extract_bridge_keywords
     from interaction_orchestrator_mcp.recall_query import is_temporal_question
 
     line = (text or "").strip()
@@ -89,7 +90,7 @@ def looks_like_memory_bridge_cue(text: str) -> bool:
     # Entity/schedule temporal (ねっとわん いつ) → compose 8b / stage-2, not bridge.
     if is_temporal_question(line) and not _HISTORY_Q.search(line):
         return False
-    if _bridge_topic_keywords(line):
+    if extract_bridge_keywords(line):
         return True
     return bool(_HISTORY_Q.search(line))
 

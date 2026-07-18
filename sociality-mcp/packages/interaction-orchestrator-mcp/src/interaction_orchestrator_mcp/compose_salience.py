@@ -5,7 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from interaction_orchestrator_mcp.memory_adapter import _extract_keywords
-from interaction_orchestrator_mcp.recall_query import is_episodic_blob
+from interaction_orchestrator_mcp.recall_query import (
+    is_episodic_blob,
+    is_legacy_food_talk_fact,
+    is_literary_agent_passage,
+    is_meal_record_fact,
+    literary_user_cue,
+)
 from interaction_orchestrator_mcp.schemas import RelevantMemoryRef
 from interaction_orchestrator_mcp.topic_retire import (
     TopicRetireStore,
@@ -49,15 +55,34 @@ def apply_compose_memory_salience(
         retired = TopicRetireStore(db).active_retired_topics(person_id=person_id)
 
     utterance = user_text or ""
+    reading_cue = literary_user_cue(utterance)
+    has_ua_meal = any(m.reason == "user_action_meal" for m in memories)
     adjusted: list[RelevantMemoryRef] = []
     for mem in memories:
         policy = mem.use_policy
         reason = mem.reason
         episodic = is_episodic_blob(mem.content)
+        literary = is_literary_agent_passage(mem.content)
 
         if episodic or "会話の区切り" in mem.content or "会話の一区切り" in mem.content:
             policy = "background_only"
             reason = "episodic_not_for_surface"
+        if literary and not reading_cue:
+            # LW-READ dumps are agent-internal; do not let them ride mentionable
+            # on unrelated turns (羅生門 × 大丈夫).
+            policy = "do_not_surface"
+            reason = "literary_passage_off_topic"
+        if is_legacy_food_talk_fact(mem.content):
+            # Prefer dated 「食べた記録」 cards over 「話をした（食事の話題）」.
+            policy = "do_not_surface"
+            reason = "legacy_food_talk_not_meal_record"
+        if (
+            has_ua_meal
+            and mem.reason != "user_action_meal"
+            and is_meal_record_fact(mem.content)
+        ):
+            policy = "do_not_surface"
+            reason = "legacy_meal_record_demoted_for_ua"
         if retired and memory_matches_retired_topics(mem.content, retired):
             policy = "background_only"
             reason = "topic_retired"
@@ -67,6 +92,9 @@ def apply_compose_memory_salience(
         if prefetch_fact_check and episodic:
             policy = "do_not_surface"
             reason = "prefetch_fact_check_episodic_omitted"
+        if prefetch_fact_check and literary and not reading_cue:
+            policy = "do_not_surface"
+            reason = "prefetch_fact_check_literary_omitted"
 
         if policy == mem.use_policy and reason == mem.reason:
             adjusted.append(mem)

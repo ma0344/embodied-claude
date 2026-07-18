@@ -41,6 +41,37 @@ class TestComposeSalience:
         assert adjusted[0].use_policy == "background_only"
         assert adjusted[0].reason == "episodic_off_topic"
 
+    def test_literary_passage_off_topic_not_mentionable(self) -> None:
+        literary = _mem(
+            "青空文庫で読んだ『羅生門』（芥川龍之介）— "
+            "どうにもならない事を、どうにかするためには、手段を選んでいる遑はない。"
+        )
+        adjusted = apply_compose_memory_salience(
+            [literary],
+            user_text="大丈夫。ぼーっとしとるわけではないで（笑）",
+            person_id="ma",
+            db=None,
+        )
+        mentionable, background = select_surface_memories(adjusted)
+        assert not mentionable
+        assert not background
+        assert adjusted[0].use_policy == "do_not_surface"
+        assert adjusted[0].reason == "literary_passage_off_topic"
+
+    def test_literary_passage_stays_when_user_cues_reading(self) -> None:
+        literary = _mem(
+            "青空文庫で読んだ『羅生門』（芥川龍之介）— 下人は、老婆をつき放すと"
+        )
+        adjusted = apply_compose_memory_salience(
+            [literary],
+            user_text="羅生門どうやった？",
+            person_id="ma",
+            db=None,
+        )
+        mentionable, _ = select_surface_memories(adjusted)
+        assert len(mentionable) == 1
+        assert adjusted[0].use_policy == "mentionable"
+
     def test_fact_memory_stays_mentionable(self) -> None:
         fact = _mem("沖縄の梅雨明けは6月29日頃")
         adjusted = apply_compose_memory_salience(
@@ -68,6 +99,21 @@ class TestComposeSalience:
         assert not mentionable
         assert not background
         assert adjusted[0].use_policy == "do_not_surface"
+
+    def test_legacy_food_talk_demoted_prefer_meal_record(self) -> None:
+        legacy = _mem("まーが蕎麦の話をした（食事の話題）")
+        meal = _mem("まーは直近で7月1日に麺類（蕎麦）を食べた記録がある")
+        adjusted = apply_compose_memory_salience(
+            [legacy, meal],
+            user_text="今日の晩御飯は何にしよ？",
+            person_id="ma",
+            db=None,
+        )
+        mentionable, _ = select_surface_memories(adjusted)
+        assert all("食べた記録" in m.content for m in mentionable)
+        assert not any("話をした" in m.content for m in mentionable)
+        assert adjusted[0].use_policy == "do_not_surface"
+        assert adjusted[0].reason == "legacy_food_talk_not_meal_record"
 
 
 class TestTopicRetire:

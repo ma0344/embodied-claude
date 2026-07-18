@@ -93,15 +93,16 @@ def maybe_enrich_memory_bridge(
         return ctx, None
 
     bridge_lines = format_bridge_lines(hits, tz_name=ctx.timezone)
+    hit_keywords = list(dict.fromkeys(hit.keyword for hit in hits))
     updated = apply_memory_bridge_to_context(
         ctx,
         bridge_lines=bridge_lines,
-        bridge_keywords=keywords,
+        bridge_keywords=hit_keywords or keywords,
         bridge_hits=hits,
         user_text=user_text,
         max_chars=max_chars,
         prefetch_fact_check=prefetch_fact_check,
         social_db=social_db,
     )
-    label = f"記憶ブリッジ ({len(hits)} 件 · {', '.join(keywords[:3])})"
+    label = f"記憶ブリッジ ({len(hits)} 件 · {', '.join((hit_keywords or keywords)[:3])})"
     return updated, label

@@ -30,6 +30,25 @@ class TestRecallQuery:
         assert should_skip_compose_recall("おはよう")
         assert not should_skip_compose_recall("ねっとわん いつ")
 
+    def test_skip_soft_status_reply(self):
+        assert should_skip_compose_recall("大丈夫。ぼーっとしとるわけではないで（笑）")
+        assert should_skip_compose_recall("大丈夫")
+        assert not should_skip_compose_recall("大丈夫、羅生門どうやった？")
+
+    def test_literary_agent_passage(self):
+        from interaction_orchestrator_mcp.recall_query import (
+            is_literary_agent_passage,
+            literary_user_cue,
+        )
+
+        assert is_literary_agent_passage(
+            "青空文庫で読んだ『羅生門』（芥川龍之介）— 下人は"
+        )
+        assert is_literary_agent_passage("青空『羅生門』— 一節")
+        assert not is_literary_agent_passage("まーのねっとわん勤務は水曜午前")
+        assert literary_user_cue("羅生門どうやった？")
+        assert not literary_user_cue("大丈夫。ぼーっとしとるわけではないで（笑）")
+
     def test_temporal_query_uses_gist_schedule(self):
         queries = build_recall_queries(
             purpose="compose",

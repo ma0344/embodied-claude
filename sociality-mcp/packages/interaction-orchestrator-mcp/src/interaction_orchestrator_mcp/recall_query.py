@@ -9,11 +9,23 @@ from typing import Literal
 RecallPurpose = Literal["compose", "followup", "autonomous"]
 
 _EPISODE_MARKERS = ("【会話の区切り】", "【会話の一区切り】", "episode_close")
+_LITERARY_USER_CUE = re.compile(
+    r"青空|文庫|読んだ|読んでる|読んでた|本|小説|一冊|しおり|芥川|羅生門"
+)
 _TEMPORAL_Q = re.compile(r"いつ|何曜|曜日|何時|スケジュール|予定|何日")
 _DEIXIS = re.compile(r"ここっち|こっち|それ|あれ|この|その")
 _CHITCHAT = re.compile(
     r"^(おはよう|こんばんは|こんにちは|おやすみ|うん|はい|ねえ|ん+|ok|hi|hello)[。!?？\s]*$",
     re.IGNORECASE,
+)
+# Soft status / reassurance replies — not memory queries (e.g. 大丈夫。ぼーっと…).
+_SOFT_STATUS_REPLY = re.compile(
+    r"^(大丈夫|平気|問題ない|なんともない|気にせんといて)"
+    r"[。．.!！？?\s　]*(.*)$",
+    re.IGNORECASE,
+)
+_SOFT_STATUS_BLOCK = re.compile(
+    r"[?？]|いつ|何|誰|どこ|どう|なぜ|予定|覚え|覚えて|読ん|青空|本"
 )
 _WEEKDAY_TIME = re.compile(r"[月火水木金土]曜|午前|午後|\d{1,2}[:：]\d{2}")
 _JP_RUN = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff々]+")
@@ -32,6 +44,49 @@ def is_episodic_blob(content: str) -> bool:
     return len(text) > 360 and text.count("\n") >= 2
 
 
+def is_literary_agent_passage(content: str) -> bool:
+    """True for LW-READ encode lines (青空 passage dumps), not user book talk."""
+    from social_core.literary_surface import is_literary_agent_surface
+
+    return is_literary_agent_surface(content)
+
+
+_VISION_BRIDGE_MARKERS = (
+    "=== VISION_CAPTION",
+    "=== VISION_DESCRIBE_FAILED",
+    "VISION_DESCRIBE_FAILED",
+    "Captured image at ",
+)
+
+
+def is_vision_bridge_noise(content: str) -> bool:
+    """True for camera caption / describe-failure dumps — not cross-session talk gists."""
+    text = (content or "").strip()
+    if not text:
+        return True
+    return any(marker in text for marker in _VISION_BRIDGE_MARKERS)
+
+
+def is_legacy_food_talk_fact(content: str) -> bool:
+    """Old meal encode: 「〜の話をした（食事の話題）」— prefer dated 食べた記録 instead."""
+    text = (content or "").strip()
+    if not text:
+        return False
+    if "を食べた記録がある" in text:
+        return False
+    return "の話をした" in text and "食事の話題" in text
+
+
+def is_meal_record_fact(content: str) -> bool:
+    """Dated meal-record card for bridge / compose hints."""
+    return "を食べた記録がある" in (content or "")
+
+
+def literary_user_cue(user_text: str) -> bool:
+    """まー is asking about / continuing a reading thread."""
+    return bool(_LITERARY_USER_CUE.search((user_text or "").strip()))
+
+
 def should_skip_compose_recall(user_text: str) -> bool:
     text = (user_text or "").strip()
     if len(text) < 2:
@@ -40,6 +95,11 @@ def should_skip_compose_recall(user_text: str) -> bool:
         return True
     if len(text) <= 3 and "?" not in text and "？" not in text:
         return True
+    soft = _SOFT_STATUS_REPLY.match(text)
+    if soft is not None:
+        rest = (soft.group(2) or "").strip()
+        if not rest or not _SOFT_STATUS_BLOCK.search(rest):
+            return True
     return False
 
 

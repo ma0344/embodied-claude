@@ -69,6 +69,88 @@ def test_hits_from_http_skips_episodic() -> None:
     assert "梅干し" in hits[0].content
 
 
+def test_hits_from_http_skips_literary_agent() -> None:
+    items = [
+        {
+            "content": "青空文庫で読んだ『羅生門』（芥川龍之介）— 下人は",
+            "score": 0.99,
+            "timestamp": "2026-07-17T21:00:00+09:00",
+            "category": "feeling",
+        },
+        {
+            "content": "まーの体調がすぐれない日があった",
+            "score": 0.7,
+            "timestamp": "2026-07-06T10:00:00+09:00",
+            "category": "memory",
+        },
+    ]
+    hits = hits_from_http_items(items, keyword="大丈夫")
+    assert len(hits) == 1
+    assert "体調" in hits[0].content
+
+
+def test_hits_from_http_skips_legacy_food_talk() -> None:
+    items = [
+        {
+            "content": "まーが蕎麦の話をした（食事の話題）",
+            "score": 0.99,
+            "category": "observation",
+        },
+        {
+            "content": "まーは直近で7月1日に麺類（蕎麦）を食べた記録がある",
+            "score": 0.8,
+            "timestamp": "2026-07-01T12:00:00+09:00",
+            "category": "observation",
+        },
+    ]
+    hits = hits_from_http_items(items, keyword="麺類")
+    assert len(hits) == 1
+    assert "食べた記録" in hits[0].content
+
+
+def test_hits_from_http_skips_vision_noise() -> None:
+    items = [
+        {
+            "content": (
+                "窓/外 Captured image at 20260708_130516 (640x360). "
+                "=== VISION_CAPTION === 部屋の奥には"
+            ),
+            "score": 0.9,
+            "category": "observation",
+        },
+        {
+            "content": "まーのデスク === VISION_DESCRIBE_FAILED === LM Studio",
+            "score": 0.88,
+            "category": "observation",
+        },
+        {
+            "content": "まーは直近で7月1日に麺類（蕎麦）を食べた記録がある",
+            "score": 0.7,
+            "timestamp": "2026-07-01T12:00:00+09:00",
+            "category": "observation",
+            "importance": 3,
+        },
+    ]
+    hits = hits_from_http_items(items, keyword="家に")
+    assert len(hits) == 1
+    assert "食べた記録" in hits[0].content
+
+
+def test_extract_bridge_keywords_skips_weak_bigrams() -> None:
+    from interaction_orchestrator_mcp.memory_bridge import extract_bridge_keywords
+
+    kws = extract_bridge_keywords(
+        "家に麺があるから、サッパリ系の冷たいラーメンにするわ"
+    )
+    assert "家に" not in kws
+    assert "家に麺があるから" in kws
+    assert any("ラーメン" in k for k in kws)
+
+    noodle = extract_bridge_keywords("麺類かなぁ。。。")
+    assert "麺類かなぁ" in noodle
+    assert "類か" not in noodle
+
+
 def test_format_bridge_lines_includes_date() -> None:
     hits = [
         MemoryBridgeHit(

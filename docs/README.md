@@ -13,12 +13,14 @@ embodied-claude（ma-home / こより）の運用・設計ドキュメント。*
 | **なぜこのプロジェクトか**                 | [VISION.md](./VISION.md)                                                                                                |
 | **MCP・設備の使い方**                  | [CLAUDE.md](../CLAUDE.md)（リポジトリ直下）                                                                                      |
 | **青空読書・生きてる感**                  | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md)                                                                    |
+| **自発性（内面拡充 · 指示待ちしない把握）** | [tracks/spontaneity.md](./tracks/spontaneity.md)                                                                        |
 | **黙考ルート（GW-S1）**                | [tracks/gw-silent.md](./tracks/gw-silent.md)                                                                            |
 | **Gateway / 自律 tick の設計**       | [architecture/gateway-direct-actions.md](./architecture/gateway-direct-actions.md)                                      |
 | **Surface Direct（表層 LM 直叩き）**   | [tracks/surface-direct-llm.md](./tracks/surface-direct-llm.md)                                                          |
 | **跨 session 記憶 bridge（MEM-8h）** | [tracks/mem-8h-memory-bridge.md](./tracks/mem-8h-memory-bridge.md)                                                      |
 | **Heartbeat・pulse**             | [architecture/heartbeat-loop.md](./architecture/heartbeat-loop.md)                                                      |
 | **認知層・設計方針**                    | [architecture/cognitive-layers.md](./architecture/cognitive-layers.md)                                                  |
+| **注入の層（表層 / 近表層 / Deep）**     | [architecture/inject-surface-layers.md](./architecture/inject-surface-layers.md)                                        |
 | **regex / e4b / Stage の使い分け**   | 下 § [regex を使うべきか](#regex-を使うべきか) · [utterance-anchoring.md](./tracks/utterance-anchoring.md)                           |
 | **相対日・deixis / TEMP**           | [tracks/utterance-anchoring.md](./tracks/utterance-anchoring.md)                                                        |
 | **open loop / リマインド / close**   | [architecture/open-loops-reminders.md](./architecture/open-loops-reminders.md) · [tracks/ol5.md](./tracks/ol5.md)       |
@@ -139,6 +141,7 @@ docs/
 | ファイル                                                        | 内容                                 |
 | ----------------------------------------------------------- | ---------------------------------- |
 | [alive-lw-read.md](./tracks/alive-lw-read.md)               | 北極星・LW-READ                        |
+| [spontaneity.md](./tracks/spontaneity.md)                   | 自発性二軸・目的別動機・KJ的思考           |
 | [gw-silent.md](./tracks/gw-silent.md)                       | 黙考・OL-GATE                         |
 | [ol5.md](./tracks/ol5.md)                                   | 予定消化 loop close                    |
 | [k-self-code.md](./tracks/k-self-code.md)                   | 自己コード（将来）                          |
@@ -167,6 +170,7 @@ docs/
 | ファイル                                                                  | 内容                     |
 | --------------------------------------------------------------------- | ---------------------- |
 | [cognitive-layers.md](./architecture/cognitive-layers.md)             | **設計方針の正**             |
+| [inject-surface-layers.md](./architecture/inject-surface-layers.md)   | 注入の層 · セッション台本 · ノイズ削減優先度 |
 | [platform-ma-home.md](./architecture/platform-ma-home.md)             | 本線・様子見                 |
 | [mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md)   | encode/retrieve 非対称    |
 | [mem-pipeline.md](./architecture/mem-pipeline.md)                     | 4層・Dreaming・5e/5f/5k/7 |

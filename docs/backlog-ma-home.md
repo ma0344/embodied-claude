@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ（ダッシュボード）
 
-**最終更新**: 2026-07-15（SOUL 距離感・outbound 動機を様子見へ）  
+**最終更新**: 2026-07-18（注入層棚卸し）  
 **詳細の正（アーカイブ）**: [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md)  
 **完了一覧**: [backlog-archive-ma-home.md](./backlog-archive-ma-home.md)
 
@@ -9,6 +9,8 @@
 ## 北極星
 
 **こよりがもっと「生きてる」感** — まーと話してない時間にも内側が動き、部屋でさりげなく見える。
+
+自発性の二軸（合意 2026-07-17）: **(A) 内面の拡充**（会話相手としての深み/広がり）· **(B) 指示を待たず予定・様子を把握して行動**。索引 → [tracks/spontaneity.md](./tracks/spontaneity.md)。
 
 第一シーン: **LW-READ**（一冊完走・READ/PAUSE/CLOSE）→ **GW-S1** 黙考 → **LW-7** Web 連鎖。
 
@@ -46,8 +48,11 @@
 ## 次の 3 手
 
 1. **（運用確認）LW-7** — `PRESENCE_LW7_ENABLED=1`（example 既定 ON · 実機で PAUSE→Web）→ [tracks/alive-lw-read.md](./tracks/alive-lw-read.md)
+2. **✅ INJECT-TRIM v0** — episode_close/tick を `[stm_recent]` から除外 · OBS-TICK collapse · desires 間引き → [inject-surface-layers.md](./architecture/inject-surface-layers.md)
+3. **✅ MEM-8h bridge 汚染止め** — vision 出口除外 · cue 条のみ · 食事 fact encode · `scripts/backfill-food-topic-facts.py` → [mem-8h-memory-bridge.md](./tracks/mem-8h-memory-bridge.md)
 
-（完了）**SHIFT-R3** — `interpretation_shifts.domain` + inject filter → [interpretation-shift-routing.md](./tracks/interpretation-shift-routing.md)
+（完了）**SHIFT-R3** — `interpretation_shifts.domain` + inject filter → [interpretation-shift-routing.md](./tracks/interpretation-shift-routing.md)  
+（完了）**注入層棚卸し + INJECT-TRIM v0** → [inject-surface-layers.md](./architecture/inject-surface-layers.md)
 
 デプロイ: `cd presence-ui` → `uv pip install --reinstall "relationship-mcp @ file:///…/relationship-mcp"` → `.\scripts\restart-presence-ui.ps1`
 
@@ -100,6 +105,8 @@
 | **TEMP** | TEMP-1〜5 ✅ · TEMP-C3/b/c4 ✅ · **C5 📋** clock/e4b · SHIFT-R1/R2/R3 ✅ | [utterance-anchoring.md](./tracks/utterance-anchoring.md) · [interpretation-shift-routing.md](./tracks/interpretation-shift-routing.md) |
 | **WS** | 会話 Web 検索 | ✅ WS-5 v0 · ✅ **5b** · ✅ **5c**（2026-07-15）· 📋 v1 e4b | [ws-2](./ops/ws-2-conversation-web-search.md) · [ws-5](./ops/ws-5-spontaneous-search.md) |
 | **SOUL-D** | SOUL 距離感 · 友人化 · Say動機（介助犬保留） | 💤 | [tracks/soul-distance.md](./tracks/soul-distance.md) |
+| **SPONT** | 自発性二軸 · S1 OL6 outbound · S2 calendar expectations | 🔧 S1/S2 実装済 · 運用確認 | [tracks/spontaneity.md](./tracks/spontaneity.md) |
+| **INJECT** | 注入層 · 表層/近表層/Deep · ノイズ間引き | ✅ 語彙固定 · ✅ **TRIM v0** | [inject-surface-layers.md](./architecture/inject-surface-layers.md) |
 | **VL-ID** | VL 同一人物判定（まー認識実験） | 💤 | [tracks/vl-same-person.md](./tracks/vl-same-person.md) |
 
 トピック索引: [backlog-koyori.md](./backlog-koyori.md)

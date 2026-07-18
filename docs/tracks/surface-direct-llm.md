@@ -44,7 +44,8 @@ native chat の **表層返答**から Claude Code 子プロセスを外し、ga
 
 - 表層人格は **`presets/koyori-SOUL.core.md`** → gateway `system` に毎ターン注入（`PRESENCE_SOUL_CORE_IN_APPEND=1`）
 - **LM Studio チャットモデルの System Prompt は空** — 二重注入・LM/gateway 矛盾を避ける
-- plan `must_avoid` に物理共作の禁止も載る（compose `response_contract`）
+- 定番禁止（物理共作・cheerleading 等）は **SOUL.core Deep**。compose `must_avoid` はパス固有のみ（2026-07-18）
+- 注入の層分け（表層 / 表層に近い / セッション台本）→ [inject-surface-layers.md](../architecture/inject-surface-layers.md)
 
 ---
 
@@ -132,7 +133,7 @@ compose（第1段 recall 込み）
 ## 残課題（本トラック外）
 
 - LM streaming（トークン単位 SSE）
-- MEM-8 L0 gist を表層 system に載せる強化
+- INJECT-TRIM（STM / room_view / desires 間引き）→ [inject-surface-layers.md](../architecture/inject-surface-layers.md)
 - A/B 計測（latency / 関西弁遵守 / must_avoid）
 
 ## MEM-8b — 条件付き第 2 段 recall（2026-07-03）

@@ -13,6 +13,8 @@
 | **Deep（基底）** | SOUL.core → stable append / LM Studio system / 将来 LoRA | 低（まー承認） |
 | **実行時** | compose / memory / social / STM | 毎ターン |
 
+口調・常時禁止（敬語 / cheerleading / 物理共作など）は **Deep**。毎ターン `[Must avoid]` には経路依存だけ載せる（2026-07-18）。`[person_profile_gists]` は常時全文ではなく **cue 時のみ**（MEM-8e）。
+
  episodic な話・今日の出来事は LTM / daybook。**口調と関係のデフォルト** だけ基底へ。
 
 ---

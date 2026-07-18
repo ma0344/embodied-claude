@@ -39,6 +39,20 @@ class TestCompose:
         assert ctx.compact_prompt_block.startswith("[interaction_context]")
         assert ctx.timezone == "Asia/Tokyo"
 
+    def test_ma_response_contract_is_thin_header(self, stores):
+        """Standing prefer/voice stay in SOUL; inject keeps initiative only."""
+        ctx = _compose(stores, user_text="テスト")
+        assert ctx.response_contract.treat_user_as == "まー（友人）/ こより"
+        assert ctx.response_contract.prefer == []
+        assert ctx.response_contract.avoid == []
+        assert ctx.response_contract.initiative_policy == "bounded"
+        assert ctx.response_contract.max_clarifying_questions == 1
+        block = ctx.compact_prompt_block
+        assert "treat_user_as: まー（友人）/ こより" in block
+        assert "initiative: bounded, max_clarifying=1" in block
+        assert "Kansai dialect" not in block
+        assert "prefer:" not in block.split("[response_contract]")[1].split("[")[0]
+
     def test_autonomous_channel_tightens_contract(self, stores):
         ctx = _compose(stores, user_text=None, channel="autonomous")
         joined = " ".join(ctx.response_contract.avoid)
@@ -501,6 +515,62 @@ class TestRecord:
         assert "same scene ×2" in block
         assert block.count("赤いソファ") == 1
 
+    def test_obs_tick_room_view_lines_collapsed(self, stores):
+        line = "Room view: dining single capture hamming=9 (OBS-TICK-1b signal)"
+        stores["orchestrator"].record_agent_experience(
+            RecordAgentExperienceInput(
+                person_id="ma",
+                kind="agent_observation",
+                summary=line,
+                importance=3,
+            )
+        )
+        stores["orchestrator"].record_agent_experience(
+            RecordAgentExperienceInput(
+                person_id="ma",
+                kind="agent_autonomous_action",
+                summary=line,
+                importance=3,
+            )
+        )
+        ctx = _compose(stores, user_text="こんにちは")
+        block = ctx.compact_prompt_block
+        assert "same scene ×2" in block
+        assert "dining" in block
+        assert block.count("hamming=9") == 0
+
+    def test_desires_section_omits_low_discomfort_extras(self, stores, tmp_path, monkeypatch):
+        import json as _json
+
+        fake_desires = tmp_path / "desires.json"
+        fake_desires.write_text(
+            _json.dumps(
+                {
+                    "desires": {
+                        "browse_curiosity": 1.0,
+                        "identity_coherence": 1.0,
+                        "miss_companion": 1.0,
+                        "cognitive_load": 0.4,
+                    },
+                    "discomforts": {
+                        "browse_curiosity": 0.7,
+                        "identity_coherence": 0.1,
+                        "miss_companion": 0.7,
+                        "cognitive_load": 0.7,
+                    },
+                    "dominant": "browse_curiosity",
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("DESIRES_PATH", str(fake_desires))
+        ctx = _compose(stores, user_text="こんにちは")
+        block = ctx.compact_prompt_block
+        assert "dominant: browse_curiosity" in block
+        assert "miss_companion" in block
+        assert "cognitive_load" in block
+        assert "identity_coherence" not in block
+
     def test_noise_open_loops_filtered_from_compose(self, stores):
         stores["relationship"].upsert_person(
             person_id="ma", canonical_name="まー", aliases=[], role="companion"
@@ -768,24 +838,26 @@ class TestPlan:
         assert "recall_memories" in plan.initiative.allowed_actions
         assert "web_search" in plan.initiative.allowed_actions
 
-    def test_plan_must_avoid_includes_contract_avoid(self, stores):
+    def test_plan_must_avoid_standing_bans_live_in_soul_core(self, stores):
+        """Standing bans (keigo / cheerleading / co-action) are SOUL.core, not Must avoid."""
         ctx = _compose(stores, user_text="please help")
         plan = plan_response(
             PlanResponseInput(interaction_context=ctx, user_text="please help")
         )
         joined = " ".join(plan.must_avoid)
-        assert "generic assistant tone" in joined
-        assert "cheerleading" in joined
-        assert "physical co-action" in joined
+        assert "generic assistant tone" not in joined
+        assert "cheerleading" not in joined
+        assert "physical co-action" not in joined
 
-    def test_plan_must_avoid_physical_co_action(self, stores):
+    def test_plan_must_avoid_path_specific_still_appends(self, stores):
         ctx = _compose(stores, user_text="梅干し作ろう")
         plan = plan_response(
             PlanResponseInput(interaction_context=ctx, user_text="梅干し作ろう")
         )
+        # Standing co-action ban is Deep; path-specific avoids may still appear.
         joined = " ".join(plan.must_avoid)
-        assert "physical co-action" in joined
-        assert "まー already proposed" in joined
+        assert "physical co-action" not in joined
+        assert "まー already proposed" not in joined
 
     def test_plan_somatic_pending_in_must_include(self, stores):
         ctx = _compose(stores, user_text="please help")
@@ -891,7 +963,7 @@ class TestPlan:
         assert plan.memory_use.use_specific_memory is True
         assert plan.memory_use.max_memories_to_surface >= 1
 
-    def test_profile_gists_in_compact_prompt_block(self, stores):
+    def test_profile_gists_cued_into_compact_prompt_block(self, stores):
         stores["relationship"].upsert_person(
             person_id="ma", canonical_name="まー", aliases=[], role="companion"
         )
@@ -901,9 +973,11 @@ class TestPlan:
             gist="まーのグループホーム名は「ここっち」（こよりプロジェクトの「こっち」と別）",
             ts="2026-06-25T10:00:00+09:00",
         )
-        ctx = _compose(stores, user_text="今日の予定は？")
-        assert "[person_profile_gists]" in ctx.compact_prompt_block
-        assert "ここっち" in ctx.compact_prompt_block
+        uncued = _compose(stores, user_text="お腹減ったかも")
+        assert "[person_profile_gists]" not in uncued.compact_prompt_block
+        cued = _compose(stores, user_text="ここっちって何やったっけ？")
+        assert "[person_profile_gists]" in cued.compact_prompt_block
+        assert "ここっち" in cued.compact_prompt_block
 
     def test_autonomous_with_dominant_desire_is_bounded(self, stores, monkeypatch, tmp_path):
         # Seed desires.json so the orchestrator sees a dominant desire.

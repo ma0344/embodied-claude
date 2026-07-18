@@ -24,6 +24,7 @@ from social_state_mcp.store import SocialStateStore
 
 from .desire_source import load_desire_snapshot
 from .compose_salience import apply_compose_memory_salience, select_surface_memories
+from .profile_surface import select_profile_gists_for_surface
 from .memory_adapter import (
     OrchestratorMemoryAdapter,
 )
@@ -479,24 +480,12 @@ def _pick_contract(
 ) -> ResponseContract:
     base = ResponseContract()
     if person_id == "ma":
+        # Standing voice / bans live in SOUL.core + surface system append.
+        # Per-turn inject keeps a thin header + turn-varying initiative only.
         base = ResponseContract(
-            treat_user_as="付き合いの長い隣人 まー; agent is こより (SOUL.md voice)",
-            avoid=[
-                "generic assistant tone or keigo",
-                "breaking character into neutral chatbot",
-                "pretending to remember unsupported facts",
-                "meta comments about TTS or using tools",
-                "closing cheerleading every turn (応援してるで, 楽しみにしてるで, "
-                "頑張ってね as default sign-off)",
-                "physical co-action with まー (手伝う/一緒にやる/うちもやる for まー's bodily tasks)",
-                "asking まー to help with work まー already proposed as theirs",
-            ],
-            prefer=[
-                "Kansai dialect Japanese casual (うち / タメ口) per SOUL.md",
-                "relationship-aware specificity with まー",
-                "direct answers without over-explaining",
-                "explicit uncertainty when memory or evidence is weak",
-            ],
+            treat_user_as="まー（友人）/ こより",
+            avoid=[],
+            prefer=[],
             initiative_policy="bounded",
             max_clarifying_questions=1,
         )
@@ -691,8 +680,10 @@ def _format_desire_section(
     dominant_desire: str | None,
     desires: dict[str, Any],
     discomforts: dict[str, Any],
-    max_lines: int = 4,
+    max_extra: int = 2,
+    discomfort_floor: float = 0.5,
 ) -> list[str]:
+    """INJECT-TRIM: dominant always; extras only when discomfort is high."""
     if not desires and not dominant_desire:
         return []
     lines = ["[desires]"]
@@ -706,20 +697,17 @@ def _format_desire_section(
             )
         else:
             lines.append(f"dominant: {dominant_desire}")
-    ranked = sorted(
-        ((name, value) for name, value in desires.items() if isinstance(value, (int, float))),
-        key=lambda item: item[1],
-        reverse=True,
-    )
-    shown = 0
-    for name, lvl in ranked:
-        if name == dominant_desire:
+    extras: list[tuple[str, float, float]] = []
+    for name, value in desires.items():
+        if name == dominant_desire or not isinstance(value, (int, float)):
             continue
-        dcom = discomforts.get(name, 0.0)
-        lines.append(f"- {name}: {float(lvl):.2f} (discomfort {float(dcom):.2f})")
-        shown += 1
-        if shown >= max_lines:
-            break
+        dcom = float(discomforts.get(name, 0.0) or 0.0)
+        if dcom < discomfort_floor:
+            continue
+        extras.append((name, float(value), dcom))
+    extras.sort(key=lambda item: (item[2], item[1]), reverse=True)
+    for name, lvl, dcom in extras[:max_extra]:
+        lines.append(f"- {name}: {lvl:.2f} (discomfort {dcom:.2f})")
     return lines if len(lines) > 1 else []
 
 
@@ -912,6 +900,7 @@ def _format_shifts_section(
 
 
 _VISUAL_EXPERIENCE_KINDS = frozenset({"agent_observation", "agent_autonomous_action"})
+_OBS_TICK_SCENE_RE = re.compile(r"room\s*view:\s*([a-z0-9_-]+)", re.I)
 
 
 def _visual_scene_tokens(text: str) -> frozenset[str]:
@@ -919,7 +908,19 @@ def _visual_scene_tokens(text: str) -> frozenset[str]:
     return frozenset(re.findall(r"[\u4e00-\u9fff]{2,}", normalized)[:24])
 
 
+def _obs_tick_scene_id(text: str) -> str | None:
+    match = _OBS_TICK_SCENE_RE.search(text or "")
+    return match.group(1).lower() if match else None
+
+
 def _visual_scenes_similar(a: str, b: str, *, threshold: float = 0.5) -> bool:
+    id_a, id_b = _obs_tick_scene_id(a), _obs_tick_scene_id(b)
+    if id_a and id_b and id_a == id_b:
+        return True
+    compact_a = re.sub(r"\s+", "", (a or "")[:100]).lower()
+    compact_b = re.sub(r"\s+", "", (b or "")[:100]).lower()
+    if compact_a and compact_a == compact_b:
+        return True
     left, right = _visual_scene_tokens(a), _visual_scene_tokens(b)
     if not left or not right:
         return False
@@ -928,10 +929,15 @@ def _visual_scenes_similar(a: str, b: str, *, threshold: float = 0.5) -> bool:
 
 def _format_visual_experience_cluster(cluster: list[RecentExperienceRef]) -> str:
     latest = cluster[0]
+    scene_id = _obs_tick_scene_id(latest.summary)
     if len(cluster) == 1:
+        if scene_id:
+            return f"- [room_view] {scene_id} (OBS-TICK)"
         summary = latest.summary[:72] + ("…" if len(latest.summary) > 72 else "")
         return f"- [{latest.kind}] {summary}"
     kinds = ", ".join(sorted({item.kind for item in cluster}))
+    if scene_id:
+        return f"- [room_view] same scene ×{len(cluster)} ({kinds}); {scene_id}"
     snippet = latest.summary[:60] + ("…" if len(latest.summary) > 60 else "")
     return (
         f"- [room_view] same scene ×{len(cluster)} ({kinds}); "
@@ -952,10 +958,15 @@ def _format_single_experience(exp: RecentExperienceRef) -> str:
 def _build_experience_bullets(
     experiences: list[RecentExperienceRef], *, max_items: int
 ) -> list[str]:
+    from social_core.literary_surface import is_literary_agent_surface
+
     lines: list[str] = []
     index = 0
     while index < len(experiences) and len(lines) < max_items:
         exp = experiences[index]
+        if is_literary_agent_surface(exp.summary):
+            index += 1
+            continue
         if exp.kind in _VISUAL_EXPERIENCE_KINDS:
             cluster = [exp]
             scan = index + 1
@@ -1090,7 +1101,10 @@ def _compact_block(
     ]
     if soul_sections:
         sections.extend(["", *soul_sections])
-    gist_lines = [g.strip() for g in (profile_gists or []) if g and g.strip()]
+    gist_lines = select_profile_gists_for_surface(
+        list(profile_gists or []),
+        user_text=user_text,
+    )
     if gist_lines:
         sections.extend(["", "[person_profile_gists]", *gist_lines[:5]])
     if trimmed_session:

@@ -445,6 +445,26 @@ MIGRATIONS = [
             ON compose_topic_retire(person_id, retired_until DESC);
         """,
     ),
+    Migration(
+        name="011_user_actions",
+        sql="""
+        CREATE TABLE IF NOT EXISTS user_actions (
+            action_id TEXT PRIMARY KEY,
+            person_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            object TEXT NOT NULL,
+            status TEXT NOT NULL,
+            action_date TEXT,
+            source_event_id TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            detail_json TEXT NOT NULL DEFAULT '{}'
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_user_actions_person_kind_status
+            ON user_actions(person_id, kind, status, updated_at DESC);
+        """,
+    ),
 ]
 
 

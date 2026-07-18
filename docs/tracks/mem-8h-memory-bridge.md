@@ -56,10 +56,73 @@ N ターン transcript は **捨てない**（同 session の直接動機）。b
 | リスク | 対策 |
 |--------|------|
 | 誤結合 | entity 辞書 · 共起 · 閾値 |
-| episode 洪水 | 8g salience · fact 優先（8a） |
+| episode 洪水 | 8g salience · fact 優先（8a）· **bridge は episodic blob を採用しない** |
 | 古い fact | topic_retire · recency |
 | 引きすぎ | **cue 語があるときだけ** · 上限 2–3 行 |
 | 定番 temporal | Stage 1 で bridge 除外 |
+| **弱い bigram cue**（`家に` / `類か`） | **句読点区切りの条のみ**（JP bigram 廃止 2026-07-18） |
+| **vision dump 採用** | `VISION_CAPTION` / `DESCRIBE_FAILED` / `Captured image` を bridge 出口で除外 |
+| **食事が episode しかない** | **正本は UserAction `meal/confirmed`**（下 §）。言及だけで LTM に「食べた」を書く旧経路は置換対象 |
+
+**向きつき短冊**（会話で過去を使う）: 今の会話の向き ↔ 日付付き短冊。食事カードが第一ノード。巨大 KG ではない → [spontaneity](./spontaneity.md#向きつき短冊ネットワーク合意-2026-07-18) · [mem-8](../architecture/mem-8-encode-retrieve.md#向きつき短冊ネットワーク合意-2026-07-18)。
+
+理想例（合意 2026-07-18）: 「麺類かなぁ」→ bridge / mentionable に  
+`まーは直近で7月1日に麺類（蕎麦）を食べた記録がある`  
+があり → 「この間は蕎麦食べてたやんなあ」が自然。episode 転写を表に出さない。**食べた断定カードの一次点は UserAction `confirmed` のみ**（下 §）。
+
+**表層に出す食事カード**: 「食べた記録」形のみ。旧 `〜の話をした（食事の話題）` は compose salience / bridge で `do_not_surface`。  
+**晩御飯 cue**: カレー等のしっかりめ料理は可。軽食・時間帯ワード（お昼だけ等）は allowlist から外す。
+
+---
+
+## UserAction meal v0（受け入れ正本 · 2026-07-18）
+
+**地位**: 食事カード encode / 晩御飯 retrieve の **唯一の受け入れ正本**（本節以外に仕様を増やさない）。
+
+### 境界
+
+| 系 | 役割 | v0 |
+|----|------|----|
+| **OpenLoop** | 未完了の約束追跡 · close 仕組みは現状維持 | UA と **同期しない · 二重書き禁止**。OL→UA 自動は **やらない** |
+| **UserAction** | 「〇月〇日に〇〇をした」点の行動記録 | kind=`meal` のみ |
+
+### 表・status
+
+- **置き場（仮決定）**: `social.db` 新表 `user_actions`（`open_loops` と同 DB · relationship store）。LTM 自由文は一次点にしない
+- status: `intended` | `confirmed`（`cancelled` は任意・v0必須でない）
+- **`intended` は compose 表層に出さない**（確認材料のみ）
+- **`intended` 寿命（仮決定）**: 作成から **48h** または confirmed/cancelled まで。同一 `(person_id, kind, object)` の intended は新しい方が勝つ
+- 自己申告（「カレー食べた」）→ pending なしで直 `confirmed`
+- 計画→確認（「今日の夜はカレー」→「もう食べた？」→「うん」）→ `intended` → `confirmed`
+- **日付** = 確認発話（または自己申告発話）の DB 上ローカル日（JST）
+- object = **allowlist 閉集合**のみ。発明禁止 · **fail-closed**。閉集合 × Stage/e4b で確定可。書き込みは **high confidence のみ**
+
+### 作った / 食べた
+
+- 双方向とも **自動昇格しない**。区別を残す
+- 「作った」材料は当面 **OL close** 側から読む（`cook` kind 本格追加は **やらない**）
+- 晩御飯話題では両方を材料に出してよい: ate confirmed →「食べたやんな」 / 作ったのみ →「作ってたやんな」（食べた断定なし）
+- **retrieve 正本**: **UA confirmed + OL close の両方を読む**（妥協ではない）
+
+### 向き · 旧 encode
+
+- encode = 一次点 · retrieve = 向き。向きグループ = allowlist 辞書（事実捏造しない）
+- **旧 `food_topic_encode`（言及＝食べた即書き）は置換**: UA 経路が生きたら episode_close の「食べた記録」LTM 即書きを **止める**（並走しない）。allowlist ヘルパは再利用可
+- **S1 誤日付痛み止め（位置づけ）**: UA 本線の前でも、「言及だけで食べた日を書く」を止め／ゲートする別枠スライス。空 recall より誤「今日食べた」の方が痛い
+
+### やらない（v0）
+
+- 食事スロット主分類 · 隣接点自動展開の本格化
+- somatic / VISION オフトピック demote（観察中）
+- OL→UA 自動 · 作る→食べた含意の自動／半自動昇格 · cook kind 本格追加
+
+### 実装スライス順
+
+1. **S1** — 旧言及＝食べた即書きの停止／ゲート（誤日付痛み止め） ✅
+2. **UA-0** — `user_actions` 表 + meal intended/confirmed 書き込み（fail-closed） ✅
+3. **UA-1** — 自己申告直 confirmed · 計画→確認 intended→confirmed ✅（決定論 · Stage LLM は後続）
+4. **R0** — 晩御飯向き retrieve: UA confirmed + OL close を材料に（表層はつなぎ一言） ✅
+5. **R1** — bridge / mentionable を UA カード形に寄せ、旧 LTM「食べた記録」は demote ✅
 
 ---
 

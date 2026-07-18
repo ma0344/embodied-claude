@@ -8,6 +8,7 @@ import uuid
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from social_core import (
     EventStore,
@@ -15,15 +16,15 @@ from social_core import (
     SocialEventCreate,
     ensure_iso8601,
     parse_timestamp,
+    utc_now,
 )
-
-from social_core.ol_stale import evaluate_stale_close, infer_stale_policy_for_loop
 from social_core.activity_frame import (
     build_activity_frame_from_detail,
     build_completion_frame,
-    frames_match_completion,
     ensure_activity_frame_in_detail,
+    frames_match_completion,
 )
+from social_core.ol_stale import evaluate_stale_close, infer_stale_policy_for_loop
 
 from .date_resolution import (
     DEFAULT_TIMEZONE,
@@ -58,8 +59,8 @@ from .schemas import (
     PreferenceRecord,
     RitualRecord,
     SuggestionRecord,
+    UserActionRecord,
 )
-
 
 _OL5_TERM_HEAD_SUFFIXES = (
     "に行く",
@@ -2022,6 +2023,309 @@ class RelationshipStore:
                     ),
                 )
         return preferences[:3]
+
+    # --- UserAction meal (MEM-8h) -------------------------------------------
+
+    _USER_ACTION_INTENDED_MAX_AGE_HOURS = 48
+
+    def upsert_intended(
+        self,
+        *,
+        person_id: str,
+        kind: str,
+        object: str,
+        source_event_id: str | None = None,
+        detail: dict[str, Any] | None = None,
+        ts: str | None = None,
+    ) -> UserActionRecord:
+        """Create or refresh an intended action. Same (person, kind, object) → newer wins."""
+        self._ensure_person(person_id)
+        kind_clean = (kind or "").strip()
+        object_clean = (object or "").strip()
+        if not kind_clean or not object_clean:
+            raise ValueError("kind and object are required")
+        now = ensure_iso8601(ts or utc_now_from_events(self) or utc_now())
+        detail_json = json.dumps(detail or {}, ensure_ascii=False)
+        existing = self.db.fetchone(
+            """
+            SELECT action_id FROM user_actions
+            WHERE person_id = ? AND kind = ? AND object = ? AND status = 'intended'
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (person_id, kind_clean, object_clean),
+        )
+        with self.db.transaction() as connection:
+            if existing is not None:
+                action_id = str(existing["action_id"])
+                connection.execute(
+                    """
+                    UPDATE user_actions
+                    SET source_event_id = COALESCE(?, source_event_id),
+                        created_at = ?,
+                        updated_at = ?,
+                        detail_json = ?,
+                        action_date = NULL
+                    WHERE action_id = ?
+                    """,
+                    (source_event_id, now, now, detail_json, action_id),
+                )
+            else:
+                action_id = f"ua_{uuid.uuid4().hex[:12]}"
+                connection.execute(
+                    """
+                    INSERT INTO user_actions(
+                        action_id, person_id, kind, object, status,
+                        action_date, source_event_id, created_at, updated_at, detail_json
+                    )
+                    VALUES (?, ?, ?, ?, 'intended', NULL, ?, ?, ?, ?)
+                    """,
+                    (
+                        action_id,
+                        person_id,
+                        kind_clean,
+                        object_clean,
+                        source_event_id,
+                        now,
+                        now,
+                        detail_json,
+                    ),
+                )
+        record = self._get_user_action(action_id)
+        assert record is not None
+        return record
+
+    def confirm(
+        self,
+        *,
+        action_id: str | None = None,
+        person_id: str | None = None,
+        kind: str | None = None,
+        object: str | None = None,
+        action_date: str | None = None,
+        source_event_id: str | None = None,
+        ts: str | None = None,
+    ) -> UserActionRecord | None:
+        """Confirm an intended action by id or (person_id, kind, object)."""
+        now = ensure_iso8601(ts or utc_now_from_events(self) or utc_now())
+        row = None
+        if action_id:
+            row = self.db.fetchone(
+                """
+                SELECT action_id, person_id, kind, object, status
+                FROM user_actions WHERE action_id = ?
+                """,
+                (action_id,),
+            )
+        elif person_id and kind and object:
+            row = self.db.fetchone(
+                """
+                SELECT action_id, person_id, kind, object, status
+                FROM user_actions
+                WHERE person_id = ? AND kind = ? AND object = ? AND status = 'intended'
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """,
+                (person_id, kind.strip(), object.strip()),
+            )
+        else:
+            raise ValueError("confirm requires action_id or person_id+kind+object")
+        if row is None:
+            return None
+        if str(row["status"]) == "confirmed":
+            return self._get_user_action(str(row["action_id"]))
+        day = action_date or _local_day_iso(now)
+        with self.db.transaction() as connection:
+            connection.execute(
+                """
+                UPDATE user_actions
+                SET status = 'confirmed',
+                    action_date = ?,
+                    source_event_id = COALESCE(?, source_event_id),
+                    updated_at = ?
+                WHERE action_id = ?
+                """,
+                (day, source_event_id, now, str(row["action_id"])),
+            )
+        return self._get_user_action(str(row["action_id"]))
+
+    def insert_confirmed(
+        self,
+        *,
+        person_id: str,
+        kind: str,
+        object: str,
+        action_date: str,
+        source_event_id: str | None = None,
+        detail: dict[str, Any] | None = None,
+        ts: str | None = None,
+    ) -> UserActionRecord:
+        """Self-report path — write confirmed without a prior intended row."""
+        self._ensure_person(person_id)
+        kind_clean = (kind or "").strip()
+        object_clean = (object or "").strip()
+        day = (action_date or "").strip()
+        if not kind_clean or not object_clean or not day:
+            raise ValueError("kind, object, and action_date are required")
+        now = ensure_iso8601(ts or utc_now_from_events(self) or utc_now())
+        action_id = f"ua_{uuid.uuid4().hex[:12]}"
+        detail_json = json.dumps(detail or {}, ensure_ascii=False)
+        with self.db.transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO user_actions(
+                    action_id, person_id, kind, object, status,
+                    action_date, source_event_id, created_at, updated_at, detail_json
+                )
+                VALUES (?, ?, ?, ?, 'confirmed', ?, ?, ?, ?, ?)
+                """,
+                (
+                    action_id,
+                    person_id,
+                    kind_clean,
+                    object_clean,
+                    day,
+                    source_event_id,
+                    now,
+                    now,
+                    detail_json,
+                ),
+            )
+        record = self._get_user_action(action_id)
+        assert record is not None
+        return record
+
+    def list_confirmed(
+        self,
+        *,
+        person_id: str,
+        kind: str = "meal",
+        limit: int = 10,
+    ) -> list[UserActionRecord]:
+        rows = self.db.fetchall(
+            """
+            SELECT action_id, person_id, kind, object, status, action_date,
+                   source_event_id, created_at, updated_at, detail_json
+            FROM user_actions
+            WHERE person_id = ? AND kind = ? AND status = 'confirmed'
+            ORDER BY action_date DESC, updated_at DESC
+            LIMIT ?
+            """,
+            (person_id, kind, max(1, limit)),
+        )
+        return [self._row_to_user_action(row) for row in rows]
+
+    def list_active_intended(
+        self,
+        *,
+        person_id: str,
+        kind: str = "meal",
+        max_age_hours: int | None = None,
+        now: str | None = None,
+    ) -> list[UserActionRecord]:
+        """Intended rows still within the age window (default 48h from created_at)."""
+        age_h = (
+            self._USER_ACTION_INTENDED_MAX_AGE_HOURS
+            if max_age_hours is None
+            else max(1, max_age_hours)
+        )
+        ref = parse_timestamp(now or utc_now_from_events(self) or utc_now())
+        cutoff = (ref - timedelta(hours=age_h)).isoformat(timespec="seconds")
+        rows = self.db.fetchall(
+            """
+            SELECT action_id, person_id, kind, object, status, action_date,
+                   source_event_id, created_at, updated_at, detail_json
+            FROM user_actions
+            WHERE person_id = ? AND kind = ? AND status = 'intended'
+              AND created_at >= ?
+            ORDER BY updated_at DESC
+            """,
+            (person_id, kind, cutoff),
+        )
+        return [self._row_to_user_action(row) for row in rows]
+
+    def list_recent_closed_loops(
+        self,
+        *,
+        person_id: str,
+        limit: int = 20,
+    ) -> list[OpenLoopRecord]:
+        rows = self.db.fetchall(
+            """
+            SELECT loop_id, topic, status, updated_at, detail_json
+            FROM open_loops
+            WHERE person_id = ? AND status = 'closed'
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (person_id, max(1, limit)),
+        )
+        records: list[OpenLoopRecord] = []
+        for row in rows:
+            detail = self._parse_loop_detail(str(row["detail_json"] or ""))
+            listed = self._loop_detail_for_list(detail)
+            listed["_list_updated_at"] = str(row["updated_at"])
+            records.append(
+                OpenLoopRecord(
+                    id=row["loop_id"],
+                    topic=str(row["topic"]),
+                    status=str(row["status"]),
+                    needs_date_confirmation=bool(detail.get("needs_date_confirmation")),
+                    ambiguous_phrases=list(detail.get("ambiguous_phrases") or []),
+                    detail=listed,
+                )
+            )
+        return records
+
+    def _get_user_action(self, action_id: str) -> UserActionRecord | None:
+        row = self.db.fetchone(
+            """
+            SELECT action_id, person_id, kind, object, status, action_date,
+                   source_event_id, created_at, updated_at, detail_json
+            FROM user_actions
+            WHERE action_id = ?
+            """,
+            (action_id,),
+        )
+        if row is None:
+            return None
+        return self._row_to_user_action(row)
+
+    @staticmethod
+    def _row_to_user_action(row: Any) -> UserActionRecord:
+        detail_raw = str(row["detail_json"] or "")
+        try:
+            detail = json.loads(detail_raw) if detail_raw else {}
+        except json.JSONDecodeError:
+            detail = {}
+        status = str(row["status"])
+        if status not in {"intended", "confirmed"}:
+            status = "intended"
+        return UserActionRecord(
+            action_id=str(row["action_id"]),
+            person_id=str(row["person_id"]),
+            kind=str(row["kind"]),
+            object=str(row["object"]),
+            status=status,  # type: ignore[arg-type]
+            action_date=str(row["action_date"]) if row["action_date"] else None,
+            source_event_id=str(row["source_event_id"]) if row["source_event_id"] else None,
+            created_at=str(row["created_at"]),
+            updated_at=str(row["updated_at"]),
+            detail=detail if isinstance(detail, dict) else {},
+        )
+
+
+def utc_now_from_events(store: RelationshipStore) -> str | None:
+    """Prefer latest event ts when available (deterministic tests)."""
+    try:
+        return store.events.get_latest_timestamp()
+    except Exception:
+        return None
+
+
+def _local_day_iso(ts: str, *, tz_name: str = DEFAULT_TIMEZONE) -> str:
+    local = parse_timestamp(ts).astimezone(ZoneInfo(tz_name))
+    return local.date().isoformat()
 
 
 def _normalize_topic(text: str) -> str:

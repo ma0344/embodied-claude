@@ -67,6 +67,7 @@ from presence_ui.gateway.soul_prefetch import (
     soul_read_prefetch_block,
 )
 from presence_ui.gateway.surface_direct import compose_omit_session_transcript_in_compact
+from presence_ui.gateway.user_action_meal import maybe_enrich_user_action_meals
 from presence_ui.gateway.user_intent import (
     ibf_gateway_speak_enabled,
     merge_intent_with_plan,
@@ -625,6 +626,15 @@ def _finish_intercept_chat_request(
     )
     if bridge_label:
         gateway_events.append(progress_event(phase="memory", label=bridge_label))
+    ctx, meal_label = maybe_enrich_user_action_meals(
+        ctx,
+        user_text=message,
+        max_chars=compose_max_chars,
+        relationship=stores.relationship,
+        prefetch_fact_check=prefetch_fact_check,
+    )
+    if meal_label:
+        gateway_events.append(progress_event(phase="memory", label=meal_label))
     ctx = enrich_interaction_context(ctx, channel="chat", user_text=message)
     plan = plan_response(
         PlanResponseInput(

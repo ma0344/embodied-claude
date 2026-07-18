@@ -28,6 +28,23 @@ class OpenLoopRecord(BaseModel):
     detail: dict[str, Any] = Field(default_factory=dict)
 
 
+class UserActionRecord(BaseModel):
+    """Point-in-time action record (UserAction meal v0)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action_id: str
+    person_id: str
+    kind: str
+    object: str
+    status: Literal["intended", "confirmed"]
+    action_date: str | None = None
+    source_event_id: str | None = None
+    created_at: str
+    updated_at: str
+    detail: dict[str, Any] = Field(default_factory=dict)
+
+
 class DismissOutcome(BaseModel):
     """Open loops closed and commitments cancelled from a dismiss utterance."""
 

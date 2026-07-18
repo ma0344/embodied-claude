@@ -194,6 +194,30 @@ async def _ingest_human_core_async(
             )
         except Exception as exc:
             hook_failures.append(record_ingest_hook_failure("llm_reminder_spec", exc))
+    try:
+        from presence_ui.gateway.user_action_meal import (
+            try_encode_user_action_meal,
+            user_actions_meal_enabled,
+        )
+
+        if user_actions_meal_enabled() and person_id.strip().lower() == "ma":
+            meal = try_encode_user_action_meal(
+                stores.relationship,
+                person_id=person_id,
+                text=text,
+                ts=when,
+                source_event_id=event_id,
+            )
+            if meal.route != "none":
+                logger.info(
+                    "UserAction meal: route=%s object=%s action_id=%s utterance=%r",
+                    meal.route,
+                    meal.object,
+                    meal.action_id,
+                    text[:80],
+                )
+    except Exception as exc:
+        hook_failures.append(record_ingest_hook_failure("user_action_meal", exc))
     return HumanIngestResult(
         event_id=event_id,
         dismiss_outcome=outcome,

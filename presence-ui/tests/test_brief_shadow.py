@@ -136,6 +136,46 @@ def test_stable_append_forbids_speaking_brief_shadow() -> None:
     assert "ua_candidates" in GATEWAY_STABLE_APPEND
 
 
+def test_coerce_dump_shaped_recipe_topic_only() -> None:
+    """Live dump shape: recipe note without web_search + topic_only/propose mismatch."""
+    raw = json.dumps(
+        {
+            "jobs": [
+                {
+                    "id": "j1",
+                    "kind": "surface_reply",
+                    "parallel": True,
+                    "note": "recipe idea generation",
+                }
+            ],
+            "ua_candidates": [
+                {
+                    "kind": "meal",
+                    "status": "intended",
+                    "object": "allowlist_or_-",
+                    "write": "propose",
+                    "reason": "topic_only",
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+    parsed = parse_brief_shadow_response(raw)
+    assert parsed is not None
+    kinds = {j.kind for j in parsed.jobs}
+    assert "surface_reply" in kinds
+    assert "web_search" in kinds
+    assert len(parsed.ua_candidates) == 1
+    ua = parsed.ua_candidates[0]
+    assert ua.write == "skip"
+    assert ua.status == "skip"
+    assert ua.object == "-"
+    assert ua.reason == "topic_only"
+    block = format_brief_shadow_block(parsed)
+    assert "write=propose" not in block
+    assert "allowlist" not in block
+
+
 def test_ate_self_report_may_propose_but_is_shadow_only() -> None:
     raw = json.dumps(
         {

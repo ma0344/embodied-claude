@@ -32,25 +32,45 @@ Output ONE JSON object only (no markdown fences). No side effects — classify o
 Schema (minimal):
 {
   "jobs": [
-    {"id": "j1", "kind": "surface_reply|web_search|other", "parallel": true|false, "note": "short"}
+    {"id": "j1", "kind": "surface_reply", "parallel": true, "note": "short"},
+    {"id": "j2", "kind": "web_search", "parallel": true, "note": "recipe search for listed ingredients"}
   ],
   "ua_candidates": [
-    {"kind": "meal|-", "status": "intended|confirmed|skip", "object": "allowlist_or_-",
-     "write": "propose|skip", "reason": "topic_only|self_report|plan|ambiguous|none|…"}
+    {"kind": "meal", "status": "skip", "object": "-",
+     "write": "skip", "reason": "topic_only"}
   ]
 }
 
+kind for jobs must be exactly one of: surface_reply, web_search, other.
+object must be a concrete meal word (e.g. カレー) or "-" — never copy schema placeholders.
+
 Rules:
 - Always include at least one job; usually surface_reply.
-- If the user lists ingredients / fridge contents and asks for ideas/recipes, include BOTH
-  surface_reply and web_search (both parallel=true). web_search note should mention recipe/idea.
-- Topic-only meal talk (ideas, ingredients, questions) → ua write=skip, reason=topic_only
-  (or ua_candidates=[]). Do NOT propose meal write for "いいアイデアある？" style.
+- If the user lists ingredients / fridge contents and asks for ideas/recipes, you MUST include
+  BOTH surface_reply and web_search (both parallel=true). web_search note mentions recipe/idea.
+- Topic-only meal talk (ideas, ingredients, questions like いいアイデアある？) →
+  ua write MUST be skip, status skip, reason=topic_only (or ua_candidates=[]).
+  Never write=propose when reason=topic_only.
 - Past meal self-report ("食べた") → kind=meal status=confirmed write=propose (shadow only).
 - Dinner plan ("にする") → kind=meal status=intended write=propose (shadow only).
-- Unknown / no UA signal → ua_candidates=[] or kind=- status=skip write=skip.
+- Unknown / no UA signal → ua_candidates=[].
 - Do not invent jobs for calendar/prefetch/TEMP-C; those stay outside this Brief.
 """
+
+# Schema placeholders the classifier sometimes echoes into object=.
+_UA_OBJECT_PLACEHOLDERS = frozenset(
+    {
+        "-",
+        "allowlist_or_-",
+        "allowlist",
+        "object",
+        "<meal allowlist word or ->",
+        "meal",
+    }
+)
+
+# Mechanical tokens from classifier notes — not open-ended NL parsing of user text.
+_RECIPE_NOTE_MARKERS = ("recipe", "レシピ", "献立", "idea")
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,7 +182,50 @@ def parse_brief_shadow_response(text: str) -> BriefShadowResult | None:
                 )
             )
 
-    return BriefShadowResult(jobs=tuple(jobs), ua_candidates=tuple(ua_list))
+    return _coerce_brief_shadow(
+        BriefShadowResult(jobs=tuple(jobs), ua_candidates=tuple(ua_list))
+    )
+
+
+def _coerce_brief_shadow(result: BriefShadowResult) -> BriefShadowResult:
+    """Deterministic coherence fixes after classify (not NL understanding of user text)."""
+    jobs = list(result.jobs)
+    kinds = {j.kind for j in jobs}
+    notes_blob = " ".join(j.note.lower() for j in jobs)
+    if "web_search" not in kinds and any(m in notes_blob for m in _RECIPE_NOTE_MARKERS):
+        jobs.append(
+            BriefShadowJob(
+                id=f"j{len(jobs) + 1}",
+                kind="web_search",
+                parallel=True,
+                note="recipe/idea search (coerced from reply note)",
+            )
+        )
+
+    ua_list: list[BriefShadowUaCandidate] = []
+    for ua in result.ua_candidates:
+        write = ua.write
+        status = ua.status
+        obj = ua.object
+        reason = ua.reason
+        if reason == "topic_only" or reason.endswith("topic_only"):
+            write = "skip"
+            status = "skip"
+        low_obj = obj.strip().lower()
+        if low_obj in {p.lower() for p in _UA_OBJECT_PLACEHOLDERS} or "allowlist" in low_obj:
+            obj = "-"
+        if write == "skip" and status in {"intended", "confirmed"} and reason == "topic_only":
+            status = "skip"
+        ua_list.append(
+            BriefShadowUaCandidate(
+                kind=ua.kind,
+                status=status,
+                object=obj,
+                write=write,
+                reason=reason,
+            )
+        )
+    return BriefShadowResult(jobs=tuple(jobs), ua_candidates=tuple(ua_list), error=result.error)
 
 
 def format_brief_shadow_block(result: BriefShadowResult) -> str:

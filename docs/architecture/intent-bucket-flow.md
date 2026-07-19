@@ -92,7 +92,9 @@ MCP サーバーは **Flow の実装の一つ**。CLI `/talk` 用に `.mcp.json`
 | **TEMP-C Stage1 · MEM-8h ルート** | Brief の **投影・断面**（自分で意味を取り直さない側へ寄せる） |
 | **UserAction（行動記録）** | Brief が決めた意味の **実行器**（自己申告→confirmed、計画→intended、話題だけ書かない） |
 
-**影モード v0（2026-07-19）**: `PRESENCE_BRIEF_SHADOW` ON 時、native chat 受信直後に e4b 単発で `[brief_shadow]` を `gateway_turn_context` へ注入する（jobs / ua_candidates の行フォーマットのみ）。**実行しない**（web_search・UA 書込・TEMP-C/prefetch 置換なし）。こよりはブロック内容を口に出さない。
+**S0（意味分解 · 2026-07-19）**: Brief の手前段。発話を `spans[]`（各 span に `ask` 1つ）へ分解する。ask 閉集合 = `greeting|report|consult|request|correction|other`。複合は分割。S1 `utterance_kind` は **投影**（Brief+S1 を1分類器にしない）。影段は既存 S1 挙動のまま不一致はログのみ、投影以降は Brief 優先・不能=`other`。金例・境界表 → [brief-s0-spans.md](../tracks/brief-s0-spans.md)。
+
+**影モード v0（2026-07-19）**: `PRESENCE_BRIEF_SHADOW` ON 時、native chat 受信直後に e4b 単発で `[brief_shadow]` を `gateway_turn_context` へ注入する（jobs / ua_candidates の行フォーマットのみ · **S0 spans とは別スキーマ**）。**実行しない**（web_search・UA 書込・TEMP-C/prefetch 置換なし）。こよりはブロック内容を口に出さない。
 
 **この節に書かない**（肥大化防止）: Brief の JSON スキーマ確定、既存ゲートの置き換え手順、実装フェーズ表。
 
@@ -338,7 +340,10 @@ effective_buckets = merge(intent, plan)
 | 用語 | 意味 |
 |------|------|
 | **Intent** | まー（+文脈）が求めているニーズの構造化表現（`UserIntent`: wants_speech / wants_observe / …） |
-| **受信時ブリーフ（Brief）** | 受信直後の構造化指示（原則 D）。ルート組み立ての正本候補。**影 v0 観測のみ**（`[brief_shadow]`） |
+| **受信時ブリーフ（Brief）** | 受信直後の構造化指示（原則 D）。意味の正本候補。**影 v0**（`[brief_shadow]`）· **S0**（spans/ask） |
+| **S0** | Brief の意味分解段。`spans[]` + `ask`。S1 の上位。金例 → [brief-s0-spans.md](../tracks/brief-s0-spans.md) |
+| **ask** | S0 の求められ方（greeting / report / consult / request / correction / other） |
+| **span** | 発話内の1事柄単位。1 span = ask 1つ |
 | **Bucket** | 会話経路のモダリティ省略ラベル。正規名ではない（§5.1） |
 | **Flow** | gateway の Python/HTTP 実行経路 |
 | **Plan** | `plan_response` の `primary_move` / initiative / voice |
@@ -356,3 +361,4 @@ effective_buckets = merge(intent, plan)
 | 2026-06-17 | IBF-7 — `benchmarks/intent_router` offline rules vs LLM intent diff |
 | 2026-07-19 | 原則 D — 受信時ブリーフ正本（思想・未実装）。並列 jobs · UA 実行器との関係 |
 | 2026-07-19 | 原則 D 影モード v0 — `[brief_shadow]` 観測注入（実行・置換なし） |
+| 2026-07-19 | S0 span ラベル規約 — ask 閉集合 · 金例 · Brief+S1 非統合（[brief-s0-spans.md](../tracks/brief-s0-spans.md)） |

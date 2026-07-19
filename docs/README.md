@@ -178,6 +178,7 @@ docs/
 | [gateway-direct-actions.md](./architecture/gateway-direct-actions.md) | gateway 直実行            |
 | [heartbeat-loop.md](./architecture/heartbeat-loop.md)                 | pulse・BIO              |
 | [intent-bucket-flow.md](./architecture/intent-bucket-flow.md)         | IBF · 受信時ブリーフ（原則 D） |
+| [brief-s0-spans.md](./tracks/brief-s0-spans.md)                       | Brief S0 · span/ask 金例規約 |
 | [open-loops-reminders.md](./architecture/open-loops-reminders.md)     | OL・OL-GATE             |
 
 

@@ -108,11 +108,11 @@ def _parse_to_date(raw: str | date | datetime | None, *, tz_name: str = "Asia/To
 
 
 def format_jp_month_day(raw: str | date | datetime | None, *, tz_name: str = "Asia/Tokyo") -> str | None:
-    """Format as ``7月1日`` for surface hints."""
+    """Format as ``2026年7月1日`` (year included — bare M月D日 forward-anchors on inject)."""
     day = _parse_to_date(raw, tz_name=tz_name)
     if day is None:
         return None
-    return f"{day.month}月{day.day}日"
+    return f"{day.year}年{day.month}月{day.day}日"
 
 
 def _food_surface_label(food: str) -> str:
@@ -127,7 +127,7 @@ def format_food_topic_fact(
 ) -> str:
     """One-line meal record hint for bridge / compose.
 
-    Example: ``まーは直近で7月1日に麺類（蕎麦）を食べた記録がある``
+    Example: ``まーは直近で2026年7月1日に麺類（蕎麦）を食べた記録がある``
     """
     day = format_jp_month_day(on_date, tz_name=tz_name) or "最近"
     label = _food_surface_label(food)
@@ -146,7 +146,7 @@ def format_cook_topic_fact(
 ) -> str:
     """Cook-only card — does not claim the meal was eaten.
 
-    Example: ``まーは直近で7月1日にカレーを作った記録がある``
+    Example: ``まーは直近で2026年7月1日にカレーを作った記録がある``
     """
     day = format_jp_month_day(on_date, tz_name=tz_name) or "最近"
     label = _food_surface_label(food)

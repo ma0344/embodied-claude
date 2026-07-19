@@ -82,6 +82,12 @@ def is_meal_record_fact(content: str) -> bool:
     return "を食べた記録がある" in (content or "")
 
 
+def is_action_record_fact(content: str) -> bool:
+    """Meal/cook dated cards — do not forward-anchor bare M月D日 on inject."""
+    text = content or ""
+    return "を食べた記録がある" in text or "を作った記録がある" in text
+
+
 def literary_user_cue(user_text: str) -> bool:
     """まー is asking about / continuing a reading thread."""
     return bool(_LITERARY_USER_CUE.search((user_text or "").strip()))

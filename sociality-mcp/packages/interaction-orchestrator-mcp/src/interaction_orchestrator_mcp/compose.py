@@ -33,6 +33,7 @@ from .memory_adapter import (
 )
 from .recall_query import (
     extract_schedule_facts,
+    is_action_record_fact,
     is_episodic_blob,
     is_temporal_question,
     temporal_schedule_contract_enabled,
@@ -182,13 +183,18 @@ def compose_interaction_context(
                 uttered_day = as_of_date(as_of_ts=hit.timestamp, tz_name=policy_timezone)
             except ValueError:
                 uttered_day = compose_as_of
-        content = reexpress_deixis_for_inject(
-            hit.content,
-            uttered_day=uttered_day,
-            as_of=compose_as_of,
-            uttered_at_iso=hit.timestamp or None,
-            tz_name=policy_timezone,
-        )
+        # Meal/cook cards use bare or dated calendar days as facts. Forward-anchoring
+        # bare M月D日 (next-year roll) produces ghosts like 2027年7月18日.
+        if is_action_record_fact(hit.content):
+            content = hit.content
+        else:
+            content = reexpress_deixis_for_inject(
+                hit.content,
+                uttered_day=uttered_day,
+                as_of=compose_as_of,
+                uttered_at_iso=hit.timestamp or None,
+                tz_name=policy_timezone,
+            )
         use_policy = hit.use_policy
         reason = hit.reason
         if is_stale_schedule_memory(

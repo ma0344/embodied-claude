@@ -26,14 +26,14 @@ def test_foods_mentioned_prefers_specific_tokens() -> None:
 
 
 def test_format_meal_record_hint() -> None:
-    assert format_jp_month_day("2026-07-01") == "7月1日"
+    assert format_jp_month_day("2026-07-01") == "2026年7月1日"
     line = format_food_topic_fact("蕎麦", on_date="2026-07-01")
-    assert line == "まーは直近で7月1日に麺類（蕎麦）を食べた記録がある"
+    assert line == "まーは直近で2026年7月1日に麺類（蕎麦）を食べた記録がある"
     assert "麺類" in line
     curry = format_food_topic_fact("カレー", on_date="2026-06-15")
-    assert curry == "まーは直近で6月15日にカレーを食べた記録がある"
+    assert curry == "まーは直近で2026年6月15日にカレーを食べた記録がある"
     cook = format_cook_topic_fact("カレー", on_date="2026-06-15")
-    assert cook == "まーは直近で6月15日にカレーを作った記録がある"
+    assert cook == "まーは直近で2026年6月15日にカレーを作った記録がある"
     assert "食べた" not in cook
 
 

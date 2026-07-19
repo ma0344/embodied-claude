@@ -49,6 +49,17 @@ class TestRecallQuery:
         assert literary_user_cue("羅生門どうやった？")
         assert not literary_user_cue("大丈夫。ぼーっとしとるわけではないで（笑）")
 
+    def test_action_record_fact_detects_meal_and_cook(self):
+        from interaction_orchestrator_mcp.recall_query import is_action_record_fact
+
+        assert is_action_record_fact(
+            "まーは直近で7月18日に麺類（蕎麦）を食べた記録がある"
+        )
+        assert is_action_record_fact(
+            "まーは直近で2026年7月1日にカレーを作った記録がある"
+        )
+        assert not is_action_record_fact("まーが蕎麦の話をした（食事の話題）")
+
     def test_temporal_query_uses_gist_schedule(self):
         queries = build_recall_queries(
             purpose="compose",

@@ -178,6 +178,83 @@ class TestComposeSalience:
         assert adjusted[0].use_policy == "mentionable"
         assert adjusted[0].reason == "somatic_escalation_push_in_scope"
 
+    def test_vision_caption_dumps_demoted(self) -> None:
+        samples = [
+            "=== VISION_CAPTION === 部屋の奥には棚がある",
+            "--- Center View (room scan) ---\n机の上にコップ",
+            "Captured image at 2026-07-19T02:00:00+00:00",
+        ]
+        for content in samples:
+            adjusted = apply_compose_memory_salience(
+                [_mem(content)],
+                user_text="今日の晩御飯は何にしよ？",
+                person_id="ma",
+                db=None,
+            )
+            mentionable, background = select_surface_memories(adjusted)
+            assert not mentionable, content
+            assert not background, content
+            assert adjusted[0].use_policy == "do_not_surface"
+            assert adjusted[0].reason == "vision_caption_off_topic"
+
+    def test_literary_desire_prefix_demoted_without_reading_cue(self) -> None:
+        literary = _mem(
+            "[desire:literary_wander] 青空文庫で読んだ『羅生門』（芥川龍之介）— "
+            "下人は、老婆をつき放すと"
+        )
+        adjusted = apply_compose_memory_salience(
+            [literary],
+            user_text="大丈夫。ぼーっとしとるわけではないで（笑）",
+            person_id="ma",
+            db=None,
+        )
+        mentionable, background = select_surface_memories(adjusted)
+        assert not mentionable
+        assert not background
+        assert adjusted[0].use_policy == "do_not_surface"
+        assert adjusted[0].reason == "literary_passage_off_topic"
+
+    def test_literary_kangaeta_prefix_demoted(self) -> None:
+        literary = _mem("考えた。青空『羅生門』— 下人は、老婆をつき放すと")
+        adjusted = apply_compose_memory_salience(
+            [literary],
+            user_text="今日の晩御飯は何にしよ？",
+            person_id="ma",
+            db=None,
+        )
+        mentionable, background = select_surface_memories(adjusted)
+        assert not mentionable
+        assert not background
+        assert adjusted[0].use_policy == "do_not_surface"
+        assert adjusted[0].reason == "literary_passage_off_topic"
+
+    def test_desire_satisfaction_telemetry_demoted(self) -> None:
+        desire = _mem("[desire:observe_room] 部屋を一通り見た。特に変化なし。")
+        adjusted = apply_compose_memory_salience(
+            [desire],
+            user_text="今日の晩御飯は何にしよ？",
+            person_id="ma",
+            db=None,
+        )
+        mentionable, background = select_surface_memories(adjusted)
+        assert not mentionable
+        assert not background
+        assert adjusted[0].use_policy == "do_not_surface"
+        assert adjusted[0].reason == "desire_satisfaction_telemetry"
+
+    def test_meal_record_not_demoted_by_new_filters(self) -> None:
+        meal = _mem("まーは直近で7月1日に麺類（蕎麦）を食べた記録がある")
+        adjusted = apply_compose_memory_salience(
+            [meal],
+            user_text="今日の晩御飯は何にしよ？",
+            person_id="ma",
+            db=None,
+        )
+        mentionable, _ = select_surface_memories(adjusted)
+        assert len(mentionable) == 1
+        assert adjusted[0].use_policy == "mentionable"
+        assert adjusted[0].reason == "test"
+
 
 class TestTopicRetire:
     def test_completion_detection_finite_markers(self) -> None:

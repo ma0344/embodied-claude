@@ -30,8 +30,13 @@ def test_literary_prefixes() -> None:
     assert is_literary_agent_surface("青空文庫で読んだ『羅生門』— 下人は")
     assert is_literary_agent_surface("青空『羅生門』を読んだ")
     assert is_literary_agent_surface("（青空を読んだあと — 咀嚼）\n本文")
+    assert is_literary_agent_surface(
+        "[desire:literary_wander] 青空文庫で読んだ『羅生門』— 下人は"
+    )
+    assert is_literary_agent_surface("考えた。青空『羅生門』を読んだ")
     assert not is_literary_agent_surface("まーと散歩の約束をした")
     assert not is_literary_agent_surface("羅生門どうやった？")
+    assert not is_literary_agent_surface("[desire:observe_room] 部屋を見た")
 
 
 def test_overnight_contaminated() -> None:

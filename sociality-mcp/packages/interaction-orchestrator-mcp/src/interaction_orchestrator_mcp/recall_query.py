@@ -56,6 +56,7 @@ _VISION_BRIDGE_MARKERS = (
     "=== VISION_DESCRIBE_FAILED",
     "VISION_DESCRIBE_FAILED",
     "Captured image at ",
+    "Center View",
 )
 
 
@@ -65,6 +66,11 @@ def is_vision_bridge_noise(content: str) -> bool:
     if not text:
         return True
     return any(marker in text for marker in _VISION_BRIDGE_MARKERS)
+
+
+def is_desire_satisfaction_telemetry(content: str) -> bool:
+    """True for agent desire-satisfaction dumps (``[desire:…]`` encode lines)."""
+    return (content or "").strip().startswith("[desire:")
 
 
 def is_legacy_food_talk_fact(content: str) -> bool:

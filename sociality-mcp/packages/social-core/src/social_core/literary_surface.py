@@ -26,9 +26,25 @@ _LITERARY_OVERNIGHT_MARKERS: tuple[str, ...] = (
 )
 
 
+def _strip_agent_surface_wrappers(text: str) -> str:
+    """Peel finite agent wrappers before literary prefix match.
+
+    DB rows often look like ``[desire:literary_wander] 青空…`` or
+    ``考えた。青空『…`` — bare ``startswith`` on the raw line misses them.
+    """
+    cleaned = (text or "").strip()
+    if cleaned.startswith("[desire:"):
+        close = cleaned.find("]")
+        if close != -1:
+            cleaned = cleaned[close + 1 :].lstrip()
+    if cleaned.startswith("考えた。"):
+        cleaned = cleaned[len("考えた。") :].lstrip()
+    return cleaned
+
+
 def is_literary_agent_surface(text: str) -> bool:
     """True for agent LW-READ / PAUSE encode lines (not user book talk)."""
-    cleaned = (text or "").strip()
+    cleaned = _strip_agent_surface_wrappers(text)
     if not cleaned:
         return False
     return any(cleaned.startswith(prefix) for prefix in LITERARY_AGENT_PREFIXES)

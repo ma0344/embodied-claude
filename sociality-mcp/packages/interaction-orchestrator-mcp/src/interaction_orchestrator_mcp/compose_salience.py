@@ -6,11 +6,13 @@ from typing import TYPE_CHECKING
 
 from interaction_orchestrator_mcp.memory_adapter import _extract_keywords
 from interaction_orchestrator_mcp.recall_query import (
+    is_desire_satisfaction_telemetry,
     is_episodic_blob,
     is_legacy_food_talk_fact,
     is_literary_agent_passage,
     is_meal_record_fact,
     is_somatic_escalation_push_passage,
+    is_vision_bridge_noise,
     literary_user_cue,
 )
 from interaction_orchestrator_mcp.schemas import RelevantMemoryRef
@@ -74,15 +76,28 @@ def apply_compose_memory_salience(
         episodic = is_episodic_blob(mem.content)
         literary = is_literary_agent_passage(mem.content)
         somatic_push = is_somatic_escalation_push_passage(mem.content)
+        vision_noise = is_vision_bridge_noise(mem.content)
+        desire_telemetry = is_desire_satisfaction_telemetry(mem.content)
 
         if episodic or "会話の区切り" in mem.content or "会話の一区切り" in mem.content:
             policy = "background_only"
             reason = "episodic_not_for_surface"
+        if desire_telemetry:
+            # Agent satisfaction encode lines — not speakable cross-session gists.
+            # Writing stop / purge is out of scope; compose demote only.
+            policy = "do_not_surface"
+            reason = "desire_satisfaction_telemetry"
         if literary and not reading_cue:
             # LW-READ dumps are agent-internal; do not let them ride mentionable
-            # on unrelated turns (羅生門 × 大丈夫).
+            # on unrelated turns (羅生門 × 大丈夫). Wins over desire reason when
+            # the line is `[desire:literary_…] 青空…`.
             policy = "do_not_surface"
             reason = "literary_passage_off_topic"
+        if vision_noise:
+            # Past VISION / Center View dumps — live see uses [vision_prefetch].
+            # Always demote; no undemote gate (unlike somatic).
+            policy = "do_not_surface"
+            reason = "vision_caption_off_topic"
         if somatic_push and not health_safety_active:
             # BIO-8d push template — keep off dinner/chitchat surfaces unless
             # escalation is currently elevated/critical.

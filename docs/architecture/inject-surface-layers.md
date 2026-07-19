@@ -57,13 +57,13 @@
 | `[Social move]` / `[Action]` | 今ターンの一手 |
 | `[response_contract]` | **薄い念押し** — `treat_user_as` 短札 + `initiative` / `max_clarifying`。定番 prefer・口調は Deep（SOUL）。quiet/autonomous 差分だけ厚くなる |
 | `[recent_room_context]` | **この部屋の台本**（本流） |
-| `[somatic_state]` | 器官の短い状態 |
 | 今ターンの生発話 | user 末尾 |
 
 ### 表層に近い（知ってるが喋らへん）
 
 | ブロック | 役割 |
 |----------|------|
+| `[somatic_state]` | **異常時のみ**詳述（Encode広く≠Inject狭く）。正常時は要約行 `somatic=ok` のみ。自発の「問題ないでぇ」はしない；まーから調子・異常を聞かれたときだけ口にしてよい |
 | `[calendar_expectations — background only]` | S2 · know≠speak。聞かれた／リマインド経路のときだけ言及 |
 | desires の数値・discomfort | 判断・自律の材料。会話のネタにしないのが既定 |
 | `Relevant memories: N (mentionable: 0)` | 件数だけ見える状態。中身は mentionable 時のみ表層 |

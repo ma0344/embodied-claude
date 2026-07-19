@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -16,6 +17,8 @@ from presence_ui.services.body_state import (
     somatic_state_dict,
     unreported_pending,
 )
+
+_SOMATIC_TOKEN_RE = re.compile(r"\bsomatic=\S+")
 
 
 def _local_hour(local_time: str, timezone: str) -> int | None:
@@ -33,6 +36,53 @@ def is_morning_digest_window(*, local_time: str, timezone: str) -> bool:
     return hour is not None and 6 <= hour < 10
 
 
+def somatic_detail_inject_needed(somatic: dict[str, Any]) -> bool:
+    """True when [somatic_state] detail block should be injected."""
+    degraded = somatic.get("degraded_organs") or []
+    pending = somatic.get("pending_unreported") or []
+    escalation = somatic.get("escalation") or {}
+    level = str(escalation.get("level") or "none")
+    return bool(degraded) or level != "none" or bool(pending)
+
+
+def somatic_summary_token(somatic: dict[str, Any]) -> str:
+    """Compact summary token for prompt_summary / interaction_context line."""
+    if not somatic_detail_inject_needed(somatic):
+        return "somatic=ok"
+    escalation = somatic.get("escalation") or {}
+    level = str(escalation.get("level") or "none")
+    if level == "none":
+        return "somatic=attention"
+    return f"somatic={level}"
+
+
+def apply_somatic_summary_token(summary: str, token: str) -> str:
+    """Attach or replace a single somatic=* token in the summary line."""
+    text = (summary or "").strip()
+    if _SOMATIC_TOKEN_RE.search(text):
+        return _SOMATIC_TOKEN_RE.sub(token, text, count=1)
+    if text:
+        return f"{text} {token}"
+    return token
+
+
+def _sync_summary_in_compact(compact: str, old_summary: str, new_summary: str) -> str:
+    """Keep compact's interaction_context summary line in sync with prompt_summary."""
+    text = compact.strip()
+    if not text:
+        return f"[interaction_context]\n{new_summary}"
+    if old_summary and old_summary in text:
+        return text.replace(old_summary, new_summary, 1)
+    if text.startswith("[interaction_context]"):
+        parts = text.split("\n", 2)
+        if len(parts) >= 2:
+            rest = parts[2] if len(parts) > 2 else ""
+            if rest:
+                return f"{parts[0]}\n{new_summary}\n{rest}"
+            return f"{parts[0]}\n{new_summary}"
+    return text
+
+
 def build_somatic_prompt_block(
     *,
     somatic: dict[str, Any],
@@ -42,16 +92,14 @@ def build_somatic_prompt_block(
     channel: str,
     user_text: str | None,
 ) -> str:
+    """Detail block for abnormal somatic only. No 'organs mostly ok' filler."""
     lines = ["[somatic_state]"]
     degraded = somatic.get("degraded_organs") or []
-    if degraded:
-        for item in degraded[:4]:
-            organ_ja = item.get("organ_ja") or item.get("organ")
-            lines.append(
-                f"- {organ_ja}: {item.get('status')} — {(item.get('summary') or '')[:120]}"
-            )
-    else:
-        lines.append("- 器官はおおむね正常（直近 probe）")
+    for item in degraded[:4]:
+        organ_ja = item.get("organ_ja") or item.get("organ")
+        lines.append(
+            f"- {organ_ja}: {item.get('status')} — {(item.get('summary') or '')[:120]}"
+        )
 
     pending = somatic.get("pending_unreported") or []
     if pending:
@@ -96,7 +144,7 @@ def enrich_interaction_context(
     channel: str | None = None,
     user_text: str | None = None,
 ) -> InteractionContext:
-    """Append somatic block and attach somatic_state for plan."""
+    """Append somatic detail when abnormal; always attach somatic_state for plan."""
     state = load_body_state()
     somatic = somatic_state_dict(state)
     quiet = quiet_active
@@ -123,24 +171,35 @@ def enrich_interaction_context(
         health_safety_active=health_safety_active,
     )
 
-    block = build_somatic_prompt_block(
-        somatic=somatic,
-        quiet_active=bool(quiet),
-        local_time=ctx.local_time,
-        timezone=ctx.timezone,
-        channel=channel or "chat",
-        user_text=user_text,
+    token = somatic_summary_token(somatic)
+    old_summary = (ctx.prompt_summary or "").strip()
+    new_summary = apply_somatic_summary_token(old_summary, token)
+    compact = _sync_summary_in_compact(
+        ctx.compact_prompt_block or "",
+        old_summary,
+        new_summary,
     )
-    compact = ctx.compact_prompt_block.strip()
-    if compact:
-        compact = f"{compact}\n\n{block}"
-    else:
-        compact = block
+
+    if somatic_detail_inject_needed(somatic):
+        block = build_somatic_prompt_block(
+            somatic=somatic,
+            quiet_active=bool(quiet),
+            local_time=ctx.local_time,
+            timezone=ctx.timezone,
+            channel=channel or "chat",
+            user_text=user_text,
+        )
+        if compact.strip():
+            compact = f"{compact.rstrip()}\n\n{block}"
+        else:
+            compact = block
+
     from presence_ui.gateway.prompt_block_safe import truncate_prompt_text
 
     ctx = ctx.model_copy(
         update={
             "compact_prompt_block": truncate_prompt_text(compact, max_len),
+            "prompt_summary": new_summary,
             "somatic_state": somatic,
         }
     )

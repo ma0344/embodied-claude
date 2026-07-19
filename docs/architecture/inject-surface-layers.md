@@ -83,6 +83,7 @@
 | `[stm_recent]` | 短期バッファ。**部屋の台本ではない**。episode_close / tick テンプレは注入スキップ（TRIM） |
 | `[recent_experiences]` | **会話 compose からは omit**（INJECT-TRIM）。DB / `agent_state` / status / daybook / STM 充填は残す。会話履歴の代替にしない |
 | `[memory_bridge]` / mentionable 食事カード | **跨 session の向きつき短冊**（例: 麺類（蕎麦）の日付付き記録）。巨大 KG ではない → [spontaneity 向きつき短冊](../tracks/spontaneity.md#向きつき短冊ネットワーク合意-2026-07-18) |
+| `[brief_shadow]` | 受信時 Brief の **影観測**（jobs / ua_candidates）。台本でも契約でもない。口に出さない · 実行しない |
 
 ---
 

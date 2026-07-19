@@ -130,6 +130,82 @@ def test_run_dreaming_skips_literary_ltm_promote(dream_env):
     assert result.remembered_count == 1
 
 
+def test_run_dreaming_skips_somatic_escalation_push_ltm(dream_env):
+    _db_path, db, getter = dream_env
+    stm = StmStore(db)
+    stm.append(
+        summary="体の調子がおかしいで。目と声が同時にダメかも。見てもらえる？",
+        kind="body_affliction",
+        source="experience_mirror",
+        person_id="ma",
+        ts="2026-06-16T22:00:00+09:00",
+        timezone="Asia/Tokyo",
+        importance=5,
+        metadata={"emotion_tag": "neutral", "importance": 5, "escalation_push": True},
+    )
+    stm.append(
+        summary="まーと散歩の約束をした",
+        kind="episode_close",
+        source="episode_summary",
+        person_id="ma",
+        session_id="sess_soma",
+        ts="2026-06-16T20:00:00+09:00",
+        timezone="Asia/Tokyo",
+    )
+
+    with (
+        patch(
+            "presence_ui.services.dreaming.http_remember",
+            return_value={"ok": True, "memory_id": "m1"},
+        ) as remember_mock,
+        patch(
+            "presence_ui.services.dreaming.http_consolidate",
+            return_value={"ok": True, "stats": {}},
+        ),
+    ):
+        result = run_dreaming_job(person_id="ma", local_day="2026-06-16", force=True)
+
+    assert remember_mock.call_count == 1
+    assert "散歩" in remember_mock.call_args.kwargs["content"]
+    assert result.remembered_count == 1
+    assert "体の調子" in result.digest_summary
+    undreamed = stm.count_undreamed(person_id="ma", local_day="2026-06-16")
+    assert undreamed == 0
+
+
+def test_run_dreaming_promotes_non_escalation_body_affliction(dream_env):
+    _db_path, db, getter = dream_env
+    stm = StmStore(db)
+    stm.append(
+        summary="目が曇ってたけど、reload で直したで",
+        kind="body_affliction",
+        source="experience_mirror",
+        person_id="ma",
+        ts="2026-06-16T22:00:00+09:00",
+        timezone="Asia/Tokyo",
+        importance=5,
+        metadata={"emotion_tag": "neutral", "importance": 5},
+    )
+
+    with (
+        patch(
+            "presence_ui.services.dreaming.http_remember",
+            return_value={"ok": True, "memory_id": "m1"},
+        ) as remember_mock,
+        patch(
+            "presence_ui.services.dreaming.http_consolidate",
+            return_value={"ok": True, "stats": {}},
+        ),
+    ):
+        result = run_dreaming_job(person_id="ma", local_day="2026-06-16", force=True)
+
+    assert remember_mock.call_count == 1
+    assert remember_mock.call_args.kwargs["content"].startswith("目が曇ってた")
+    assert remember_mock.call_args.kwargs["category"] == "feeling"
+    assert remember_mock.call_args.kwargs["importance"] == 5
+    assert result.remembered_count == 1
+
+
 def test_run_dreaming_job_promotes_and_marks(dream_env):
     _db_path, db, getter = dream_env
     stm = StmStore(db)

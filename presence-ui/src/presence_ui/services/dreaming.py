@@ -34,6 +34,27 @@ def _skip_literary_ltm_promote(summary: str) -> bool:
     return is_literary_agent_surface(summary)
 
 
+def _skip_somatic_escalation_ltm_promote(entry: Any) -> bool:
+    """Skip BIO-8d escalation push body_affliction rows (STM mark/digest still OK)."""
+    if getattr(entry, "kind", None) != "body_affliction":
+        return False
+    from social_core.somatic_surface import is_somatic_escalation_push_passage
+
+    summary = str(getattr(entry, "summary", "") or "")
+    if is_somatic_escalation_push_passage(summary):
+        return True
+    raw = getattr(entry, "metadata_json", None) or "{}"
+    try:
+        import json
+
+        meta = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    except (json.JSONDecodeError, TypeError):
+        meta = {}
+    if isinstance(meta, dict) and meta.get("escalation_push") is True:
+        return True
+    return False
+
+
 @dataclass(slots=True)
 class DreamingResult:
     ok: bool
@@ -100,6 +121,12 @@ def run_dreaming_job(
         if _skip_literary_ltm_promote(entry.summary):
             logger.info(
                 "Dreaming skip literary LTM promote entry_id=%s",
+                entry.entry_id,
+            )
+            continue
+        if _skip_somatic_escalation_ltm_promote(entry):
+            logger.info(
+                "Dreaming skip somatic escalation push LTM promote entry_id=%s",
                 entry.entry_id,
             )
             continue

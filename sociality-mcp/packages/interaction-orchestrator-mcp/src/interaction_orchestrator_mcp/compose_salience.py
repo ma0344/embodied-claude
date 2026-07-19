@@ -10,6 +10,7 @@ from interaction_orchestrator_mcp.recall_query import (
     is_legacy_food_talk_fact,
     is_literary_agent_passage,
     is_meal_record_fact,
+    is_somatic_escalation_push_passage,
     literary_user_cue,
 )
 from interaction_orchestrator_mcp.schemas import RelevantMemoryRef
@@ -30,6 +31,14 @@ def compose_salience_enabled() -> bool:
     return raw not in ("0", "false", "no", "off")
 
 
+def health_safety_active_from_somatic(somatic_state: dict | None) -> bool:
+    """True when escalation is elevated/critical (plan health_safety equivalent)."""
+    if not somatic_state:
+        return False
+    escalation = somatic_state.get("escalation") or {}
+    return str(escalation.get("level") or "none") in {"elevated", "critical"}
+
+
 def _keyword_overlap(user_text: str, memory_content: str) -> bool:
     user_kw = set(_extract_keywords(user_text or "", max_keywords=8))
     if not user_kw:
@@ -45,6 +54,7 @@ def apply_compose_memory_salience(
     person_id: str | None,
     db: SocialDB | None = None,
     prefetch_fact_check: bool = False,
+    health_safety_active: bool = False,
 ) -> list[RelevantMemoryRef]:
     """Demote episodic / retired / off-topic hits — never promote episodic to mentionable."""
     if not compose_salience_enabled():
@@ -63,6 +73,7 @@ def apply_compose_memory_salience(
         reason = mem.reason
         episodic = is_episodic_blob(mem.content)
         literary = is_literary_agent_passage(mem.content)
+        somatic_push = is_somatic_escalation_push_passage(mem.content)
 
         if episodic or "会話の区切り" in mem.content or "会話の一区切り" in mem.content:
             policy = "background_only"
@@ -72,6 +83,22 @@ def apply_compose_memory_salience(
             # on unrelated turns (羅生門 × 大丈夫).
             policy = "do_not_surface"
             reason = "literary_passage_off_topic"
+        if somatic_push and not health_safety_active:
+            # BIO-8d push template — keep off dinner/chitchat surfaces unless
+            # escalation is currently elevated/critical.
+            policy = "do_not_surface"
+            reason = "somatic_escalation_push_off_topic"
+        elif (
+            somatic_push
+            and health_safety_active
+            and (
+                mem.reason == "somatic_escalation_push_off_topic"
+                or reason == "somatic_escalation_push_off_topic"
+            )
+        ):
+            # Re-gate after enrich attaches somatic_state (compose ran with False).
+            policy = "mentionable"
+            reason = "somatic_escalation_push_in_scope"
         if is_legacy_food_talk_fact(mem.content):
             # Prefer dated 「食べた記録」 cards over 「話をした（食事の話題）」.
             policy = "do_not_surface"

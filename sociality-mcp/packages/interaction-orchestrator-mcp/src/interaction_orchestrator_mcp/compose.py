@@ -73,6 +73,7 @@ def compose_interaction_context(
     memory_adapter: OrchestratorMemoryAdapter | None = None,
     session_adapter: OrchestratorSessionAdapter | None = None,
     social_db: SocialDB | None = None,
+    health_safety_active: bool = False,
 ) -> InteractionContext:
     """Gather everything the next move needs into a single snapshot."""
 
@@ -221,6 +222,7 @@ def compose_interaction_context(
         person_id=payload.person_id,
         db=social_db,
         prefetch_fact_check=payload.prefetch_fact_check,
+        health_safety_active=health_safety_active,
     )
 
     joint_focus = _optional_dict(

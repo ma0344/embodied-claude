@@ -130,11 +130,17 @@ def maybe_escalate_somatic(
                 summary=text[:240],
                 public_summary=text[:240],
                 why="somatic escalation push",
-                felt_state={"escalation_level": level},
+                felt_state={"escalation_level": level, "escalation_push": True},
                 importance=5,
                 privacy_level="relationship",
                 related_event_ids=[],
-                artifacts=[{"escalation": escalation, "push_detail": detail}],
+                artifacts=[
+                    {
+                        "escalation": escalation,
+                        "push_detail": detail,
+                        "escalation_push": True,
+                    }
+                ],
             )
         )
         logger.info("Somatic escalation push ok: %s", detail)

@@ -102,6 +102,27 @@ def enrich_interaction_context(
     quiet = quiet_active
     if quiet is None:
         quiet = bool(ctx.boundary_hints and any("quiet" in h.lower() for h in ctx.boundary_hints))
+
+    from interaction_orchestrator_mcp.stage2_recall import refresh_interaction_context_memories
+
+    from presence_ui.gateway.context_limits import enrich_max_chars
+
+    # Re-gate compose salience now that escalation level is known (compose ran
+    # before somatic attach; default health_safety_active=False).
+    escalation = somatic.get("escalation") or {}
+    health_safety_active = str(escalation.get("level") or "none") in {
+        "elevated",
+        "critical",
+    }
+    max_len = enrich_max_chars()
+    ctx = refresh_interaction_context_memories(
+        ctx.model_copy(update={"somatic_state": somatic}),
+        relevant_memories=list(ctx.relevant_memories),
+        user_text=user_text,
+        max_chars=max_len,
+        health_safety_active=health_safety_active,
+    )
+
     block = build_somatic_prompt_block(
         somatic=somatic,
         quiet_active=bool(quiet),
@@ -115,10 +136,8 @@ def enrich_interaction_context(
         compact = f"{compact}\n\n{block}"
     else:
         compact = block
-    from presence_ui.gateway.context_limits import enrich_max_chars
     from presence_ui.gateway.prompt_block_safe import truncate_prompt_text
 
-    max_len = enrich_max_chars()
     ctx = ctx.model_copy(
         update={
             "compact_prompt_block": truncate_prompt_text(compact, max_len),

@@ -49,6 +49,24 @@ class TestRecallQuery:
         assert literary_user_cue("羅生門どうやった？")
         assert not literary_user_cue("大丈夫。ぼーっとしとるわけではないで（笑）")
 
+    def test_somatic_escalation_push_passage(self):
+        from interaction_orchestrator_mcp.recall_query import (
+            is_somatic_escalation_push_passage,
+        )
+
+        assert is_somatic_escalation_push_passage(
+            "体の調子がおかしいで。目と声が同時にダメかも。見てもらえる？"
+        )
+        assert is_somatic_escalation_push_passage(
+            "体の調子がおかしいで。複数の感覚が同時にダメかも。見てもらえる？"
+        )
+        assert not is_somatic_escalation_push_passage(
+            "目が曇ってたけど、reload で直したで"
+        )
+        assert not is_somatic_escalation_push_passage(
+            "体の調子がおかしいで。少し疲れた。"
+        )
+
     def test_action_record_fact_detects_meal_and_cook(self):
         from interaction_orchestrator_mcp.recall_query import is_action_record_fact
 

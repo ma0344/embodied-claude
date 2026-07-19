@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from interaction_orchestrator_mcp.compose_salience import (
     apply_compose_memory_salience,
+    health_safety_active_from_somatic,
     select_surface_memories,
 )
 from interaction_orchestrator_mcp.memory_adapter import _hits_from_http_items
@@ -215,9 +216,13 @@ def refresh_interaction_context_memories(
     max_chars: int,
     prefetch_fact_check: bool = False,
     social_db: SocialDB | None = None,
+    health_safety_active: bool | None = None,
 ) -> InteractionContext:
     """Re-run salience + rebuild compact block after stage-2 merge."""
     from interaction_orchestrator_mcp.compose import _build_prompt_summary, _compact_block
+
+    if health_safety_active is None:
+        health_safety_active = health_safety_active_from_somatic(ctx.somatic_state)
 
     memories = apply_compose_memory_salience(
         relevant_memories,
@@ -225,6 +230,7 @@ def refresh_interaction_context_memories(
         person_id=ctx.person_id,
         db=social_db,
         prefetch_fact_check=prefetch_fact_check,
+        health_safety_active=health_safety_active,
     )
     profile_gists = list((ctx.person_model or {}).get("profile_gists") or [])
     person_name = ctx.person_name

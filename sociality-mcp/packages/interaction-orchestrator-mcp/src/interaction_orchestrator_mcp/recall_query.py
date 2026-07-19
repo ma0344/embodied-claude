@@ -88,6 +88,15 @@ def is_action_record_fact(content: str) -> bool:
     return "を食べた記録がある" in text or "を作った記録がある" in text
 
 
+def is_somatic_escalation_push_passage(content: str) -> bool:
+    """True for BIO-8d escalation push templates (agent-fixed), not free NL health talk."""
+    from social_core.somatic_surface import (
+        is_somatic_escalation_push_passage as _is_push,
+    )
+
+    return _is_push(content)
+
+
 def literary_user_cue(user_text: str) -> bool:
     """まー is asking about / continuing a reading thread."""
     return bool(_LITERARY_USER_CUE.search((user_text or "").strip()))

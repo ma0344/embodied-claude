@@ -115,6 +115,69 @@ class TestComposeSalience:
         assert adjusted[0].use_policy == "do_not_surface"
         assert adjusted[0].reason == "legacy_food_talk_not_meal_record"
 
+    def test_somatic_escalation_push_demoted_when_gate_off(self) -> None:
+        push = _mem(
+            "体の調子がおかしいで。目と声が同時にダメかも。見てもらえる？"
+        )
+        adjusted = apply_compose_memory_salience(
+            [push],
+            user_text="今日の晩御飯は何にしよ？",
+            person_id="ma",
+            db=None,
+            health_safety_active=False,
+        )
+        mentionable, background = select_surface_memories(adjusted)
+        assert not mentionable
+        assert not background
+        assert adjusted[0].use_policy == "do_not_surface"
+        assert adjusted[0].reason == "somatic_escalation_push_off_topic"
+
+    def test_somatic_escalation_push_stays_when_gate_on(self) -> None:
+        push = _mem(
+            "体の調子がおかしいで。複数の感覚が同時にダメかも。見てもらえる？"
+        )
+        adjusted = apply_compose_memory_salience(
+            [push],
+            user_text="今日の晩御飯は何にしよ？",
+            person_id="ma",
+            db=None,
+            health_safety_active=True,
+        )
+        mentionable, _ = select_surface_memories(adjusted)
+        assert len(mentionable) == 1
+        assert adjusted[0].use_policy == "mentionable"
+        assert adjusted[0].reason != "somatic_escalation_push_off_topic"
+
+    def test_non_push_body_report_not_demoted_by_somatic_reason(self) -> None:
+        body = _mem("目が曇ってたけど、reload で直したで")
+        adjusted = apply_compose_memory_salience(
+            [body],
+            user_text="今日の晩御飯は何にしよ？",
+            person_id="ma",
+            db=None,
+            health_safety_active=False,
+        )
+        assert adjusted[0].use_policy == "mentionable"
+        assert adjusted[0].reason != "somatic_escalation_push_off_topic"
+
+    def test_somatic_push_undemotes_when_gate_turns_on(self) -> None:
+        demoted = RelevantMemoryRef(
+            memory_id="m1",
+            content="体の調子がおかしいで。目と声が同時にダメかも。見てもらえる？",
+            relevance=0.9,
+            use_policy="do_not_surface",
+            reason="somatic_escalation_push_off_topic",
+        )
+        adjusted = apply_compose_memory_salience(
+            [demoted],
+            user_text="ねえ",
+            person_id="ma",
+            db=None,
+            health_safety_active=True,
+        )
+        assert adjusted[0].use_policy == "mentionable"
+        assert adjusted[0].reason == "somatic_escalation_push_in_scope"
+
 
 class TestTopicRetire:
     def test_completion_detection_finite_markers(self) -> None:

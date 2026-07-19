@@ -64,7 +64,7 @@
 | ブロック | 役割 |
 |----------|------|
 | `[somatic_state]` | **異常時のみ**詳述（Encode広く≠Inject狭く）。正常時は要約行 `somatic=ok` のみ。自発の「問題ないでぇ」はしない；まーから調子・異常を聞かれたときだけ口にしてよい |
-| `[calendar_expectations — background only]` | S2 · know≠speak。聞かれた／リマインド経路のときだけ言及 |
+| `[calendar_expectations — background only]` | S2 · know≠speak。**cards≥1 のときだけ** inject（空窓は omit）。聞かれた／リマインド経路のときだけ言及 |
 | desires の数値・discomfort | 判断・自律の材料。会話のネタにしないのが既定 |
 | `Relevant memories: N (mentionable: 0)` | 件数だけ見える状態。中身は mentionable 時のみ表層 |
 | soft status / schedule_facts（条件付き） | 経路が開いたときだけ厚くする |
@@ -81,25 +81,26 @@
 | ブロック | 正体 |
 |----------|------|
 | `[stm_recent]` | 短期バッファ。**部屋の台本ではない**。episode_close / tick テンプレは注入スキップ（TRIM） |
-| `[recent_experiences]` | 経験ログ（room_view / autonomous 等）。会話履歴の代替にしない |
+| `[recent_experiences]` | **会話 compose からは omit**（INJECT-TRIM）。DB / `agent_state` / status / daybook / STM 充填は残す。会話履歴の代替にしない |
 | `[memory_bridge]` / mentionable 食事カード | **跨 session の向きつき短冊**（例: 麺類（蕎麦）の日付付き記録）。巨大 KG ではない → [spontaneity 向きつき短冊](../tracks/spontaneity.md#向きつき短冊ネットワーク合意-2026-07-18) |
 
 ---
 
-## ノイズ削減（INJECT-TRIM · 2026-07-18 実装）
+## ノイズ削減（INJECT-TRIM · 2026-07-18 → 2026-07-19）
 
 | 順 | 対象 | 実装 |
 |----|------|------|
 | **1** | STM autonomous テンプレ + **episode_close 会話** | `should_skip_stm_surface_inject` — DB/Dreaming は残し、`[stm_recent]` から除外。台本は room events / messages[] が本流なので episode_close 対話の再注入はしない |
-| **2** | `recent_experiences` room_view | OBS-TICK `Room view: <scene>` 同士も collapse。英語行は CJK Jaccard が効かなかった穴を塞いだ |
+| **2** | `recent_experiences` | compact / `prompt_summary` から **全 channel omit**。room_view collapse ヘルパは status 等用に残す |
 | **3** | desires 常時フル | compact は dominant + discomfort≥0.5 を最大2本 |
+| **4** | `calendar_expectations` 空窓 | cards≥1 のときだけ inject。0件はブロック全体 omit（avoid も付けない）。JSON refresh は現状維持 |
 
 **残リスク**
 
 - `messages[]` 12 turns と `[recent_room_context]` 全文の二重（長い部屋で効く）— 別チケット
-- 日本語 layout 描写と英語 OBS-TICK が別クラスタのまま並ぶことはありうる
+- 日本語 layout 描写と英語 OBS-TICK が別クラスタのまま並ぶことはありうる（status 面の collapse のみ）
 
-トラック名: **INJECT-TRIM**（v0 済）。
+トラック名: **INJECT-TRIM**（v0 済 · experiences/calendar empty omit 追記）。
 
 ---
 
@@ -110,6 +111,7 @@
 - INJECT-TRIM v0（上表）
 - `[response_contract]` 薄型化 — 定番 prefer 削除、`treat_user_as: まー（友人）/ こより` + initiative のみ
 - MEM-8h bridge — vision 出口除外 · cue 条のみ · 食事 fact encode（episode_close）
+- **2026-07-19**: `recent_experiences` 会話 omit · `calendar_expectations` 空は inject しない
 
 ---
 

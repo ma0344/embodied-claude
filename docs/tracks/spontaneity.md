@@ -263,8 +263,8 @@ S2 は **Expectation の供給だけ**。発話は次のときだけ:
 | 項目 | 値 |
 |------|-----|
 | 入力 | tick で Google Calendar `now → now+N hours` |
-| 内部 | `~/.claude/presence-ui/calendar_expectations.json` |
-| 注入 | compose enrich → compact に background ブロック + `response_contract.avoid` |
+| 内部 | `~/.claude/presence-ui/calendar_expectations.json`（空でも refresh は書く） |
+| 注入 | **events≥1 のときだけ** compose enrich → background ブロック + `response_contract.avoid`。0件はブロック全体 omit（avoid も付けない） |
 | 発話 | **しない**（outbound enqueue なし · must_include にしない） |
 | API 抑制 | `PRESENCE_CALENDAR_LOOKAHEAD_MIN_INTERVAL_MINUTES` 既定 30 |
 

@@ -191,23 +191,32 @@ def load_expectations(*, path: Path | None = None) -> dict | None:
     return data
 
 
-def build_block_from_payload(payload: dict) -> str:
+def cards_from_payload(payload: dict) -> list[ExpectationCard]:
     events = payload.get("events") or []
     cards: list[ExpectationCard] = []
-    if isinstance(events, list):
-        for row in events:
-            if not isinstance(row, dict):
-                continue
-            cards.append(
-                ExpectationCard(
-                    event_id=str(row.get("event_id") or ""),
-                    summary=str(row.get("summary") or "（無題）"),
-                    start=str(row.get("start") or ""),
-                    end=str(row.get("end") or ""),
-                    location=str(row.get("location") or ""),
-                    calendar_label=str(row.get("calendar_label") or ""),
-                )
+    if not isinstance(events, list):
+        return cards
+    for row in events:
+        if not isinstance(row, dict):
+            continue
+        cards.append(
+            ExpectationCard(
+                event_id=str(row.get("event_id") or ""),
+                summary=str(row.get("summary") or "（無題）"),
+                start=str(row.get("start") or ""),
+                end=str(row.get("end") or ""),
+                location=str(row.get("location") or ""),
+                calendar_label=str(row.get("calendar_label") or ""),
             )
+        )
+    return cards
+
+
+def build_block_from_payload(payload: dict) -> str:
+    """Format inject block. Empty event list → empty string (omit whole block)."""
+    cards = cards_from_payload(payload)
+    if not cards:
+        return ""
     return format_expectation_block(
         cards,
         timezone=str(payload.get("timezone") or "Asia/Tokyo"),
@@ -288,7 +297,11 @@ def inject_calendar_expectations(
     user_text: str | None = None,
     channel: str | None = None,
 ) -> InteractionContext:
-    """Append background expectations + must_avoid. Never forces speech."""
+    """Append background expectations + must_avoid when cards ≥ 1.
+
+    Empty lookahead (0 events): omit the whole block and do not add avoid.
+    Never forces speech.
+    """
     payload = load_expectations()
     if not payload:
         return ctx

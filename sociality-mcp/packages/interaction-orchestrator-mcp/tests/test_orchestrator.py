@@ -467,8 +467,9 @@ class TestRecord:
         assert "browse_curiosity" in block
         assert "[open_loops]" in block
         assert "pr review" in block.lower()
-        assert "[recent_experiences]" in block
+        assert "[recent_experiences]" not in block
         assert "open loop" in block.lower()
+        assert "Recent agent experiences" not in ctx.prompt_summary
 
     def test_agent_response_dialogue_not_injected_verbatim(self, stores):
         stores["orchestrator"].record_agent_experience(
@@ -481,10 +482,13 @@ class TestRecord:
         )
         ctx = _compose(stores, user_text="こんにちは")
         block = ctx.compact_prompt_block
+        assert "[recent_experiences]" not in block
         assert "急に来た" not in block
-        assert "do not continue prior wording" in block
+        assert len(ctx.agent_state.recent_experiences) == 1
 
     def test_similar_visual_experiences_collapsed_in_compose(self, stores):
+        from interaction_orchestrator_mcp.compose import _format_experiences_section
+
         room = (
             "部屋には、赤いソファと木製のテーブルが見えます。"
             "テーブルの上には、ティッシュボックスがあります。"
@@ -511,11 +515,20 @@ class TestRecord:
         )
         ctx = _compose(stores, user_text="こんにちは")
         block = ctx.compact_prompt_block
-        assert "[room_view]" in block
-        assert "same scene ×2" in block
-        assert block.count("赤いソファ") == 1
+        assert "[recent_experiences]" not in block
+        assert "赤いソファ" not in block
+        assert len(ctx.agent_state.recent_experiences) == 2
+        # Collapse helper still works for status/daybook surfaces
+        formatted = "\n".join(
+            _format_experiences_section(list(ctx.agent_state.recent_experiences))
+        )
+        assert "[room_view]" in formatted
+        assert "same scene ×2" in formatted
+        assert formatted.count("赤いソファ") == 1
 
     def test_obs_tick_room_view_lines_collapsed(self, stores):
+        from interaction_orchestrator_mcp.compose import _format_experiences_section
+
         line = "Room view: dining single capture hamming=9 (OBS-TICK-1b signal)"
         stores["orchestrator"].record_agent_experience(
             RecordAgentExperienceInput(
@@ -535,9 +548,15 @@ class TestRecord:
         )
         ctx = _compose(stores, user_text="こんにちは")
         block = ctx.compact_prompt_block
-        assert "same scene ×2" in block
-        assert "dining" in block
-        assert block.count("hamming=9") == 0
+        assert "[recent_experiences]" not in block
+        assert "hamming=9" not in block
+        assert len(ctx.agent_state.recent_experiences) == 2
+        formatted = "\n".join(
+            _format_experiences_section(list(ctx.agent_state.recent_experiences))
+        )
+        assert "same scene ×2" in formatted
+        assert "dining" in formatted
+        assert formatted.count("hamming=9") == 0
 
     def test_desires_section_omits_low_discomfort_extras(self, stores, tmp_path, monkeypatch):
         import json as _json

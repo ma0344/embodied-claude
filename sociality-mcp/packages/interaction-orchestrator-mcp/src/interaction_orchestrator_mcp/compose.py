@@ -564,7 +564,6 @@ def _build_prompt_summary(
     return (
         f"{calendar_anchor} Now {local_time} • {who} seems {availability}, {activity}, phase={phase}. "
         f"{desire_text} {open_loop_text} {quiet_text} {memory_text} "
-        f"Recent agent experiences: {len(agent_state.recent_experiences)}; "
         f"interpretation_shifts so far: {agent_state.interpretation_shifts}."
     ).strip()
 
@@ -1005,6 +1004,10 @@ def _looks_like_dialogue_prose(text: str) -> bool:
 def _format_experiences_section(
     experiences: list[RecentExperienceRef], *, max_items: int = 3
 ) -> list[str]:
+    """Format experiences for non-compose surfaces (status/daybook helpers).
+
+    Conversation compact no longer injects this section (INJECT-TRIM).
+    """
     if not experiences:
         return []
     lines = ["[recent_experiences]"]
@@ -1032,6 +1035,8 @@ def _compact_block(
     prefetch_fact_check: bool = False,
     memory_bridge_lines: list[str] | None = None,
 ) -> str:
+    # recent_experiences stay on agent_state / DB; not injected into conversation compact.
+    _ = recent_experiences
     contract_lines = [f"treat_user_as: {response_contract.treat_user_as}"]
     if response_contract.avoid:
         contract_lines.append("avoid: " + "; ".join(response_contract.avoid[:4]))
@@ -1105,7 +1110,6 @@ def _compact_block(
         *_format_date_confirmation_section(open_loops or []),
         *_format_commitments_due_section(commitments_due or []),
         *_format_shifts_section(recent_shifts or []),
-        *_format_experiences_section(recent_experiences or []),
     ]
     if soul_sections:
         sections.extend(["", *soul_sections])

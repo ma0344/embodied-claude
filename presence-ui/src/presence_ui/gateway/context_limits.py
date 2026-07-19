@@ -10,8 +10,9 @@ Tier policy (``lite=True`` Room / native chat):
 - **Tier 1 — pin top of compact block**: ``[schedule_facts]``, top ``[relevant_memories]``
   (compose ``_compact_block``).
 - **Tier 2 — compose body**: interaction summary, gists, desires, response contract.
-- **Tier 3 — trim first when over budget**: ``session_history``, ``[stm_recent]``,
-  ``recent_experiences`` (long tail inside ``[Social context]``).
+- **Tier 3 — trim first when over budget**: ``session_history``, ``[stm_recent]``
+  (long tail inside ``[Social context]``). ``recent_experiences`` are no longer
+  injected into conversation compact (INJECT-TRIM).
 """
 
 from __future__ import annotations

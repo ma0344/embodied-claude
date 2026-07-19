@@ -99,6 +99,25 @@ def test_inject_adds_avoid_when_not_asked(tmp_path: Path, monkeypatch: pytest.Mo
     assert any("calendar_expectations" in a for a in out.response_contract.avoid)
 
 
+def test_inject_omits_block_and_avoid_when_events_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "expectations.json"
+    monkeypatch.setenv("PRESENCE_CALENDAR_EXPECTATIONS_PATH", str(path))
+    ce.save_expectations(
+        cards=[],
+        timezone="Asia/Tokyo",
+        hours=6,
+        status="ok",
+        path=path,
+    )
+    base = _ctx()
+    out = ce.inject_calendar_expectations(base, user_text="おはよう", channel="autonomous")
+    assert "[calendar_expectations" not in out.compact_prompt_block
+    assert out.compact_prompt_block == base.compact_prompt_block
+    assert out.response_contract.avoid == base.response_contract.avoid
+
+
 def test_inject_skips_avoid_when_schedule_asked(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

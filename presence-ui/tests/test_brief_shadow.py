@@ -136,8 +136,8 @@ def test_stable_append_forbids_speaking_brief_shadow() -> None:
     assert "ua_candidates" in GATEWAY_STABLE_APPEND
 
 
-def test_coerce_dump_shaped_recipe_topic_only() -> None:
-    """Live dump shape: recipe note without web_search + topic_only/propose mismatch."""
+def test_coerce_topic_only_and_placeholder_object() -> None:
+    """UA field coherence only — does not invent web_search from notes."""
     raw = json.dumps(
         {
             "jobs": [
@@ -145,7 +145,7 @@ def test_coerce_dump_shaped_recipe_topic_only() -> None:
                     "id": "j1",
                     "kind": "surface_reply",
                     "parallel": True,
-                    "note": "recipe idea generation",
+                    "note": "Acknowledge the fun idea",
                 }
             ],
             "ua_candidates": [
@@ -162,9 +162,7 @@ def test_coerce_dump_shaped_recipe_topic_only() -> None:
     )
     parsed = parse_brief_shadow_response(raw)
     assert parsed is not None
-    kinds = {j.kind for j in parsed.jobs}
-    assert "surface_reply" in kinds
-    assert "web_search" in kinds
+    assert {j.kind for j in parsed.jobs} == {"surface_reply"}
     assert len(parsed.ua_candidates) == 1
     ua = parsed.ua_candidates[0]
     assert ua.write == "skip"
@@ -173,6 +171,7 @@ def test_coerce_dump_shaped_recipe_topic_only() -> None:
     assert ua.reason == "topic_only"
     block = format_brief_shadow_block(parsed)
     assert "write=propose" not in block
+    assert "web_search" not in block
     assert "allowlist" not in block
 
 

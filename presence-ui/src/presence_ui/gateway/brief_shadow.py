@@ -69,9 +69,6 @@ _UA_OBJECT_PLACEHOLDERS = frozenset(
     }
 )
 
-# Mechanical tokens from classifier notes — not open-ended NL parsing of user text.
-_RECIPE_NOTE_MARKERS = ("recipe", "レシピ", "献立", "idea")
-
 
 @dataclass(frozen=True, slots=True)
 class BriefShadowJob:
@@ -188,20 +185,7 @@ def parse_brief_shadow_response(text: str) -> BriefShadowResult | None:
 
 
 def _coerce_brief_shadow(result: BriefShadowResult) -> BriefShadowResult:
-    """Deterministic coherence fixes after classify (not NL understanding of user text)."""
-    jobs = list(result.jobs)
-    kinds = {j.kind for j in jobs}
-    notes_blob = " ".join(j.note.lower() for j in jobs)
-    if "web_search" not in kinds and any(m in notes_blob for m in _RECIPE_NOTE_MARKERS):
-        jobs.append(
-            BriefShadowJob(
-                id=f"j{len(jobs) + 1}",
-                kind="web_search",
-                parallel=True,
-                note="recipe/idea search (coerced from reply note)",
-            )
-        )
-
+    """Field coherence only — does NOT decide web_search (that is e4b's job)."""
     ua_list: list[BriefShadowUaCandidate] = []
     for ua in result.ua_candidates:
         write = ua.write
@@ -214,8 +198,6 @@ def _coerce_brief_shadow(result: BriefShadowResult) -> BriefShadowResult:
         low_obj = obj.strip().lower()
         if low_obj in {p.lower() for p in _UA_OBJECT_PLACEHOLDERS} or "allowlist" in low_obj:
             obj = "-"
-        if write == "skip" and status in {"intended", "confirmed"} and reason == "topic_only":
-            status = "skip"
         ua_list.append(
             BriefShadowUaCandidate(
                 kind=ua.kind,
@@ -225,7 +207,9 @@ def _coerce_brief_shadow(result: BriefShadowResult) -> BriefShadowResult:
                 reason=reason,
             )
         )
-    return BriefShadowResult(jobs=tuple(jobs), ua_candidates=tuple(ua_list), error=result.error)
+    return BriefShadowResult(
+        jobs=result.jobs, ua_candidates=tuple(ua_list), error=result.error
+    )
 
 
 def format_brief_shadow_block(result: BriefShadowResult) -> str:

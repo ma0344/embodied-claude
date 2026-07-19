@@ -471,6 +471,9 @@ def _summary_for_prompt(entry: StmEntry) -> str:
 _STM_SURFACE_SKIP_KINDS = frozenset({"episode_close"})
 _STM_SURFACE_SKIP_MARKERS = (
     "Autonomous tick with a dominant desire",
+    "Autonomous tick during inward hours",
+    "Autonomous tick with no strong signal",
+    "prefer a private note over any speech",
     "[interaction_context]",
     "[gateway_turn_context",
 )
@@ -520,11 +523,18 @@ def build_stm_prompt_block(entries: list[StmEntry], *, max_chars: int = 2000) ->
         return ""
     lines = ["[stm_recent]"]
     total = len("[stm_recent]\n[/stm_recent]")
+    seen_summaries: set[str] = set()
     # Scan beyond 12 so skips (episode_close / tick templates) do not empty the block.
     for entry in entries[:24]:
         if should_skip_stm_surface_inject(kind=entry.kind, summary=entry.summary):
             continue
-        summary = _summary_for_prompt(entry)
+        summary = (_summary_for_prompt(entry) or "").strip()
+        if not summary:
+            continue
+        dedupe_key = " ".join(summary.split())[:160]
+        if dedupe_key in seen_summaries:
+            continue
+        seen_summaries.add(dedupe_key)
         line = f"- ({entry.kind}) {summary[:200]}"
         if total + len(line) + 1 > max_chars:
             break

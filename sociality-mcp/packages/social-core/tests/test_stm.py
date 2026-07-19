@@ -245,6 +245,17 @@ def test_build_stm_prompt_block_skips_episode_close_and_tick_templates():
         kind="agent_private_reflection",
         summary="（自律の思考メモ）\n\nAutonomous tick with a dominant desire — one bounded action fits.",
     )
+    assert should_skip_stm_surface_inject(
+        kind="agent_private_reflection",
+        summary=(
+            "Autonomous tick during inward hours — prefer a private note over any speech.\n\n"
+            "いま心に残ってること:\n- いまの欲求: observe_room"
+        ),
+    )
+    assert should_skip_stm_surface_inject(
+        kind="agent_private_reflection",
+        summary="Autonomous tick with no strong signal — prepare quietly without nudging.",
+    )
     entries = [
         StmEntry(
             entry_id="stm_ep",

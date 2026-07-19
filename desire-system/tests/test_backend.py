@@ -51,6 +51,14 @@ def _insert(path: Path, memory_id: str, content: str, ts: str) -> None:
         conn.close()
 
 
+def _memory_count(path: Path) -> int:
+    conn = sqlite3.connect(str(path))
+    try:
+        return int(conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0])
+    finally:
+        conn.close()
+
+
 def test_sqlite_adapter_returns_none_when_db_missing(tmp_path):
     adapter = SQLiteMemoryAdapter(tmp_path / "missing.db")
     assert adapter.latest_satisfaction_ts(["外を見た"]) is None
@@ -79,10 +87,13 @@ def test_sqlite_adapter_ignores_non_matching_rows(tmp_path):
     assert adapter.latest_satisfaction_ts(["外を見た"]) is None
 
 
-def test_sqlite_adapter_record_satisfaction_round_trip(tmp_path):
+def test_sqlite_adapter_record_satisfaction_round_trip(tmp_path, monkeypatch):
+    """Default: sidecar cooldown works; conversational LTM stays empty."""
+    monkeypatch.delenv("PRESENCE_DESIRE_LTM_SATISFACTION", raising=False)
     db = tmp_path / "memory.db"
+    log = tmp_path / "desire_satisfactions.jsonl"
     _bootstrap_memory_db(db)
-    adapter = SQLiteMemoryAdapter(db)
+    adapter = SQLiteMemoryAdapter(db, satisfaction_log_path=log)
     ts = datetime(2026, 4, 19, 12, 0, 0, tzinfo=timezone.utc)
 
     memory_id = adapter.record_satisfaction(
@@ -96,6 +107,30 @@ def test_sqlite_adapter_record_satisfaction_round_trip(tmp_path):
     found = adapter.latest_satisfaction_ts(["ベランダから夕焼け見た"])
     assert found is not None
     assert found == ts
+    assert _memory_count(db) == 0
+    assert log.is_file()
+
+
+def test_sqlite_adapter_ltm_write_when_env_enabled(tmp_path, monkeypatch):
+    monkeypatch.setenv("PRESENCE_DESIRE_LTM_SATISFACTION", "1")
+    db = tmp_path / "memory.db"
+    log = tmp_path / "desire_satisfactions.jsonl"
+    _bootstrap_memory_db(db)
+    adapter = SQLiteMemoryAdapter(db, satisfaction_log_path=log)
+    ts = datetime(2026, 4, 19, 12, 0, 0, tzinfo=timezone.utc)
+
+    adapter.record_satisfaction(
+        desire_name="look_outside",
+        summary="ベランダから夕焼け見た",
+        ts=ts,
+    )
+    assert _memory_count(db) == 1
+    conn = sqlite3.connect(str(db))
+    try:
+        body = conn.execute("SELECT content FROM memories").fetchone()[0]
+    finally:
+        conn.close()
+    assert body.startswith("[desire:look_outside]")
 
 
 def test_sqlite_adapter_empty_keywords_returns_none(tmp_path):
@@ -155,11 +190,13 @@ def test_make_default_adapter_explicit_null(monkeypatch):
     assert isinstance(adapter, NullMemoryAdapter)
 
 
-def test_satisfaction_write_makes_future_lookup_succeed(tmp_path):
+def test_satisfaction_write_makes_future_lookup_succeed(tmp_path, monkeypatch):
     """Regression guard: record_satisfaction + latest_satisfaction_ts must agree."""
+    monkeypatch.delenv("PRESENCE_DESIRE_LTM_SATISFACTION", raising=False)
     db = tmp_path / "memory.db"
+    log = tmp_path / "desire_satisfactions.jsonl"
     _bootstrap_memory_db(db)
-    adapter = SQLiteMemoryAdapter(db)
+    adapter = SQLiteMemoryAdapter(db, satisfaction_log_path=log)
 
     first = datetime(2026, 4, 19, 10, 0, 0, tzinfo=timezone.utc)
     adapter.record_satisfaction(desire_name="browse_curiosity", summary="WebSearch", ts=first)
@@ -171,6 +208,7 @@ def test_satisfaction_write_makes_future_lookup_succeed(tmp_path):
 
     latest = adapter.latest_satisfaction_ts(["WebSearchで調べた"])
     assert latest == second
+    assert _memory_count(db) == 0
 
 
 @pytest.mark.parametrize("bad_ts", ["", "not-a-date", "2026/04/19"])

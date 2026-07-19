@@ -174,8 +174,29 @@ def observation_summary_from_vision(result: VisionCaptureResult) -> str:
     return "視界キャプチャ（説明なし）"
 
 
+def vision_ltm_remember_enabled() -> bool:
+    """Whether raw VISION mcp_text may be written to conversational LTM.
+
+    Default **off** (``PRESENCE_VISION_LTM_REMEMBER=0``). Live see still uses
+    ``vision_prefetch``; historical LTM dumps are not wanted.
+    """
+    return os.getenv("PRESENCE_VISION_LTM_REMEMBER", "0").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 def remember_vision_capture(result: VisionCaptureResult) -> bool:
     if not result.ok or not result.mcp_text.strip():
+        return False
+    if not vision_ltm_remember_enabled():
+        logger.info(
+            "vision LTM remember skipped (PRESENCE_VISION_LTM_REMEMBER off; "
+            "live path uses vision_prefetch)"
+        )
+        result.remember_ok = False
         return False
     outcome = persist_remember_intent(
         RememberIntent(content=result.mcp_text, category="observation")

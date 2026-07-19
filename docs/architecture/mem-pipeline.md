@@ -42,7 +42,7 @@ Deep（SOUL / arc）
 ```
 
 - **WM→STM**: 会話終了を待たない。エピソード単位要約（MEM-2）。
-- **STM→LTM**: 睡眠バッチ — experiences + afflictions + 要約 + somatic digest → `consolidate` + daybook。BIO-8d escalation push 形の `body_affliction` は LTM remember しない（STM dreamed / digest は可）。
+- **STM→LTM**: 睡眠バッチ — experiences + afflictions + 要約 + somatic digest → `consolidate` + daybook。BIO-8d escalation push 形の `body_affliction` は LTM remember しない（STM dreamed / digest は可）。**desire satisfaction / VISION raw dump も会話 LTM へ書かない**（既定 OFF · purge: `scripts/purge-telemetry-ltm.py`）。
 - **LTM→Deep**: 低頻度。`interpretation_shift`、arc → SOUL パッチは **人間承認**（MEM-6）。
 
 ### 既存資産

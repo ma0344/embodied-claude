@@ -4,10 +4,15 @@ This module abstracts over the storage used to look up "when was desire X last
 satisfied?" and to record new satisfaction events. The project has migrated
 from ChromaDB to a SQLite-based memory store; the adapter keeps a legacy
 Chroma path available for users who have not completed the migration.
+
+Conversational LTM (memory.db ``memories``) no longer receives desire
+satisfaction telemetry by default — see ``PRESENCE_DESIRE_LTM_SATISFACTION``.
+Cooldown / ``latest_satisfaction_ts`` uses a sidecar JSONL instead.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import uuid
@@ -35,6 +40,87 @@ def _default_chroma_path() -> Path:
     ).expanduser()
 
 
+def _default_satisfaction_log_path() -> Path:
+    return Path(
+        os.getenv(
+            "DESIRE_SATISFACTION_LOG",
+            str(Path.home() / ".claude" / "desire_satisfactions.jsonl"),
+        )
+    ).expanduser()
+
+
+def desire_ltm_satisfaction_writes_enabled() -> bool:
+    """Whether ``[desire:…]`` rows may be INSERT'd into conversational LTM.
+
+    Default **off** (``PRESENCE_DESIRE_LTM_SATISFACTION=0``). Set to ``1`` /
+    ``true`` / ``on`` to restore the legacy LTM encode path.
+    """
+    return os.getenv("PRESENCE_DESIRE_LTM_SATISFACTION", "0").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _append_satisfaction_sidecar(
+    *,
+    path: Path,
+    desire_name: str,
+    summary: str,
+    body: str,
+    ts: datetime,
+    memory_id: str,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "id": memory_id,
+        "desire_name": desire_name,
+        "summary": summary,
+        "content": body,
+        "timestamp": ts.isoformat(),
+    }
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def _latest_from_satisfaction_sidecar(
+    path: Path, keywords: list[str]
+) -> datetime | None:
+    if not path.is_file() or not keywords:
+        return None
+    latest: datetime | None = None
+    try:
+        with path.open(encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                content = str(row.get("content") or row.get("summary") or "")
+                if not any(kw in content for kw in keywords):
+                    continue
+                parsed = _coerce_ts(str(row.get("timestamp") or ""))
+                if parsed is None:
+                    continue
+                if latest is None or parsed > latest:
+                    latest = parsed
+    except OSError:
+        return None
+    return latest
+
+
+def _max_ts(a: datetime | None, b: datetime | None) -> datetime | None:
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return a if a >= b else b
+
+
 class DesireMemoryAdapter(Protocol):
     """Minimum surface the desire system needs from the memory store."""
 
@@ -52,16 +138,25 @@ class DesireMemoryAdapter(Protocol):
 
 @dataclass(slots=True)
 class SQLiteMemoryAdapter:
-    """Read-latest / append-minimal adapter against the memory-mcp SQLite store."""
+    """Read-latest / append-minimal adapter against the memory-mcp SQLite store.
+
+    Satisfaction evidence for cooldown lives in a sidecar JSONL by default.
+    Conversational LTM INSERT is gated by ``PRESENCE_DESIRE_LTM_SATISFACTION``.
+    """
 
     db_path: Path
+    satisfaction_log_path: Path | None = None
+
+    def _log_path(self) -> Path:
+        return self.satisfaction_log_path or _default_satisfaction_log_path()
 
     def latest_satisfaction_ts(self, keywords: Iterable[str]) -> datetime | None:
         kw_list = [k for k in keywords if k]
         if not kw_list:
             return None
+        latest = _latest_from_satisfaction_sidecar(self._log_path(), kw_list)
         if not self.db_path.exists():
-            return None
+            return latest
         clauses = " OR ".join(["content LIKE ?"] * len(kw_list))
         params = [f"%{k}%" for k in kw_list]
         # Pull more than one row because memory.db may contain rows with
@@ -78,14 +173,12 @@ class SQLiteMemoryAdapter:
             finally:
                 conn.close()
         except sqlite3.DatabaseError:
-            return None
-        latest: datetime | None = None
+            return latest
         for (raw,) in rows:
             parsed = _coerce_ts(str(raw)) if raw else None
             if parsed is None:
                 continue
-            if latest is None or parsed > latest:
-                latest = parsed
+            latest = _max_ts(latest, parsed)
         return latest
 
     def record_satisfaction(
@@ -100,6 +193,22 @@ class SQLiteMemoryAdapter:
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
         body = f"[desire:{desire_name}] {summary}"
+        # Always record for cooldown / desire_updater, independent of LTM.
+        try:
+            _append_satisfaction_sidecar(
+                path=self._log_path(),
+                desire_name=desire_name,
+                summary=summary,
+                body=body,
+                ts=ts,
+                memory_id=memory_id,
+            )
+        except OSError:
+            pass
+
+        if not desire_ltm_satisfaction_writes_enabled():
+            return memory_id
+
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(self.db_path))
         try:

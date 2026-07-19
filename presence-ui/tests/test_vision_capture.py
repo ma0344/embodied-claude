@@ -1,7 +1,13 @@
 """Tests for vision prefetch note formatting."""
 
+from unittest.mock import patch
+
 from presence_ui.gateway.see_intent import SeeIntent
-from presence_ui.services.vision_capture import VisionCaptureResult, vision_prefetch_note
+from presence_ui.services.vision_capture import (
+    VisionCaptureResult,
+    remember_vision_capture,
+    vision_prefetch_note,
+)
 
 
 def test_vision_prefetch_note_success() -> None:
@@ -42,3 +48,44 @@ def test_vision_prefetch_note_failure() -> None:
     )
     assert "error=TimeoutError" in note
     assert "guess the scene" in note.lower()
+
+
+def test_remember_vision_capture_skipped_by_default(monkeypatch) -> None:
+    monkeypatch.delenv("PRESENCE_VISION_LTM_REMEMBER", raising=False)
+    result = VisionCaptureResult(
+        ok=True,
+        mode="current",
+        label="--- Current View ---",
+        mcp_text="=== VISION_CAPTION ===\ndesk\n=== END ===",
+        caption="desk",
+        file_path="/tmp/cap.jpg",
+    )
+    with patch(
+        "presence_ui.services.vision_capture.persist_remember_intent"
+    ) as persist:
+        assert remember_vision_capture(result) is False
+        persist.assert_not_called()
+    assert result.remember_ok is False
+
+
+def test_remember_vision_capture_writes_when_env_on(monkeypatch) -> None:
+    monkeypatch.setenv("PRESENCE_VISION_LTM_REMEMBER", "1")
+    result = VisionCaptureResult(
+        ok=True,
+        mode="current",
+        label="--- Current View ---",
+        mcp_text="=== VISION_CAPTION ===\ndesk\n=== END ===",
+        caption="desk",
+        file_path="/tmp/cap.jpg",
+    )
+
+    class _Ok:
+        ok = True
+
+    with patch(
+        "presence_ui.services.vision_capture.persist_remember_intent",
+        return_value=_Ok(),
+    ) as persist:
+        assert remember_vision_capture(result) is True
+        persist.assert_called_once()
+    assert result.remember_ok is True

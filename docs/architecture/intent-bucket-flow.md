@@ -1,8 +1,8 @@
 # Intent → Bucket → Flow — ツール選定強化計画
 
-**合意**: 2026-06-17（まー）  
-**状態**: 計画確立（実装は段階的）  
-**関連**: [gateway-direct-actions.md](./gateway-direct-actions.md)（A3 身体直実行）、[backlog-ma-home.md](./backlog-ma-home.md)
+**合意**: 2026-06-17（まー）· 原則 D 2026-07-19  
+**状態**: 計画確立（実装は段階的）· 原則 D は **思想・未実装**  
+**関連**: [gateway-direct-actions.md](./gateway-direct-actions.md)（A3 身体直実行）、[backlog-ma-home.md](../backlog-ma-home.md)、[mem-8h-memory-bridge.md](../tracks/mem-8h-memory-bridge.md)（UserAction）
 
 ---
 
@@ -75,6 +75,26 @@ MCP サーバーは **Flow の実装の一つ**。CLI `/talk` 用に `.mcp.json`
 - **未対応**: 通常会話の「喋って」「見て」→ バケツ、`voice.speak`（`answer_directly` は **意図的に `speak=false`**）
 
 新設するのは Plan の置き換えではなく、**Intent 層 + Bucket→Flow マップ**。
+
+### 原則 D — 受信時ブリーフ正本（合意 2026-07-19 · **思想・未実装**）
+
+チャットは **文章が確定してから** 届く。音声会話と違い、受信時点で主旨・論旨・文末の否定・複数の中身をまとめて分析できる。そのアドバンテージを前提に:
+
+1. **受信直後**に「まーが何を言いたくて、こよりは何を求められているか」を構造化する（**Brief**）
+2. Brief から **必要な処理だけ逆算して組み立て**、実行する
+3. 表層（こよりが答えを出す）は **二の次** — 構造は「指示 → 結果 → 答える」と同型で、細分化したいのは指示側
+
+**複数内容は並列ジョブ**として扱う。例:「おはよう。昨夜は暑くて眠れなかった。寝不足で今日の会議が憂鬱。」→ 挨拶 / 昨夜の体験の受け取り（任意で気温など）/ 今日の予定把握、を並列に先に決める。
+
+| | 役割 |
+|--|------|
+| **Brief** | 意味・ルートの正本（jobs / 制約 / 記憶予算 / 書き込み候補 …） |
+| **TEMP-C Stage1 · MEM-8h ルート** | Brief の **投影・断面**（自分で意味を取り直さない側へ寄せる） |
+| **UserAction（行動記録）** | Brief が決めた意味の **実行器**（自己申告→confirmed、計画→intended、話題だけ書かない） |
+
+**この節に書かない**（未実装・肥大化防止）: Brief の JSON スキーマ確定、既存ゲートの置き換え手順、実装フェーズ表。
+
+Intent 層（§7）が骨格に一番近い。ここに載せるのは **コスト配置の上位原則**（適切なルートを先に決めるしくみ）であって、TEMP-C と MEM-8h の「どっちか」問題の答えではない。
 
 ---
 
@@ -316,6 +336,7 @@ effective_buckets = merge(intent, plan)
 | 用語 | 意味 |
 |------|------|
 | **Intent** | まー（+文脈）が求めているニーズの構造化表現（`UserIntent`: wants_speech / wants_observe / …） |
+| **受信時ブリーフ（Brief）** | 受信直後の構造化指示（原則 D）。ルート組み立ての正本候補。**思想・未実装** |
 | **Bucket** | 会話経路のモダリティ省略ラベル。正規名ではない（§5.1） |
 | **Flow** | gateway の Python/HTTP 実行経路 |
 | **Plan** | `plan_response` の `primary_move` / initiative / voice |
@@ -331,3 +352,4 @@ effective_buckets = merge(intent, plan)
 | 2026-06-17 | 初版 — ma-home 会話ログ分析・5W1H/Plan 議論を反映 |
 | 2026-06-17 | IBF-6a — §5.1 正規名ポリシー、§6 allowed_action↔バケツ↔Flow 対応表 |
 | 2026-06-17 | IBF-7 — `benchmarks/intent_router` offline rules vs LLM intent diff |
+| 2026-07-19 | 原則 D — 受信時ブリーフ正本（思想・未実装）。並列 jobs · UA 実行器との関係 |

@@ -177,7 +177,7 @@ docs/
 | [outbound-channels.md](./architecture/outbound-channels.md)           | 能動届け A4                |
 | [gateway-direct-actions.md](./architecture/gateway-direct-actions.md) | gateway 直実行            |
 | [heartbeat-loop.md](./architecture/heartbeat-loop.md)                 | pulse・BIO              |
-| [intent-bucket-flow.md](./architecture/intent-bucket-flow.md)         | IBF                    |
+| [intent-bucket-flow.md](./architecture/intent-bucket-flow.md)         | IBF · 受信時ブリーフ（原則 D） |
 | [open-loops-reminders.md](./architecture/open-loops-reminders.md)     | OL・OL-GATE             |
 
 

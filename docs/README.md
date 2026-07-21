@@ -179,6 +179,7 @@ docs/
 | [heartbeat-loop.md](./architecture/heartbeat-loop.md)                 | pulse・BIO              |
 | [intent-bucket-flow.md](./architecture/intent-bucket-flow.md)         | IBF · 受信時ブリーフ（原則 D） |
 | [brief-s0-spans.md](./tracks/brief-s0-spans.md)                       | Brief S0 · span/ask 金例規約 |
+| [brief-s0-system-prompt.md](./tracks/brief-s0-system-prompt.md)       | Brief S0 · LM Studio 評価用 system |
 | [open-loops-reminders.md](./architecture/open-loops-reminders.md)     | OL・OL-GATE             |
 
 

@@ -237,6 +237,57 @@ body {
   line-height: 1.4;
 }
 
+.brief-s0__hint {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  opacity: 0.85;
+  margin: 0 0 0.6rem;
+}
+
+.brief-s0__hint code {
+  font-size: 0.75em;
+}
+
+.brief-s0__status {
+  font-size: 0.8rem;
+  min-height: 1.2em;
+  margin: 0 0 0.5rem;
+}
+
+.brief-s0__status.is-ok {
+  color: var(--ok, #2a7a4b);
+}
+
+.brief-s0__status.is-warn {
+  color: var(--warn, #a67c00);
+}
+
+.brief-s0__status.is-error {
+  color: var(--error, #b33);
+}
+
+.brief-s0__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+  cursor: pointer;
+}
+
+.brief-s0__row input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.brief-s0__label {
+  font-size: 0.9rem;
+}
+  font-size: 0.68rem;
+  opacity: 0.65;
+  margin: 0 0 0.55rem;
+  line-height: 1.4;
+}
+
 .kiosk-audio__status {
   font-size: 0.82rem;
   line-height: 1.35;

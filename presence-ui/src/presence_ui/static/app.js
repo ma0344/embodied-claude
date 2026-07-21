@@ -3143,6 +3143,102 @@ function setupClaudePermissions() {
 
 // ── Claude permissions ここまで ──────────────────────────────────
 
+// ── Brief S0 reasoning ───────────────────────────────────────────
+let briefS0ReasoningEditable = false;
+let briefS0ReasoningDirty = false;
+let briefS0ReasoningLoaded = false;
+
+function setBriefS0ReasoningStatus(text, kind) {
+  const el = document.getElementById("brief-s0-reasoning-status");
+  if (!el) return;
+  el.textContent = text || "";
+  el.classList.remove("is-ok", "is-warn", "is-error");
+  if (kind) el.classList.add(`is-${kind}`);
+}
+
+function syncBriefS0ReasoningSaveButton() {
+  const saveBtn = document.getElementById("brief-s0-reasoning-save");
+  const toggle = document.getElementById("brief-s0-reasoning-toggle");
+  if (!saveBtn || !toggle) return;
+  saveBtn.disabled = !briefS0ReasoningEditable || !briefS0ReasoningDirty;
+}
+
+function renderBriefS0Reasoning(data) {
+  const toggle = document.getElementById("brief-s0-reasoning-toggle");
+  const saveBtn = document.getElementById("brief-s0-reasoning-save");
+  if (!toggle || !saveBtn) return;
+  briefS0ReasoningEditable = Boolean(data.editable);
+  toggle.checked = data.enabled !== false;
+  toggle.disabled = !briefS0ReasoningEditable;
+  briefS0ReasoningDirty = false;
+  briefS0ReasoningLoaded = true;
+  syncBriefS0ReasoningSaveButton();
+  if (!briefS0ReasoningEditable) {
+    setBriefS0ReasoningStatus("この端末からは編集不可（localhost / 認証が必要）", "warn");
+  } else {
+    setBriefS0ReasoningStatus(
+      data.enabled !== false ? "reasoning ON（精度寄り）" : "reasoning OFF（速い）",
+      "ok",
+    );
+  }
+}
+
+async function loadBriefS0Reasoning() {
+  try {
+    const data = await fetchJson("/api/v1/brief-s0/reasoning");
+    renderBriefS0Reasoning(data);
+  } catch (err) {
+    setBriefS0ReasoningStatus(`読み込み失敗: ${err.message}`, "error");
+  }
+}
+
+async function saveBriefS0Reasoning() {
+  const toggle = document.getElementById("brief-s0-reasoning-toggle");
+  if (!toggle || !briefS0ReasoningEditable) return;
+  setBriefS0ReasoningStatus("保存中…", "warn");
+  try {
+    if (usesNativeChat()) {
+      await ensureNativeLogin();
+    }
+    const headers = { "Content-Type": "application/json; charset=utf-8" };
+    if (nativeAuthToken) {
+      headers.Authorization = `Bearer ${nativeAuthToken}`;
+    }
+    const res = await fetch("/api/v1/brief-s0/reasoning", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ enabled: toggle.checked }),
+    });
+    if (!res.ok) {
+      const detail = await res.text();
+      throw new Error(`${res.status} ${detail}`);
+    }
+    const data = await res.json();
+    renderBriefS0Reasoning({ ...data, editable: true });
+    setBriefS0ReasoningStatus(data.note || "保存した", "ok");
+  } catch (err) {
+    setBriefS0ReasoningStatus(`保存できなかった: ${err.message}`, "error");
+  }
+}
+
+function setupBriefS0Reasoning() {
+  const section = document.getElementById("brief-s0-reasoning-section");
+  const toggle = document.getElementById("brief-s0-reasoning-toggle");
+  const saveBtn = document.getElementById("brief-s0-reasoning-save");
+  if (!section || !toggle || !saveBtn) return;
+  toggle.addEventListener("change", () => {
+    if (!briefS0ReasoningEditable || !briefS0ReasoningLoaded) return;
+    briefS0ReasoningDirty = true;
+    syncBriefS0ReasoningSaveButton();
+  });
+  saveBtn.addEventListener("click", () => {
+    void saveBriefS0Reasoning();
+  });
+  void loadBriefS0Reasoning();
+}
+
+// ── Brief S0 reasoning ここまで ──────────────────────────────────
+
 async function playKioskSpeech(text) {
   if (!isKioskLayout()) {
     await playOutboundNudgeAudio(text);
@@ -3569,6 +3665,7 @@ function setupKioskLayout() {
 setupRoomInbound();
 setupKioskLayout();
 setupClaudePermissions();
+setupBriefS0Reasoning();
 setupStatusCardExpand();
 setupReminderCardActions();
 setupChatScroll();

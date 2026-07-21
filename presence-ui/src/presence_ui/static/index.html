@@ -162,6 +162,26 @@
         </section>
 
         <section
+          class="room-drawer__section room-drawer__section--brief-s0"
+          id="brief-s0-reasoning-section"
+          aria-label="Brief S0"
+        >
+          <h3 class="room-drawer__section-title">Brief S0</h3>
+          <p class="brief-s0__hint">
+            意味分解（spans）の <strong>reasoning</strong>。精度寄りが既定 ON。遅ければ OFF。
+            表層の Claude thinking とは別ノブ。<code>PRESENCE_BRIEF_S0_REASONING</code> に保存。
+          </p>
+          <p id="brief-s0-reasoning-status" class="brief-s0__status" aria-live="polite"></p>
+          <label class="brief-s0__row" for="brief-s0-reasoning-toggle">
+            <input type="checkbox" id="brief-s0-reasoning-toggle" checked />
+            <span class="brief-s0__label">S0 reasoning を使う</span>
+          </label>
+          <button type="button" id="brief-s0-reasoning-save" class="drawer-action drawer-action--primary" disabled>
+            保存
+          </button>
+        </section>
+
+        <section
           class="room-drawer__section room-drawer__section--permissions"
           id="claude-permissions-section"
           aria-label="ツール権限"

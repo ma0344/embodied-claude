@@ -16,6 +16,8 @@ const SYSTEM_BLOCK_RES = [
   /^\[\/calendar_prefetch\]/i,
   /^\[brief_shadow\]\s*$/i,
   /^\[\/brief_shadow\]/i,
+  /^\[brief_s0\]\s*$/i,
+  /^\[\/brief_s0\]/i,
   /^\[calendar_write_result\]\s*$/i,
   /^\[\/calendar_write_result\]/i,
   /^\[calendar_confirm_pending\]\s*$/i,
@@ -59,6 +61,7 @@ const PAIRED_BLOCK_OPENERS = {
   "[web_search_prefetch]": "[/web_search_prefetch]",
   "[calendar_prefetch]": "[/calendar_prefetch]",
   "[brief_shadow]": "[/brief_shadow]",
+  "[brief_s0]": "[/brief_s0]",
   "[calendar_write_result]": "[/calendar_write_result]",
   "[calendar_confirm_pending]": "[/calendar_confirm_pending]",
   "[ws5c_search_offer]": "[/ws5c_search_offer]",
@@ -267,6 +270,7 @@ function stripOneTrailingTailPrefetch(remainder) {
     /\n\[calendar_write_result\][\s\S]*$/i,
     /\n\[calendar_prefetch\][\s\S]*$/i,
     /\n\[brief_shadow\][\s\S]*$/i,
+    /\n\[brief_s0\][\s\S]*$/i,
     /\n\[vision_prefetch\][\s\S]*$/i,
   ];
   for (const pattern of patterns) {

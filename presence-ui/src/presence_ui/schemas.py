@@ -430,3 +430,25 @@ class ClaudePermissionsSaveResponse(BaseModel):
     presets: list[ClaudePermissionPresetItem] = Field(default_factory=list)
     preserved_rules: list[str] = Field(default_factory=list)
     note: str = "次のメッセージから反映（新しい会話推奨）"
+
+
+class BriefS0ReasoningResponse(BaseModel):
+    enabled: bool = True
+    env_key: str = "PRESENCE_BRIEF_S0_REASONING"
+    settings_path: str = ""
+    editable: bool = False
+    note: str = (
+        "S0 意味分解の reasoning（精度↔レイテンシ）。既定 ON。"
+        "表層 Claude thinking とは別。"
+    )
+
+
+class BriefS0ReasoningSaveRequest(BaseModel):
+    enabled: bool
+
+
+class BriefS0ReasoningSaveResponse(BaseModel):
+    ok: bool = True
+    enabled: bool
+    settings_path: str = ""
+    note: str = "次の S0 / 評価呼び出しから反映"

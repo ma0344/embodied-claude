@@ -88,12 +88,17 @@ def run_classifier_turn(
     timeout: float | None = None,
     log_label: str = "GW classifier",
     model_scope: Literal["classifier", "surface"] = "classifier",
+    reasoning: bool | None = None,
 ) -> str | None:
     """Stateless LM Studio completion (OL-GATE — no SOUL / no session history).
 
     ``model_scope="classifier"`` (default): ``PRESENCE_CLASSIFIER_*`` when set,
     else ``google/gemma-4-e4b-qat`` (PFC-1 default — not surface 12B).
     GW-S1 uses ``model_scope="surface"``.
+
+    ``reasoning``: optional Gemma 4 thinking via OpenAI-compat ``reasoning_effort``
+    (``medium`` / ``none``). ``None`` leaves the field unset so other classifiers
+    are unchanged. Brief S0 callers pass ``brief_s0_reasoning_enabled()``.
     """
     if not lm_studio_available(timeout=2.0):
         logger.warning("%s: LM Studio unavailable", log_label)
@@ -109,12 +114,16 @@ def run_classifier_turn(
         {"role": "system", "content": system.strip()},
         {"role": "user", "content": user.strip()},
     ]
-    payload = {
+    payload: dict = {
         "model": model,
         "max_tokens": max_tokens,
         "temperature": temperature,
         "messages": messages,
     }
+    if reasoning is not None:
+        from presence_ui.gateway.brief_s0_reasoning import reasoning_effort_for_openai
+
+        payload["reasoning_effort"] = reasoning_effort_for_openai(reasoning)
     headers = {
         "Authorization": f"Bearer {token}",
         "x-api-key": token,

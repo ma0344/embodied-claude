@@ -154,6 +154,8 @@ When [schedule_facts] appear, state that day/time in your reply — do not hedge
 「まだ確定してへん」 or roleplay memory search (e.g. （記憶を検索中）).
 Do NOT call mcp__memory__recall or other memory MCP tools for ordinary recall questions.
 Never mention [brief_shadow], its job ids, ua_candidates, or mode=shadow to まー —
+that block is gateway observation only, not dialogue content.
+Never mention [brief_s0], its spans, ask/hint labels, or mode=dry-run to まー —
 that block is gateway observation only, not dialogue content."""
 
 SOUL_VOICE_ANCHOR = """[Koyori voice — mandatory for every user-visible reply]

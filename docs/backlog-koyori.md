@@ -13,7 +13,7 @@
 | **ALIVE / LW** | 🔥 | [tracks/alive-lw-read.md](./tracks/alive-lw-read.md) |
 | **GW-SILENT** | ✅ S1 · ✅ S2（opt-in） | [tracks/gw-silent.md](./tracks/gw-silent.md) |
 | **OL5** | ✅ 運用確認済 | [tracks/ol5.md](./tracks/ol5.md) |
-| **MEM-8** | 概念済 · **8g** 💤 · **8h** 📋 | [architecture/mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) · [tracks/mem-8h-memory-bridge.md](./tracks/mem-8h-memory-bridge.md) |
+| **MEM-8** | 概念済 · **8g** 💤 · **8h** ✅ · **8j** 💤 エンティティ属性マップ | [architecture/mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) · [tracks/mem-8h-memory-bridge.md](./tracks/mem-8h-memory-bridge.md) · [backlog-ma-home.md](./backlog-ma-home.md) |
 | **MEM パイプライン** | 運用+未 | [architecture/mem-pipeline.md](./architecture/mem-pipeline.md) |
 | **OBS** | 📋 | [tracks/obs.md](./tracks/obs.md) |
 | **CAM** | 💤 | [tracks/cam-tapo-ptz.md](./tracks/cam-tapo-ptz.md) |

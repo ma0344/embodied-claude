@@ -19,6 +19,7 @@ from interaction_orchestrator_mcp.schemas import (
 from social_core import utc_now
 
 from presence_ui.deps import get_stores
+from presence_ui.gateway.brief_s0 import append_brief_s0
 from presence_ui.gateway.brief_shadow import append_brief_shadow
 from presence_ui.gateway.calendar_prefetch import (
     calendar_honesty_directive,
@@ -490,6 +491,7 @@ def _finish_intercept_chat_request(
     list_request = detect_memory_list_request(message)
     if detect_soul_read_request(message) and not list_request:
         turn_delta = append_brief_shadow(soul_read_prefetch_block(), utterance=message)
+        turn_delta = append_brief_s0(turn_delta, utterance=message)
         enriched_message, append_prompt = apply_gateway_prompt_injection(
             user_text=message,
             turn_delta=turn_delta,
@@ -536,6 +538,7 @@ def _finish_intercept_chat_request(
             "Do NOT call MCP/Skill. Show the numbered list as your reply."
         )
         turn_delta = append_brief_shadow(turn_delta, utterance=message)
+        turn_delta = append_brief_s0(turn_delta, utterance=message)
         enriched_message, append_prompt = apply_gateway_prompt_injection(
             user_text=message,
             turn_delta=turn_delta,
@@ -768,6 +771,7 @@ def _finish_intercept_chat_request(
     if inbound_delta:
         turn_delta = f"{turn_delta}\n\n{inbound_delta}" if turn_delta else inbound_delta
     turn_delta = append_brief_shadow(turn_delta, utterance=message)
+    turn_delta = append_brief_s0(turn_delta, utterance=message)
     if lite and turn_delta:
         turn_delta = truncate_lite_turn_delta(turn_delta, lite_append_max_chars())
     extra_append = ""

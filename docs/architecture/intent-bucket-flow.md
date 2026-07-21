@@ -94,7 +94,11 @@ MCP サーバーは **Flow の実装の一つ**。CLI `/talk` 用に `.mcp.json`
 
 **S0（意味分解 · 2026-07-19）**: Brief の手前段。発話を `spans[]`（各 span に `ask` 1つ）へ分解する。ask 閉集合 = `greeting|report|consult|request|correction|other`。複合は分割。S1 `utterance_kind` は **投影**（Brief+S1 を1分類器にしない）。影段は既存 S1 挙動のまま不一致はログのみ、投影以降は Brief 優先・不能=`other`。金例・境界表 → [brief-s0-spans.md](../tracks/brief-s0-spans.md)。
 
-**影モード v0（2026-07-19）**: `PRESENCE_BRIEF_SHADOW` ON 時、native chat 受信直後に e4b 単発で `[brief_shadow]` を `gateway_turn_context` へ注入する（jobs / ua_candidates の行フォーマットのみ · **S0 spans とは別スキーマ**）。**実行しない**（web_search・UA 書込・TEMP-C/prefetch 置換なし）。こよりはブロック内容を口に出さない。
+**影モード v0（2026-07-19）**: `PRESENCE_BRIEF_SHADOW` ON 時、native chat 受信直後に e4b 単発で `[brief_shadow]` を `gateway_turn_context` へ注入する（jobs / ua_candidates の行フォーマットのみ · **S0 spans とは別スキーマ**）。**実行しない**（web_search·UA 書込·TEMP-C/prefetch 置換なし）。こよりはブロック内容を口に出さない。
+
+**S0 dry-run（2026-07-20）**: `PRESENCE_BRIEF_S0`（既定 ON）で同じ受信直後に e4b が spans/ask/hint を `[brief_s0]` として注入（`mode=dry-run`）。`PRESENCE_BRIEF_S0_REASONING` で reasoning。**実行·S1 置換なし** — 結果の観測のみ。正本 → [brief-s0-spans.md](../tracks/brief-s0-spans.md)。
+
+**S0 投影方針 D1–D6（2026-07-21 · 方針ロック · 実装未）**: 1 span ≈ 受信時ルート確定（並列 N 本可）· 同 ask でも話題差で分割可 · report 事実確認は伝聞ゲート許可型 · 地域は伝聞＝言及地／天気＝既定松本 · Resolve ジョブ単位 · 表層は材料＋短い grounding（順序は 12b）。詳細 → [brief-s0-spans.md § 投影以降](../tracks/brief-s0-spans.md#投影以降--d1d6合意-2026-07-21)。
 
 **この節に書かない**（肥大化防止）: Brief の JSON スキーマ確定、既存ゲートの置き換え手順、実装フェーズ表。
 
@@ -362,3 +366,4 @@ effective_buckets = merge(intent, plan)
 | 2026-07-19 | 原則 D — 受信時ブリーフ正本（思想・未実装）。並列 jobs · UA 実行器との関係 |
 | 2026-07-19 | 原則 D 影モード v0 — `[brief_shadow]` 観測注入（実行・置換なし） |
 | 2026-07-19 | S0 span ラベル規約 — ask 閉集合 · 金例 · Brief+S1 非統合（[brief-s0-spans.md](../tracks/brief-s0-spans.md)） |
+| 2026-07-21 | S0 投影 D1–D6 方針ロック（実装未）— [brief-s0-spans.md § 投影以降](../tracks/brief-s0-spans.md#投影以降--d1d6合意-2026-07-21) |

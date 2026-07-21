@@ -17,6 +17,9 @@ from presence_ui.gateway.backend import backend_base_url
 from presence_ui.gateway.chat_stream import stream_gateway_chat
 from presence_ui.gateway.proxy import proxy_get
 from presence_ui.schemas import (
+    BriefS0ReasoningResponse,
+    BriefS0ReasoningSaveRequest,
+    BriefS0ReasoningSaveResponse,
     CameraSnapshotResponse,
     CancelReminderRequest,
     CancelReminderResponse,
@@ -326,6 +329,40 @@ def create_app() -> FastAPI:
                 for p in presets
             ],
             preserved_rules=preserved,
+        )
+
+    @app.get("/api/v1/brief-s0/reasoning", response_model=BriefS0ReasoningResponse)
+    def get_brief_s0_reasoning(request: Request) -> BriefS0ReasoningResponse:
+        """Brief S0 classifier reasoning ON/OFF (env-backed, default ON)."""
+        from presence_ui.gateway.brief_s0_reasoning import (
+            ENV_KEY,
+            brief_s0_reasoning_enabled,
+            local_env_path,
+        )
+        from presence_ui.gateway.native_chat_router import can_edit_claude_permissions
+
+        return BriefS0ReasoningResponse(
+            enabled=brief_s0_reasoning_enabled(),
+            env_key=ENV_KEY,
+            settings_path=str(local_env_path()),
+            editable=can_edit_claude_permissions(request),
+        )
+
+    @app.post("/api/v1/brief-s0/reasoning", response_model=BriefS0ReasoningSaveResponse)
+    def post_brief_s0_reasoning(
+        body: BriefS0ReasoningSaveRequest,
+        request: Request,
+    ) -> BriefS0ReasoningSaveResponse:
+        """Persist PRESENCE_BRIEF_S0_REASONING to local.env + process env."""
+        from presence_ui.gateway.brief_s0_reasoning import set_brief_s0_reasoning
+        from presence_ui.gateway.native_chat_router import can_edit_claude_permissions
+
+        if not can_edit_claude_permissions(request):
+            raise HTTPException(status_code=403, detail="brief-s0 reasoning edit denied")
+        path = set_brief_s0_reasoning(body.enabled)
+        return BriefS0ReasoningSaveResponse(
+            enabled=body.enabled,
+            settings_path=str(path),
         )
 
     @app.get("/api/v1/outbound/pending", response_model=OutboundPendingResponse)

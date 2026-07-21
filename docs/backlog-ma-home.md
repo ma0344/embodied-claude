@@ -1,6 +1,6 @@
 # ma-home / koyori バックログ（ダッシュボード）
 
-**最終更新**: 2026-07-18（注入層棚卸し）  
+**最終更新**: 2026-07-21（エンティティ属性マップ覚書）  
 **詳細の正（アーカイブ）**: [archive/backlog-ma-home-full-2026-06-26.md](./archive/backlog-ma-home-full-2026-06-26.md)  
 **完了一覧**: [backlog-archive-ma-home.md](./backlog-archive-ma-home.md)
 
@@ -80,7 +80,7 @@
 | **IBF** | Intent→Bucket→Flow | ✅ | [architecture/intent-bucket-flow.md](./architecture/intent-bucket-flow.md) |
 | **OL** | Open loops / リマインド | ✅ 運用 · ✅ OL-GATE（GW-S2 opt-in）· ✅ `list_open_loops.detail` | [architecture/open-loops-reminders.md](./architecture/open-loops-reminders.md) |
 | **A4** | Outbound（着信・tick・ntfy） | ✅ | [outbound-channels.md](./architecture/outbound-channels.md) |
-| **MEM** | 記憶層・Dreaming | ✅ 5a–5f-c · 📋 MEM-8 概念 | [mem-pipeline.md](./architecture/mem-pipeline.md) · [mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) |
+| **MEM** | 記憶層・Dreaming | ✅ 5a–5f-c · 📋 MEM-8 概念 · 📋 **エンティティ属性マップ** | [mem-pipeline.md](./architecture/mem-pipeline.md) · [mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) |
 | **RP** | SOUL.core / stable append | ✅ Phase 0–1 | [ops/role-persistence-ma-home.md](./ops/role-persistence-ma-home.md) |
 | **C** | 部屋 UI Native + キオスク | ✅ C11 実戦 OK | [surface-vision.md](./tracks/surface-vision.md) · [platform-ma-home.md](./architecture/platform-ma-home.md) |
 | **B** | Task 常駐・診断 | ✅ B2 除く | [scripts-reference.md](./ops/scripts-reference.md) |
@@ -104,6 +104,7 @@
 | **GAPI** | Google Calendar / Drive | ✅ prep-1/2/3 · 7a/7b · **2b/2r/2r-S2/2s** · 📋 **7c** 複数件 · **7d** e4b確認 | [tracks/gapi.md](./tracks/gapi.md) · [gapi-setup.md](./ops/gapi-setup.md) |
 | **TEMP** | TEMP-1〜5 ✅ · TEMP-C3/b/c4 ✅ · **C5 📋** clock/e4b · SHIFT-R1/R2/R3 ✅ | [utterance-anchoring.md](./tracks/utterance-anchoring.md) · [interpretation-shift-routing.md](./tracks/interpretation-shift-routing.md) |
 | **WS** | 会話 Web 検索 | ✅ WS-5 v0 · ✅ **5b** · ✅ **5c**（2026-07-15）· 📋 v1 e4b | [ws-2](./ops/ws-2-conversation-web-search.md) · [ws-5](./ops/ws-5-spontaneous-search.md) |
+| **MEM-8j** | 身の回り固有名の **エンティティ属性マップ**（所在地・カテゴリ・関係性など。例: ねっとわん⇔松本市）。`profile_gists` 散文の先。Brief S0 地域推論などはこれ前提 | 💤 覚書 · 急がない | [mem-8-encode-retrieve.md](./architecture/mem-8-encode-retrieve.md) · Brief S0 D4（規定松本・推論は後） |
 | **SOUL-D** | SOUL 距離感 · 友人化 · Say動機（介助犬保留） | 💤 | [tracks/soul-distance.md](./tracks/soul-distance.md) |
 | **SPONT** | 自発性二軸 · S1 OL6 outbound · S2 calendar expectations | 🔧 S1/S2 実装済 · 運用確認 | [tracks/spontaneity.md](./tracks/spontaneity.md) |
 | **INJECT** | 注入層 · 表層/近表層/Deep · ノイズ間引き | ✅ 語彙固定 · ✅ **TRIM v0** | [inject-surface-layers.md](./architecture/inject-surface-layers.md) |
